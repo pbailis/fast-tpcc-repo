@@ -7,7 +7,7 @@ object VeloxConfig {
   var serverAddresses: Map[PartitionId, InetSocketAddress] = null
   var serverPort = -1
   var partitionId: PartitionId = -1
-  var bootstrapConnectionWaitSeconds = 5
+  var bootstrapConnectionWaitSeconds = 2
   var tcpNoDelay: Boolean = true
   var partitionList: Array[PartitionId] = null
 

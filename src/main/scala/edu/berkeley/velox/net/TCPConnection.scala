@@ -16,7 +16,7 @@ import edu.berkeley.velox.conf.VeloxConfig
  */
 
 class TCPConnection(val clientSocket: Socket,
-                    val netService: NetworkService,
+                    val netService: BasicNetworkService,
                     var connectedPartition: PartitionId = -1) {
   val sendQueue = new LinkedBlockingQueue[Array[Byte]]()
   val dataInputStream = new DataInputStream(clientSocket.getInputStream)
