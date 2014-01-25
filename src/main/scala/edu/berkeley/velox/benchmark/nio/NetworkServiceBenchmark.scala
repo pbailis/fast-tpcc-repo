@@ -11,6 +11,53 @@ import edu.berkeley.velox.PartitionId
 import java.util.concurrent.Executors
 
 
+class PingMessageService(val totalPing: Int,
+                         val sendThreads: Int,
+                         val receiveThreads: Int,
+                         val msgSize: Int) extends MessageService {
+  val pings = new AtomicInteger(0)
+  val sendExecutor = Executors.newFixedThreadPool(sendThreads)
+  var startTime: Long = 0L
+
+  override def setNetworkService(networkService: NetworkService): Unit =  {
+    this.networkService = networkService
+    this.networkService.messageService = this
+  }
+
+  def sendPings(partitionId: PartitionId) {
+    startTime = System.currentTimeMillis()
+    val bytes = new Array[Byte](msgSize)
+    for (i <- 0 until 10) {
+      sendExecutor.execute(new Runnable {
+        def run() {
+          for (j <- 0 until totalPing / 10) {
+            PingMessageService.this.networkService.send(partitionId, bytes)
+          }
+        }
+      })
+    }
+  }
+
+  override def receiveRemoteMessage(src: PartitionId, bytes: Array[Byte]): Unit = {
+    val count = pings.incrementAndGet()
+    if (count == totalPing) {
+      val endTime = System.currentTimeMillis()
+      val startTime = PingMessageService.this.startTime
+      val msgsSent = PingMessageService.this.totalPing
+      val msgSize = PingMessageService.this.msgSize
+      val elapsedTime = (endTime - startTime).toDouble / 1000.0
+      val mbSent = msgsSent.toDouble * msgSize / 1048576.0
+      println(s"Finished in ${elapsedTime} seconds.")
+      println(s"Ping-Pong rate: ${msgsSent.toDouble / elapsedTime}")
+      println(s"Data rate: ${mbSent / elapsedTime} (MB/Sec)")
+      val actualBytesRecv = networkService.bytesRecvCounter.get
+      println(s"Physical Mbytes received: ${actualBytesRecv / 1048576.0}")
+      println(s"Physical transfer rate: ${actualBytesRecv / (1048576.0 * elapsedTime)} (MB/Sec)")
+
+    }
+  }
+}
+
 class PingPongMessageService(val totalPingPongs: Int,
                              val sendThreads: Int,
                              val receiveThreads: Int,
@@ -28,10 +75,12 @@ class PingPongMessageService(val totalPingPongs: Int,
   def sendPings(partitionId: PartitionId) {
     startTime = System.currentTimeMillis()
     val bytes = new Array[Byte](msgSize)
-    for (i <- 0 until totalPingPongs) {
+    for (i <- 0 until 10) {
       sendExecutor.execute(new Runnable {
         def run() {
-          PingPongMessageService.this.networkService.send(partitionId, bytes)
+          for (j <- 0 until totalPingPongs / 10) {
+            PingPongMessageService.this.networkService.send(partitionId, bytes)
+          }
         }
       })
     }
@@ -70,19 +119,20 @@ class PingPongMessageService(val totalPingPongs: Int,
   }
 }
 
+
 object NetworkServiceBenchmark {
   def main(args: Array[String]) {
     // Parse command line and setup environment
     VeloxConfig.initialize(args)
     println(s"Starting node ${VeloxConfig.partitionId} ")
     //Thread.sleep(1000 * 10)  // yourkit timing delay
-    val totalPingPongs = 4000000
-    val sendThreads = 8
-    val receiveThreads = 8
+    val totalPingPongs = 10000000
+    val sendThreads = 4
+    val receiveThreads = 4
     val msgSize = 64
 
-    //val ns = new NetworkService
     val ms = new PingPongMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
+    //val ms = new PingMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
     val ns = new NIONetworkService
     ns.setMessageService(ms)
     ns.start()

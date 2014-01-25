@@ -26,13 +26,9 @@ class NIONetworkService extends NetworkService {
                      val mb: Int = 16) extends Thread(s"Socket-Thread-$partitionId") {
     val readBuffer = new DoubleBuffer(2*mb)
     val writeBuffer = new DoubleBuffer(mb)
-    val readyToWrite = new AtomicBoolean(false)
-    val writerLock = new Semaphore(1)
     // Initialize the active read buffer and pending write buffer to empty
     readBuffer.active.flip() // Nothing to read yet
     writeBuffer.pending.flip()  // Nothing to send ye
-    // Disable negel
-    channel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
     override def run() {
       while (true) {
         // Get the next message
@@ -44,63 +40,63 @@ class NIONetworkService extends NetworkService {
       writeBuffer.writeMessage(bytes)
       msgSentCounter.incrementAndGet()
       bytesWrittenCounter.addAndGet(bytes.size)
-      readyToWrite.set(true)
     }
   } // end of SocketReader
-
 
   /**
    * A single writer thread multiplexes writing on each socket
    */
   class WriterThread extends Thread("Write-Selector-Thread") {
-    val requestExecutor = Executors.newFixedThreadPool(4)
+    val selector = Selector.open
+    val newChannels = collection.mutable.Queue.empty[SocketThread]
     override def run() {
       while(true) {
-        //println("Starting Writes")
-        val connections = NIONetworkService.this.connections
-        val iter = connections.entrySet.iterator
-        while (iter.hasNext) {
-          val pair = iter.next
-          val socketThread = pair.getValue
-          if (socketThread.writerLock.tryAcquire) {
-            if (socketThread.readyToWrite.get()) {
-              socketThread.readyToWrite.set(false)
-              requestExecutor.execute(new Runnable {
-                def run() {
-                  // Get the channel
-                  val channel = socketThread.channel.asInstanceOf[SocketChannel]
-                  val buffer = socketThread.writeBuffer
-                  // If the pending send buffer is empty try and get more to send
-                  if (!buffer.pending.hasRemaining) {
-                    buffer.finishedSending()
-                    //println("flipping send buffer")
-                  }
-                  // If there are bytes to send then try and send those bytes
-                  if (buffer.pending.hasRemaining) {
-                    // write the bytes from the buffer
-                    var bytesWritten = 0
-                    while (buffer.pending.hasRemaining) {
-                      val result = channel.write(buffer.pending)
-                      assert(result >= 0)
-                      bytesWritten += result
-                    }
-                    //println(s"Bytes written: $bytesWritten")
-                    // println(s"Sent $bytesWritten bytes.")
-                    // ensure not end of stream
-                    assert(bytesWritten > 0)
-                    bytesSentCounter.addAndGet(bytesWritten)
-                  }
-                  socketThread.writerLock.release
-
-                  synchronized { notify() }
-                }
-              }) // End of runnable
-            } else { // if not ready to write then we can release the lock
-              socketThread.writerLock.release
+        //println("Writer select started.")
+        val count = selector.select()
+        newChannels.synchronized {
+          if(!newChannels.isEmpty) {
+            for(s <- newChannels) {
+              s.channel.register(selector, SelectionKey.OP_WRITE, s)
             }
-          } // end of trylock
+            newChannels.clear
+          }
+        }
+        val it = selector.selectedKeys().iterator()
+        var bytesWrittenOnRound = 0
+        while (it.hasNext) {
+          val key = it.next()
+          it.remove()
+          // if the channel is ready to send bytes
+          if (key.isValid && key.isWritable) {
+            // Get the channel
+            val channel = key.channel.asInstanceOf[SocketChannel]
+            val socketThread = key.attachment().asInstanceOf[SocketThread]
+            val buffer = socketThread.writeBuffer
+            // If the pending send buffer is empty try and get more to send
+            if (!buffer.pending.hasRemaining) {
+              buffer.finishedSending()
+              //println("flipping send buffer")
+            }
+            // If there are bytes to send then try and send those bytes
+            if (buffer.pending.hasRemaining) {
+              // write the bytes from the buffer
+              var bytesWritten = channel.write(buffer.pending)
+              // println("Wrote zero bytes")
+              var totalBytesWritten = bytesWritten
+              while (buffer.pending.hasRemaining && bytesWritten > 0) {
+                bytesWritten = channel.write(buffer.pending)
+                assert(bytesWritten >= 0)
+                totalBytesWritten += bytesWritten
+              }
+              bytesWrittenOnRound += totalBytesWritten
+              //println(s"Total bytes written: $totalBytesWritten")
+              bytesSentCounter.addAndGet(totalBytesWritten)
+            }
+          }
         } // end of while loop over iterator
-        synchronized { wait(10) }
+        if(bytesWrittenOnRound == 0) {
+          synchronized { wait() }
+        }
       } // end of outer while loop
     } // end of run
   } // end of writer thread
@@ -117,7 +113,7 @@ class NIONetworkService extends NetworkService {
         newChannels.synchronized {
           if(!newChannels.isEmpty) {
             for(s <- newChannels) {
-              s.channel.register(selector, SelectionKey.OP_READ, s.readBuffer)
+              s.channel.register(selector, SelectionKey.OP_READ, s)
             }
             newChannels.clear
           }
@@ -131,7 +127,8 @@ class NIONetworkService extends NetworkService {
           if (key.isValid && key.isReadable) {
             // Get the channel
             val channel = key.channel.asInstanceOf[SocketChannel]
-            val buffer = key.attachment().asInstanceOf[DoubleBuffer]
+            val socketThread = key.attachment().asInstanceOf[SocketThread]
+            val buffer = socketThread.readBuffer
             buffer.pendingLock.synchronized {
               // If there is no space left in the read buffer then double it
               if (!buffer.pending.hasRemaining) {
@@ -139,8 +136,14 @@ class NIONetworkService extends NetworkService {
               }
               // Read the bytes
               assert(buffer.pending.hasRemaining)
-              val bytesRead = channel.read(buffer.pending)
-              bytesRecvCounter.addAndGet(bytesRead)
+              var bytesRead = channel.read(buffer.pending)
+              var totalBytesRead = bytesRead
+              while (buffer.pending.hasRemaining && bytesRead > 0) {
+                bytesRead = channel.read(buffer.pending)
+                totalBytesRead += bytesRead
+              }
+              // println(s"Message read with $totalBytesRead")
+              bytesRecvCounter.addAndGet(totalBytesRead)
               assert(bytesRead >= 0)
             }
             totalBytesRead += 1
@@ -169,10 +172,15 @@ class NIONetworkService extends NetworkService {
       println(s"Adding connection from $partitionId")
       val channel = socketThread.channel
       channel.configureBlocking(false)
+      channel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
       readerThread.newChannels.synchronized {
         readerThread.newChannels.enqueue(socketThread)
       }
+      writerThread.newChannels.synchronized {
+        writerThread.newChannels.enqueue(socketThread)
+      }
       readerThread.selector.wakeup()
+      writerThread.selector.wakeup()
       socketThread.start()
     } else {
       println("Already connected to " + partitionId)
