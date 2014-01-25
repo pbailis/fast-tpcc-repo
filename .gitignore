@@ -15,3 +15,6 @@ project/plugins/project/
 # Intellij
 .idea/*
 .idea_modules/*
+
+# Emacs/Ensime
+.ensime*
