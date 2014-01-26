@@ -107,14 +107,14 @@ class PingPongMessageService(val totalPingPongs: Int,
       }
     } else {
       // This is a ping message
-      receiveExecutor.execute( new Runnable {
-        def run() {
+//      receiveExecutor.execute( new Runnable {
+//        def run() {
           val ns: NetworkService = PingPongMessageService.this.networkService
           // make bytes a pong message
           bytes(0) = 3
           ns.send(src, bytes)
-        }
-      })
+//        }
+//      })
     }
   }
 }
@@ -125,8 +125,8 @@ object NetworkServiceBenchmark {
     // Parse command line and setup environment
     VeloxConfig.initialize(args)
     println(s"Starting node ${VeloxConfig.partitionId} ")
-    //Thread.sleep(1000 * 10)  // yourkit timing delay
-    val totalPingPongs = 10000000
+    Thread.sleep(1000 * 5)  // yourkit timing delay
+    val totalPingPongs = 5000000
     val sendThreads = 4
     val receiveThreads = 4
     val msgSize = 64
