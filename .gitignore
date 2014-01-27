@@ -1,5 +1,6 @@
 *.class
 *.log
+*.swp
 
 # sbt specific
 dist/*
@@ -18,3 +19,4 @@ project/plugins/project/
 
 # Emacs/Ensime
 .ensime*
+*.iml

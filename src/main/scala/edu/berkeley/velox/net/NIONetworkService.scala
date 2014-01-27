@@ -4,28 +4,42 @@ import java.net.InetSocketAddress
 import edu.berkeley.velox.conf.VeloxConfig
 import java.nio.channels.{SelectionKey, SocketChannel, Selector, ServerSocketChannel}
 import java.util.concurrent._
-import edu.berkeley.velox.PartitionId
+import edu.berkeley.velox.NetworkDestinationHandle
 import java.io.{DataOutputStream, ByteArrayOutputStream, ByteArrayInputStream, DataInputStream}
-import edu.berkeley.velox.rpc.MessageService
 import java.nio.ByteBuffer
 import com.typesafe.scalalogging.slf4j.Logging
+import scala.util.Random
+import java.util.concurrent.atomic.AtomicInteger
+import edu.berkeley.velox.rpc.MessageService
 
+class NIONetworkService(val performIDHandshake: Boolean = false) extends NetworkService with Logging {
 
-class NIONetworkService extends NetworkService with Logging {
-
-  class ChannelState (val partitionId: PartitionId,
-                      val channel: SocketChannel, val mb: Int = 16) {
+  class ChannelState (val partitionId: NetworkDestinationHandle,
+                      val channel: SocketChannel,
+                      val mb: Int = 16) {
+    var isOpen = true;
     val writeBuffers = new RingBuffer(mb)
     val sizeBuffer = ByteBuffer.allocateDirect(4)
 
     var readSizeBuffer = ByteBuffer.allocateDirect(4)
     var readBuffer: ByteBuffer = null // ByteBuffer.allocateDirect(mb * 1048576)
 
+    val nextInternalID = new AtomicInteger(0)
+
     def writeMessage(bytes: Array[Byte]): Boolean = {
+      if(!isOpen) {
+        logger.error(s"Write to closed channel ($channel)")
+      }
+
       val bufferResized = writeBuffers.writeMessage(bytes)
       messageSentMeter.mark()
       bytesWrittenMeter.mark(bytes.size)
       bufferResized
+    }
+
+    def shutdown {
+      isOpen = false;
+      channel.close();
     }
   }
 
@@ -37,7 +51,6 @@ class NIONetworkService extends NetworkService with Logging {
     val newChannels = collection.mutable.Queue.empty[ChannelState]
     override def run() {
       while(true) {
-        //println("Writer select started.")
         val count = selector.select()
         // Register any pending write selectors
         newChannels.synchronized {
@@ -91,8 +104,6 @@ class NIONetworkService extends NetworkService with Logging {
       } // end of outer while loop
     } // end of run
   } // end of writer thread
-
-
 
   class ReaderThread extends Thread("Read-Selector-Thread") {
     val selector = Selector.open
@@ -176,7 +187,7 @@ class NIONetworkService extends NetworkService with Logging {
                     assert(msgSize >= 0)
                     val bytes = new Array[Byte](msgSize)
                     oldReadBuffer.get(bytes)
-                    NIONetworkService.this.recv(partitionId, bytes)
+                    NIONetworkService.this.receive(partitionId, bytes)
                   }
                   oldReadBuffer.clear()
                   readBufferPool.add(oldReadBuffer)
@@ -193,18 +204,18 @@ class NIONetworkService extends NetworkService with Logging {
     }
   } // end of Reader
 
-  var connections = new ConcurrentHashMap[PartitionId, ChannelState]
+  var connections = new ConcurrentHashMap[NetworkDestinationHandle, ChannelState]
   val writerThread = new WriterThread
   val readBufferPool = new ConcurrentLinkedQueue[ByteBuffer]
   val readerThread = new ReaderThread
   val readExecutor = Executors.newFixedThreadPool(16)
+  val nextConnectionID = new AtomicInteger(0)
 
   override def setMessageService(messageService: MessageService) {
     this.messageService = messageService
-    this.messageService.networkService = this
   }
 
-  def addConnection(partitionId: PartitionId, channelState: ChannelState) {
+  def _registerConnection(partitionId: NetworkDestinationHandle, channelState: ChannelState) {
     // Register the connection and attach the selectors
     if (connections.putIfAbsent(partitionId, channelState) == null) {
       logger.debug(s"Adding connection from $partitionId")
@@ -224,61 +235,70 @@ class NIONetworkService extends NetworkService with Logging {
     }
   }
 
-  def start() {
+  override def configureInboundListener(port: Integer) {
     val serverChannel = ServerSocketChannel.open()
-    serverChannel.socket.bind(new InetSocketAddress(VeloxConfig.serverPort))
+    serverChannel.socket.bind(new InetSocketAddress(port))
+
+    new Thread {
+         override def run() {
+           // Grab references to memebers in the parent class
+           val connections = NIONetworkService.this.connections
+           // Loop waiting for inbound connections
+           while (true) {
+             // Accept the client socket
+             val clientChannel: SocketChannel = serverChannel.accept
+             clientChannel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
+             //println("Receiving Connection")
+             // Get the bytes encoding the source partition Id
+             var connectionId: NetworkDestinationHandle = -1;
+             if(performIDHandshake) {
+               val bytes = new Array[Byte](4)
+               val bytesRead = clientChannel.socket.getInputStream.read(bytes)
+               assert(bytesRead == 4)
+               // Read the partition id
+               connectionId = new DataInputStream(new ByteArrayInputStream(bytes)).readInt()
+             } else {
+               connectionId = nextConnectionID.decrementAndGet();
+             }
+             // Create a message reader thread to read the input buffer
+             val socketThread = new ChannelState(connectionId, clientChannel)
+             _registerConnection(connectionId, socketThread)
+           }
+         }
+       }.start()
+  }
+
+  override def start() {
     // Start the messenger threads
     writerThread.start()
     readerThread.start()
-    new Thread {
-      override def run() {
-        // Grab references to memebers in the parent class
-        val connections = NIONetworkService.this.connections
-        // Loop waiting for inbound connections
-        while (true) {
-          // Accept the client socket
-          val clientChannel: SocketChannel = serverChannel.accept
-          clientChannel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
-          //println("Receiving Connection")
-          // Get the bytes encoding the source partition Id
-          val bytes = new Array[Byte](4)
-          val bytesRead = clientChannel.socket.getInputStream.read(bytes)
-          assert(bytesRead == 4)
-          // Read the partition id
-          val partitionId: PartitionId =
-            new DataInputStream(new ByteArrayInputStream(bytes)).readInt()
-          // Create a message reader thread to read the input buffer
-          val socketThread = new ChannelState(partitionId, clientChannel)
-          addConnection(partitionId, socketThread)
-        }
-      }
-    }.start()
-
-    // Wait for connections
-    Thread.sleep(VeloxConfig.bootstrapConnectionWaitSeconds * 1000)
-
-    // connect to all higher-numbered partitions
-    VeloxConfig.serverAddresses.filter {
-      case (id, addr) => id > VeloxConfig.partitionId
-    }.foreach {
-      case (partitionId, remoteAddress) =>
-        val clientChannel = SocketChannel.open()
-        clientChannel.connect(remoteAddress)
-        assert(clientChannel.isConnected)
-        val bos = new ByteArrayOutputStream()
-        val dos = new DataOutputStream(bos)
-        dos.writeInt(VeloxConfig.partitionId)
-        dos.flush()
-        val bytes = bos.toByteArray()
-        assert(bytes.size == 4)
-        clientChannel.socket.getOutputStream.write(bytes)
-        val socketThread = new ChannelState(partitionId, clientChannel)
-        addConnection(partitionId, socketThread)
-    }
-    Thread.sleep(VeloxConfig.bootstrapConnectionWaitSeconds * 1000)
   }
 
-  def send(dst: PartitionId, buffer: Array[Byte]) {
+  override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
+    val clientChannel = SocketChannel.open()
+    clientChannel.connect(address)
+    assert(clientChannel.isConnected)
+    val bos = new ByteArrayOutputStream()
+    val dos = new DataOutputStream(bos)
+
+    if(performIDHandshake) {
+      dos.writeInt(VeloxConfig.partitionId)
+      dos.flush()
+      val bytes = bos.toByteArray()
+      assert(bytes.size == 4)
+      clientChannel.socket.getOutputStream.write(bytes)
+    }
+    val socketThread = new ChannelState(handle, clientChannel)
+    _registerConnection(handle, socketThread)
+  }
+
+  override def connect(address: InetSocketAddress): NetworkDestinationHandle = {
+    val handle = nextConnectionID.incrementAndGet()
+    connect(handle, address)
+    handle
+  }
+
+  override def send(dst: NetworkDestinationHandle, buffer: Array[Byte]) {
     assert(connections.containsKey(dst))
     val bufferResized = connections.get(dst).writeMessage(buffer)
     if (bufferResized) {
@@ -286,7 +306,25 @@ class NIONetworkService extends NetworkService with Logging {
     }
   }
 
-  def recv(src: PartitionId, buffer: Array[Byte]) {
+  override def sendAny(buffer: Array[Byte]) {
+    if(connections.isEmpty) {
+      logger.error("Empty connections list in sendAny!")
+    }
+
+    val connArray = connections.keySet.toArray
+    send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
+  }
+
+  override def disconnect(which: NetworkDestinationHandle) {
+    if(connections.contains(which)) {
+      logger.error(s"Disconnection to $which requested, but $which not found!")
+      return
+    }
+
+    connections.remove(which)
+  }
+
+  def receive(src: NetworkDestinationHandle, buffer: Array[Byte]) {
     bytesReadMeter.mark(buffer.size)
     messageService.receiveRemoteMessage(src, buffer)
   }

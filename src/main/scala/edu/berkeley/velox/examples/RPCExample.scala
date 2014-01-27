@@ -10,6 +10,7 @@ import edu.berkeley.velox.rpc._
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.net.NIONetworkService
 import java.util.concurrent.atomic.AtomicInteger
+import edu.berkeley.velox.NetworkDestinationHandle
 
 /**
  * Demonstrate the usage of the RPC layer
@@ -21,17 +22,16 @@ object RPCExample extends Logging {
     VeloxConfig.initialize(args)
     logger.debug(s"Starting node ${VeloxConfig.partitionId} ")
 
-    /// Initialize the message service before starting the network -------------------
     // Create an RPC group and initialize by opening all the sockets
     // This should be a blocking call
-    val ms = new KryoMessageService()
+    val ms = new InternalRPCService()
 
     // Define a message class
-    case class FibonacciRequest (val input: Int) extends Request[Int]
+    case class FibonacciRequest (input: Int) extends Request[Int]
     // Define the handler for the fibonacci message
     class FibonacciHandler extends MessageHandler[Int, FibonacciRequest] {
       def fib(x: Int): Int = if (x < 2) x else fib(x - 1) + fib(x - 2)
-      def receive(src: Int, msg: FibonacciRequest): Int = {
+      def receive(src: NetworkDestinationHandle, msg: FibonacciRequest): Int = {
         println(s"Message from $src received by ${VeloxConfig.partitionId}")
         fib(msg.input)
       }

@@ -1,6 +1,5 @@
 package edu.berkeley.velox.benchmark.nio
 
-import java.io.IOException
 
 import java.nio.channels.SocketChannel
 import java.nio.ByteBuffer

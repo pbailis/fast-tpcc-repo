@@ -1,8 +1,10 @@
 package edu.berkeley.velox.net
 
 import java.nio.ByteBuffer
-import java.util.concurrent.atomic.{AtomicInteger}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import edu.berkeley.velox.conf.VeloxConfig
+
 /**
  * This class models an active and pending buffer in which the user
  * thread is either reading or writing to the active buffer and the
@@ -12,7 +14,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 class RingBuffer(val mb: Int = 1) {
   val MByte = 1048576
 
-  val poolSize = 16
+  val poolSize = VeloxConfig.numBuffersPerRing
 
   val rwLock = new ReentrantReadWriteLock()
   val activeIndex = new AtomicInteger(0)
