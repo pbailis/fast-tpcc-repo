@@ -8,14 +8,14 @@ import edu.berkeley.velox.PartitionId
 import java.io.{DataOutputStream, ByteArrayOutputStream, ByteArrayInputStream, DataInputStream}
 import edu.berkeley.velox.rpc.MessageService
 import java.nio.ByteBuffer
+import com.typesafe.scalalogging.slf4j.Logging
 
 
-class NIONetworkService extends NetworkService {
-
+class NIONetworkService extends NetworkService with Logging {
 
   class ChannelState (val partitionId: PartitionId,
                       val channel: SocketChannel, val mb: Int = 16) {
-    val writeBuffers = new DoubleBuffer(mb)
+    val writeBuffers = new RingBuffer(mb)
     val sizeBuffer = ByteBuffer.allocateDirect(4)
 
     var readSizeBuffer = ByteBuffer.allocateDirect(4)
@@ -63,7 +63,7 @@ class NIONetworkService extends NetworkService {
             var hasRemaining = buffer.pending.exists(_.hasRemaining)
             // If the pending send buffer is empty try and get more to send
             if (!hasRemaining) {
-              //println("flipping send buffer")
+              logger.trace("flipping send buffer")
               buffer.finishedSending()
               hasRemaining = buffer.pending.exists(_.hasRemaining)
             }
@@ -71,7 +71,6 @@ class NIONetworkService extends NetworkService {
             if (hasRemaining) {
               // write the bytes from the buffer
               var bytesWritten = channel.write(buffer.pending)
-              // println("Wrote zero bytes")
               var totalBytesWritten = bytesWritten
 
               while (bytesWritten > 0 && buffer.pending.exists(_.hasRemaining)) {
@@ -100,7 +99,7 @@ class NIONetworkService extends NetworkService {
     val newChannels = collection.mutable.Queue.empty[ChannelState]
     override def run() {
       while(true) {
-        // println("Reader Select started")
+        logger.trace("Reader Select started")
         // Register any pending write selectors
         val count = selector.select()
         newChannels.synchronized {
@@ -159,14 +158,6 @@ class NIONetworkService extends NetworkService {
               val bytesRead = channel.read(state.readBuffer)
               assert(bytesRead >= 0)
               bytesRecvCounter.addAndGet(bytesRead)
-              /*
-              var totalBytesRead = bytesRead
-              while (state.readBuffer.hasRemaining && bytesRead > 0) {
-                bytesRead = channel.read(state.readBuffer)
-                assert(bytesRead >= 0)
-                totalBytesRead += bytesRead
-              }
-              */
             }
 
             /**
@@ -216,7 +207,7 @@ class NIONetworkService extends NetworkService {
   def addConnection(partitionId: PartitionId, channelState: ChannelState) {
     // Register the connection and attach the selectors
     if (connections.putIfAbsent(partitionId, channelState) == null) {
-      println(s"Adding connection from $partitionId")
+      logger.debug(s"Adding connection from $partitionId")
       val channel = channelState.channel
       channel.configureBlocking(false)
       channel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
@@ -229,7 +220,7 @@ class NIONetworkService extends NetworkService {
       readerThread.selector.wakeup()
       writerThread.selector.wakeup()
     } else {
-      println("Already connected to " + partitionId)
+      logger.error("Already connected to " + partitionId)
     }
   }
 
@@ -274,7 +265,6 @@ class NIONetworkService extends NetworkService {
         val clientChannel = SocketChannel.open()
         clientChannel.connect(remoteAddress)
         assert(clientChannel.isConnected)
-        //println("Starting Connection")
         val bos = new ByteArrayOutputStream()
         val dos = new DataOutputStream(bos)
         dos.writeInt(VeloxConfig.partitionId)
@@ -289,7 +279,6 @@ class NIONetworkService extends NetworkService {
   }
 
   def send(dst: PartitionId, buffer: Array[Byte]) {
-    //println(s"Sending ${VeloxConfig.partitionId} --> $dst")
     assert(connections.containsKey(dst))
     val bufferResized = connections.get(dst).writeMessage(buffer)
     if (bufferResized) {

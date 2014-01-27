@@ -8,7 +8,7 @@ import scala.concurrent.duration._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.rpc._
 import edu.berkeley.velox.conf.VeloxConfig
-import edu.berkeley.velox.net.{NIONetworkService, BasicNetworkService}
+import edu.berkeley.velox.net.NIONetworkService
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
