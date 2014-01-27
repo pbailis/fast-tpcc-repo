@@ -5,6 +5,7 @@ import ExecutionContext.Implicits.global
 import scala.util.{Success, Failure}
 import scala.concurrent.duration._
 
+import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.rpc._
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.net.{NIONetworkService, BasicNetworkService}
@@ -13,12 +14,12 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Demonstrate the usage of the RPC layer
  */
-object RPCExample {
+object RPCExample extends Logging {
 
   def main(args: Array[String]) {
     // Parse command line and setup environment
     VeloxConfig.initialize(args)
-    println(s"Starting node ${VeloxConfig.partitionId} ")
+    logger.debug(s"Starting node ${VeloxConfig.partitionId} ")
 
     /// Initialize the message service before starting the network -------------------
     // Create an RPC group and initialize by opening all the sockets
