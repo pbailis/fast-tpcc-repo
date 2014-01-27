@@ -2,7 +2,7 @@ package edu.berkeley.velox.benchmark.nio
 
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.net.{NetworkService, NIONetworkService}
-import edu.berkeley.velox.rpc.MessageService
+import edu.berkeley.velox.rpc.{InternalRPCService, MessageService}
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.NetworkDestinationHandle
 import java.util.concurrent.Executors
@@ -11,14 +11,10 @@ import java.util.concurrent.Executors
 class PingMessageService(val totalPing: Int,
                          val sendThreads: Int,
                          val receiveThreads: Int,
-                         val msgSize: Int) extends MessageService {
-  val name = "ping"
-
+                         val msgSize: Int) extends InternalRPCService {
   val pings = new AtomicInteger(0)
   val sendExecutor = Executors.newFixedThreadPool(sendThreads)
   var startTime: Long = 0L
-
-  def initialize() {}
 
   def sendPings(partitionId: NetworkDestinationHandle) {
     startTime = System.currentTimeMillis()
@@ -57,23 +53,23 @@ class PingMessageService(val totalPing: Int,
 class PingPongMessageService(val totalPingPongs: Int,
                              val sendThreads: Int,
                              val receiveThreads: Int,
-                             val msgSize: Int) extends MessageService {
-  val name = "pong"
+                             val msgSize: Int) extends InternalRPCService {
+  override val name = "pong"
   val pingPongs = new AtomicInteger(0)
   val sendExecutor = Executors.newFixedThreadPool(sendThreads)
   val receiveExecutor = Executors.newFixedThreadPool(receiveThreads)
   var startTime: Long = 0L
 
-  def initialize() {}
 
   def sendPings(partitionId: NetworkDestinationHandle) {
     startTime = System.currentTimeMillis()
     val bytes = new Array[Byte](msgSize)
+    val ns = networkService
     for (i <- 0 until 10) {
       sendExecutor.execute(new Runnable {
         def run() {
           for (j <- 0 until totalPingPongs / 10) {
-            PingPongMessageService.this.networkService.send(partitionId, bytes)
+            ns.send(partitionId, bytes)
           }
         }
       })
@@ -126,10 +122,11 @@ object NetworkServiceBenchmark {
     val msgSize = 64
 
     val ms = new PingPongMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
+    ms.initialize()
+
     //val frontendServer = new PingMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
-    val ns = new NIONetworkService
-    ns.setMessageService(ms)
-    ns.start()
+
+
 
     val other = (VeloxConfig.partitionId+1) % VeloxConfig.partitionList.size
     ms.sendPings(other)
