@@ -1,9 +1,9 @@
 package edu.berkeley
 
-/**
- * Created by jegonzal on 1/20/14.
- */
+import com.codahale.metrics.MetricRegistry
+
 package object velox {
   type PartitionId = Int
   type RequestId = Long
+  val metrics = new MetricRegistry()
 }

@@ -9,7 +9,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
  * network layer is writing or reading to the pending buffer.  When
  * possible the network layer will try to swtich buffers
  */
-class DoubleBuffer(val mb: Int = 1) {
+class RingBuffer(val mb: Int = 1) {
   val MByte = 1048576
 
   val poolSize = 16

@@ -2,7 +2,7 @@ package edu.berkeley.velox.rpc
 
 import java.util.{HashMap => JHashMap}
 import scala.reflect.ClassTag
-import edu.berkeley.velox.net.{NetworkService, BasicNetworkService}
+import edu.berkeley.velox.net.NetworkService
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, PartitionId}
