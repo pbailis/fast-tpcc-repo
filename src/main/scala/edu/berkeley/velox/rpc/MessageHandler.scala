@@ -1,7 +1,6 @@
 package edu.berkeley.velox.rpc
 
-import scala.reflect.ClassTag
-import edu.berkeley.velox.PartitionId
+import edu.berkeley.velox.NetworkDestinationHandle
 
 /**
  * The message handler trait handles a particular message type
@@ -14,10 +13,9 @@ trait MessageHandler[+R, -M <: Request[R]] {
     * and should process the message content and return the appropriate response.
     *
     * @param src the originating machine id
-    * @param seqId the sequence number assigned by the originating machine
     * @param msg the actual message body
     * @return the response to be sent to the calling process (future).
     */
-  def receive(src: PartitionId, msg: M): R
+  def receive(src: NetworkDestinationHandle, msg: M): R
 }
 

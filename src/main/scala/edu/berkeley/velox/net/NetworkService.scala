@@ -1,11 +1,12 @@
 package edu.berkeley.velox.net
 
 import edu.berkeley.velox._
-import edu.berkeley.velox.rpc.{MessageService, KryoMessageService}
-import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 import com.codahale.metrics.MetricRegistry
+import java.net.InetSocketAddress
+import edu.berkeley.velox.rpc.MessageService
 
 trait NetworkService {
+
   var messageSentMeter = metrics.meter(MetricRegistry.name(getClass.getName, "messages-sent"))
   var messageReceivedMeter = metrics.meter(MetricRegistry.name(getClass.getName, "messages-received"))
   var bytesWrittenMeter = metrics.meter(MetricRegistry.name(getClass.getName, "bytes-written"))
@@ -15,6 +16,18 @@ trait NetworkService {
 
   var messageService: MessageService = null
   def setMessageService(messageService: MessageService)
+
   def start()
-  def send(dst: PartitionId, buffer: Array[Byte])
+
+  def configureInboundListener(port: Integer)
+
+  /*
+   * Connect to remote address and retain handle.
+   */
+  def connect(handle: NetworkDestinationHandle, address: InetSocketAddress)
+  def connect(address: InetSocketAddress): NetworkDestinationHandle
+  def disconnect(which: NetworkDestinationHandle)
+
+  def send(dst: NetworkDestinationHandle, buffer: Array[Byte])
+  def sendAny(buffer: Array[Byte])
 }

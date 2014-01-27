@@ -2,12 +2,9 @@ package edu.berkeley.velox.benchmark.nio
 
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.net.{NetworkService, NIONetworkService}
-import edu.berkeley.velox.rpc.{MessageService, MessageHandler, Request, KryoMessageService}
-import scala.concurrent.{Await, Future}
-import scala.util.{Failure, Success}
-import scala.concurrent.duration.Duration
+import edu.berkeley.velox.rpc.MessageService
 import java.util.concurrent.atomic.AtomicInteger
-import edu.berkeley.velox.PartitionId
+import edu.berkeley.velox.NetworkDestinationHandle
 import java.util.concurrent.Executors
 
 
@@ -15,16 +12,15 @@ class PingMessageService(val totalPing: Int,
                          val sendThreads: Int,
                          val receiveThreads: Int,
                          val msgSize: Int) extends MessageService {
+  val name = "ping"
+
   val pings = new AtomicInteger(0)
   val sendExecutor = Executors.newFixedThreadPool(sendThreads)
   var startTime: Long = 0L
 
-  override def setNetworkService(networkService: NetworkService): Unit =  {
-    this.networkService = networkService
-    this.networkService.messageService = this
-  }
+  def initialize() {}
 
-  def sendPings(partitionId: PartitionId) {
+  def sendPings(partitionId: NetworkDestinationHandle) {
     startTime = System.currentTimeMillis()
     val bytes = new Array[Byte](msgSize)
     for (i <- 0 until 10) {
@@ -38,7 +34,7 @@ class PingMessageService(val totalPing: Int,
     }
   }
 
-  override def receiveRemoteMessage(src: PartitionId, bytes: Array[Byte]): Unit = {
+  override def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: Array[Byte]): Unit = {
     val count = pings.incrementAndGet()
     if (count == totalPing) {
       val endTime = System.currentTimeMillis()
@@ -62,17 +58,15 @@ class PingPongMessageService(val totalPingPongs: Int,
                              val sendThreads: Int,
                              val receiveThreads: Int,
                              val msgSize: Int) extends MessageService {
+  val name = "pong"
   val pingPongs = new AtomicInteger(0)
   val sendExecutor = Executors.newFixedThreadPool(sendThreads)
   val receiveExecutor = Executors.newFixedThreadPool(receiveThreads)
   var startTime: Long = 0L
 
-  override def setNetworkService(networkService: NetworkService): Unit =  {
-    this.networkService = networkService
-    this.networkService.messageService = this
-  }
+  def initialize() {}
 
-  def sendPings(partitionId: PartitionId) {
+  def sendPings(partitionId: NetworkDestinationHandle) {
     startTime = System.currentTimeMillis()
     val bytes = new Array[Byte](msgSize)
     for (i <- 0 until 10) {
@@ -86,7 +80,7 @@ class PingPongMessageService(val totalPingPongs: Int,
     }
   }
 
-  override def receiveRemoteMessage(src: PartitionId, bytes: Array[Byte]): Unit = {
+  override def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: Array[Byte]): Unit = {
     val isPong = bytes(0) == 3
     if (isPong) {
       val count = pingPongs.incrementAndGet()
@@ -132,7 +126,7 @@ object NetworkServiceBenchmark {
     val msgSize = 64
 
     val ms = new PingPongMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
-    //val ms = new PingMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
+    //val frontendServer = new PingMessageService(totalPingPongs, sendThreads, receiveThreads, msgSize)
     val ns = new NIONetworkService
     ns.setMessageService(ms)
     ns.start()
