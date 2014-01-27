@@ -50,7 +50,7 @@ class PingMessageService(val totalPing: Int,
       println(s"Finished in ${elapsedTime} seconds.")
       println(s"Ping-Pong rate: ${msgsSent.toDouble / elapsedTime}")
       println(s"Data rate: ${mbSent / elapsedTime} (MB/Sec)")
-      val actualBytesRecv = networkService.bytesRecvCounter.get
+      val actualBytesRecv = networkService.bytesReceivedMeter.getCount
       println(s"Physical Mbytes received: ${actualBytesRecv / 1048576.0}")
       println(s"Physical transfer rate: ${actualBytesRecv / (1048576.0 * elapsedTime)} (MB/Sec)")
 
@@ -100,7 +100,7 @@ class PingPongMessageService(val totalPingPongs: Int,
         println(s"Finished in ${elapsedTime} seconds.")
         println(s"Ping-Pong rate: ${msgsSent.toDouble / elapsedTime}")
         println(s"Data rate: ${mbSent / elapsedTime} (MB/Sec)")
-        val actualBytesWritten = networkService.bytesWrittenCounter.get()
+        val actualBytesWritten = networkService.bytesWrittenMeter.getCount
         println(s"Physical Mbytes transfered: ${actualBytesWritten / 1048576.0}")
         println(s"Physical transfer rate: ${actualBytesWritten / (1048576.0 * elapsedTime)} (MB/Sec)")
 

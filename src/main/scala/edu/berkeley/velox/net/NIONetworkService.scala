@@ -23,8 +23,8 @@ class NIONetworkService extends NetworkService with Logging {
 
     def writeMessage(bytes: Array[Byte]): Boolean = {
       val bufferResized = writeBuffers.writeMessage(bytes)
-      msgSentCounter.incrementAndGet()
-      bytesWrittenCounter.addAndGet(bytes.size)
+      messageSentMeter.mark()
+      bytesWrittenMeter.mark(bytes.size)
       bufferResized
     }
   }
@@ -81,7 +81,7 @@ class NIONetworkService extends NetworkService with Logging {
 
               bytesWrittenOnRound += totalBytesWritten
               //println(s"Total bytes written: $totalBytesWritten")
-              bytesSentCounter.addAndGet(totalBytesWritten)
+              bytesSentMeter.mark(totalBytesWritten)
             }
           }
         } // end of while loop over iterator
@@ -129,7 +129,7 @@ class NIONetworkService extends NetworkService with Logging {
             if (state.readSizeBuffer.hasRemaining) {
               val bytesRead = channel.read(state.readSizeBuffer)
               assert(bytesRead >= 0)
-              bytesRecvCounter.addAndGet(bytesRead)
+              bytesReceivedMeter.mark(bytesRead)
               // If we read the size of the next buffer
               if (!state.readSizeBuffer.hasRemaining) {
                 state.readSizeBuffer.flip
@@ -157,7 +157,7 @@ class NIONetworkService extends NetworkService with Logging {
             if (!state.readSizeBuffer.hasRemaining) {
               val bytesRead = channel.read(state.readBuffer)
               assert(bytesRead >= 0)
-              bytesRecvCounter.addAndGet(bytesRead)
+              bytesReceivedMeter.mark(bytesRead)
             }
 
             /**
@@ -287,7 +287,7 @@ class NIONetworkService extends NetworkService with Logging {
   }
 
   def recv(src: PartitionId, buffer: Array[Byte]) {
-    bytesReadCounter.addAndGet(buffer.size)
+    bytesReadMeter.mark(buffer.size)
     messageService.receiveRemoteMessage(src, buffer)
   }
 
