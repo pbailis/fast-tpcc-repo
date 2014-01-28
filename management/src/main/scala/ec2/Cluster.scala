@@ -104,7 +104,7 @@ class Cluster(name: String,
   def state(): ClusterState = curState
 
   def start(): Cluster = {
-    if (curState != init) return
+    if (curState != init) return null
 
     curState = pending
     val kp =

@@ -1,7 +1,6 @@
 package edu.berkeley.velox.server
 
 import java.util.concurrent.ConcurrentHashMap
-import edu.berkeley.velox.client._
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.{InternalRPCService, Request, FrontendRPCService, MessageHandler}
 import edu.berkeley.velox._
@@ -99,6 +98,10 @@ object VeloxServerMain extends Logging {
     val kvserver = new VeloxServer
   }
 }
+
+case class ClientPutRequest (k: Key, v: Value) extends Request[Value]
+case class ClientInsertRequest (k: Key, v: Value) extends Request[Boolean]
+case class ClientGetRequest (k: Key) extends Request[Value]
 
 case class RoutedPutRequest(k: Key, v: Value) extends Request[Value]
 case class RoutedInsertRequest(k: Key, v: Value) extends Request[Boolean]
