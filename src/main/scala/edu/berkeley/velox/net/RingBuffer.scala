@@ -79,7 +79,7 @@ class RingBuffer(val mb: Int = 1) {
     rwLock.writeLock.unlock()
     // Update the frames size for each of the pending buffers
     val totalLength = pending.foldLeft(0)((sum, b) => (sum + b.position)) - 4
-    if (totalLength > 0) {
+    if (totalLength > 4) {
       pending(0).putInt(0,totalLength)
     } else {
       pending(0).clear()
