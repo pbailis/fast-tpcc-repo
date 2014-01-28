@@ -3,9 +3,9 @@ package edu.berkeley.velox.benchmark
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.{Key, Value}
 import edu.berkeley.velox.conf.VeloxConfig
-import edu.berkeley.velox.client.KVClient
 import scala.util.Random
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit, ThreadPoolExecutor}
+import edu.berkeley.velox.frontend.VeloxConnection
 
 
 object ClientBenchmark {
@@ -16,7 +16,7 @@ object ClientBenchmark {
 
     VeloxConfig.initialize(args)
 
-    val client = new KVClient
+    val client = new VeloxConnection
 
     val rand = new Random
     val nanospersec = math.pow(10, 9)

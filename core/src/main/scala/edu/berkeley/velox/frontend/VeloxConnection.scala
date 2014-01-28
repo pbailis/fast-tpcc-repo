@@ -1,13 +1,14 @@
-package edu.berkeley.velox.client
+package edu.berkeley.velox.frontend
 
 import edu.berkeley.velox.rpc.{ClientRPCService, Request}
 import scala.concurrent._
 import scala.concurrent.duration._
 import edu.berkeley.velox._
+import edu.berkeley.velox.server._
 import edu.berkeley.velox.conf.VeloxConfig
 
 
-class KVClient {
+class VeloxConnection {
   val ms = new ClientRPCService
   ms.initialize()
   ms.connect(VeloxConfig.frontendServerAddresses.values.toArray)
@@ -45,7 +46,3 @@ class KVClient {
     Await.result(f, Duration.Inf)
   }
 }
-
-case class ClientPutRequest (k: Key, v: Value) extends Request[Value]
-case class ClientInsertRequest (k: Key, v: Value) extends Request[Boolean]
-case class ClientGetRequest (k: Key) extends Request[Value]

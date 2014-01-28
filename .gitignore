@@ -1,8 +1,10 @@
 *.class
 *.log
 *.swp
+*.history
 
 # sbt specific
+bin/cluster/*.jar
 dist/*
 target/
 lib_managed/

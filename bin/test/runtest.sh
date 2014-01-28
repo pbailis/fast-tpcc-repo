@@ -1,5 +1,5 @@
-% mainclass=edu.berkeley.velox.examples.RPCExample
-mainclass=edu.berkeley.velox.benchmark.nio.NetworkServiceBenchmark
+% mainclass=edu.berkeley.velox.client.examples.RPCExample
+mainclass=edu.berkeley.velox.client.benchmark.nio.NetworkServiceBenchmark
 % -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005
 
 javaopts=" -cp target/scala-2.10/velox-assembly-0.1.jar -Xmx2G "

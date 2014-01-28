@@ -1,9 +1,9 @@
 package edu.berkeley.velox.examples
 
 import edu.berkeley.velox.net.NIONetworkService
-import edu.berkeley.velox.client.KVClient
 import edu.berkeley.velox._
 import edu.berkeley.velox.conf.VeloxConfig
+import edu.berkeley.velox.frontend.VeloxConnection
 
 /**
  * A simple example client that randomly generates numbers in a given range and
@@ -16,7 +16,7 @@ object ExampleClient {
     println("Starting client")
     VeloxConfig.initialize(args)
 
-    val client = new KVClient
+    val client = new VeloxConnection
     println("Client initialized")
 
     val testEntries = List(
