@@ -8,6 +8,8 @@ scalacOptions += "-deprecation"
 
 scalacOptions += "-feature"
 
+unmanagedSourceDirectories in Compile <+= baseDirectory(_ / "contrib/jassh/src")
+
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.2",
   "org.slf4j" % "slf4j-log4j12" % "1.7.2",
@@ -20,3 +22,11 @@ libraryDependencies ++= Seq(
 
 libraryDependencies += "org.scalatest" %% "scalatest" % "2.0" % "test"
 
+libraryDependencies ++= Seq(
+  "com.amazonaws" % "aws-java-sdk" % "1.2.1",
+  "com.github.seratch" %% "awscala" % "0.1.3"
+)
+
+resolvers += "JAnalyse Repository" at "http://www.janalyse.fr/repository/"
+
+libraryDependencies += "fr.janalyse" %% "janalyse-ssh" % "0.9.10" % "compile"
