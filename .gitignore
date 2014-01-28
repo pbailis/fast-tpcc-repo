@@ -3,6 +3,7 @@
 *.swp
 
 # sbt specific
+bin/cluster/*.jar
 dist/*
 target/
 lib_managed/

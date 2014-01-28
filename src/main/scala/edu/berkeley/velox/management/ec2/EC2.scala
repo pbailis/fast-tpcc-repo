@@ -2,7 +2,7 @@
   * Slightly more featurefull EC2 client
   */
 
-package edu.berkeley.velox.ec2
+package edu.berkeley.velox.management.ec2
 
 import scala.collection.JavaConverters._
 import com.amazonaws.services.{ ec2 => aws }

@@ -17,16 +17,11 @@ libraryDependencies ++= Seq(
   "com.twitter" % "chill_2.10" % "0.3.5",
   "com.twitter" % "chill-bijection_2.10" % "0.3.5",
   "com.typesafe" %% "scalalogging-slf4j" % "1.0.1",
-  "com.codahale.metrics" % "metrics-core" % "3.0.1"
-)
-
-libraryDependencies += "org.scalatest" %% "scalatest" % "2.0" % "test"
-
-libraryDependencies ++= Seq(
+  "com.codahale.metrics" % "metrics-core" % "3.0.1",
   "com.amazonaws" % "aws-java-sdk" % "1.2.1",
-  "com.github.seratch" %% "awscala" % "0.1.3"
+  "com.github.seratch" %% "awscala" % "0.1.3",
+  "fr.janalyse" %% "janalyse-ssh" % "0.9.10" % "compile",
+  "org.scalatest" %% "scalatest" % "2.0" % "test"
 )
 
 resolvers += "JAnalyse Repository" at "http://www.janalyse.fr/repository/"
-
-libraryDependencies += "fr.janalyse" %% "janalyse-ssh" % "0.9.10" % "compile"
