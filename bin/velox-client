@@ -1,0 +1,6 @@
+#!/bin/bash
+
+CLASSPATH=target/scala-2.10/velox-assembly-0.1.jar
+JVM_ARGS=""
+
+java $JVM_ARGS -cp $CLASSPATH edu.berkeley.velox.benchmark.ClientBenchmark "$@"

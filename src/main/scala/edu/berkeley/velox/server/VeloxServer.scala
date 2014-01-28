@@ -19,7 +19,7 @@ import com.typesafe.scalalogging.slf4j.Logging
 // it owns. It depends on the routing service to route only the correct
 // keys to it.
 
-class KVServer extends Logging {
+class VeloxServer extends Logging {
   val datastore = new ConcurrentHashMap[Key, Value]()
   val partitioner = new RandomPartitioner
 
@@ -96,7 +96,7 @@ object KVServerMain extends Logging {
     logger.info("Initializing Server")
     VeloxConfig.initialize(args)
     // initialize network service and message service
-    val kvserver = new KVServer
+    val kvserver = new VeloxServer
   }
 }
 
