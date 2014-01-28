@@ -19,10 +19,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
                       val mb: Int = 16) {
     var isOpen = true;
     val writeBuffers = new RingBuffer(mb)
-    val sizeBuffer = ByteBuffer.allocateDirect(4)
-
-    var readSizeBuffer = ByteBuffer.allocateDirect(4)
-    var readBuffer: ByteBuffer = null // ByteBuffer.allocateDirect(mb * 1048576)
+    var readBuffer: ByteBuffer = ByteBuffer.allocateDirect(mb * 1048576)
 
     val nextInternalID = new AtomicInteger(0)
 
@@ -71,23 +68,23 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
             // Get the channel and socket thread
             val channel = key.channel.asInstanceOf[SocketChannel]
             val state = key.attachment().asInstanceOf[ChannelState]
-            val buffer = state.writeBuffers
+            val buffers = state.writeBuffers
             // Test if there are any bytes remaining in the send buffer
-            var hasRemaining = buffer.pending.exists(_.hasRemaining)
+            var hasRemaining = buffers.pending.exists(_.hasRemaining)
             // If the pending send buffer is empty try and get more to send
             if (!hasRemaining) {
               logger.trace("flipping send buffer")
-              buffer.finishedSending()
-              hasRemaining = buffer.pending.exists(_.hasRemaining)
+              buffers.finishedSending()
+              hasRemaining = buffers.pending.exists(_.hasRemaining)
             }
             // If there are bytes to send then try and send those bytes
             if (hasRemaining) {
               // write the bytes from the buffer
-              var bytesWritten = channel.write(buffer.pending)
+              var bytesWritten = channel.write(buffers.pending)
               var totalBytesWritten = bytesWritten
 
-              while (bytesWritten > 0 && buffer.pending.exists(_.hasRemaining)) {
-                bytesWritten = channel.write(buffer.pending)
+              while (bytesWritten > 0 && buffers.pending.exists(_.hasRemaining)) {
+                bytesWritten = channel.write(buffers.pending)
                 assert(bytesWritten >= 0)
                 totalBytesWritten += bytesWritten
               }
@@ -105,10 +102,50 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
     } // end of run
   } // end of writer thread
 
+  def processFrames(partition: NetworkDestinationHandle, buffer: ByteBuffer) {
+    // Process the read buffer (we make a local copy here)
+    readExecutor.execute(new Runnable {
+      def run() {
+        while (buffer.hasRemaining) {
+          val frameSize = buffer.getInt
+          assert(frameSize <= buffer.remaining)
+          val endOfFrame = buffer.position + frameSize
+          while (buffer.position < endOfFrame) {
+            val msgSize = buffer.getInt
+            assert(msgSize >= 0)
+            val bytes = new Array[Byte](msgSize)
+            buffer.get(bytes)
+            NIONetworkService.this.receive(partition, bytes)
+          }
+        }
+        // We should have now depleted the buffer
+        assert(!buffer.hasRemaining)
+        buffer.clear()
+        readBufferPool.put(buffer)
+      }
+    })
+  }
+
+  def getNewReadBuffer(minSize: Int): ByteBuffer = {
+    // Get a buffer
+    var nextBuffer = readBufferPool.take()
+    if (nextBuffer.capacity < minSize) {
+      var newSize = nextBuffer.capacity()
+      while (newSize < minSize) { newSize = 2 * newSize }
+      // return the old buffer (maybe we can reuse it?)
+      readBufferPool.put(nextBuffer)
+      nextBuffer = ByteBuffer.allocateDirect(newSize)
+    }
+    nextBuffer
+  }
+
   class ReaderThread extends Thread("Read-Selector-Thread") {
     val selector = Selector.open
     val newChannels = collection.mutable.Queue.empty[ChannelState]
     override def run() {
+      for (i <- 0 until 32) {
+        readBufferPool.put(ByteBuffer.allocateDirect(1048576))
+      }
       while(true) {
         logger.trace("Reader Select started")
         // Register any pending write selectors
@@ -132,71 +169,45 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
             // Get the channel and buffer
             val channel = key.channel.asInstanceOf[SocketChannel]
             val state = key.attachment().asInstanceOf[ChannelState]
-            /**
-             * Step 1: Read the size of the read buffer if necessary
-             */
-            // If the read size buffer is not full then we
-            // don't know the read buffer size
-            if (state.readSizeBuffer.hasRemaining) {
-              val bytesRead = channel.read(state.readSizeBuffer)
-              assert(bytesRead >= 0)
-              bytesReceivedMeter.mark(bytesRead)
-              // If we read the size of the next buffer
-              if (!state.readSizeBuffer.hasRemaining) {
-                state.readSizeBuffer.flip
-                val nextBufferSize = state.readSizeBuffer.getInt
-                // If we need to resize the read buffer
-                if (state.readBuffer == null || state.readBuffer.capacity < nextBufferSize) {
-                  // initialize the new size and loop until big enough
-                  // @todo make pretty
-                  var newSize = if (state.readBuffer == null) 64 else state.readBuffer.capacity
-                  while (nextBufferSize > newSize) {
-                    newSize = 2 * newSize
-                  }
-                  state.readBuffer = ByteBuffer.allocateDirect(newSize)
-                }
-                // Set the limit on the read buffer
-                state.readBuffer.clear()
-                state.readBuffer.limit(nextBufferSize)
+
+            // Do a read
+            val bytesRead = channel.read(state.readBuffer)
+            bytesReceivedMeter.mark(bytesRead)
+
+            // Find the beginning of the first partial frame
+            var startPosition = 0
+            while (startPosition + 4 < state.readBuffer.position() &&
+              startPosition + state.readBuffer.getInt(startPosition) + 4 <= state.readBuffer.position()) {
+              startPosition += state.readBuffer.getInt(startPosition) + 4
+            }
+
+            // If we have read any complete frames split off the completed frames and restart the
+            // buffer with the remainder
+            if (startPosition > 0) {
+              // Construct the finished buffer
+              val finishedBuffer = state.readBuffer.duplicate()
+              finishedBuffer.flip()
+              finishedBuffer.limit(startPosition)
+              processFrames(state.partitionId, finishedBuffer)
+              // Construct the remainder buffer
+              val remainderBuffer = state.readBuffer.duplicate()
+              remainderBuffer.flip()
+              remainderBuffer.position(startPosition)
+              // Put the remainder in a new read buffer
+              state.readBuffer = getNewReadBuffer(remainderBuffer.remaining())
+              state.readBuffer.clear()
+              state.readBuffer.put(remainderBuffer)
+            }
+
+            // Resize the read buffer if necessary (and possible)
+            if (state.readBuffer.position() >= 4) {
+              val frameSize = state.readBuffer.getInt(0)
+              if (frameSize + 4 > state.readBuffer.capacity()) {
+                val newBuffer = getNewReadBuffer(frameSize + 4)
+                state.readBuffer.flip()
+                newBuffer.put(state.readBuffer)
+                state.readBuffer = newBuffer
               }
-            }
-
-            /**
-             * Step 2: If we know the size of the read buffer begin
-             * (or continue) to fill it
-             */
-            if (!state.readSizeBuffer.hasRemaining) {
-              val bytesRead = channel.read(state.readBuffer)
-              assert(bytesRead >= 0)
-              bytesReceivedMeter.mark(bytesRead)
-            }
-
-            /**
-             * Step 3: Process the results of the read if necessary
-             */
-            // If the receive buffer is full process the result
-            if (!state.readBuffer.hasRemaining) {
-              // Process the read buffer (we make a local copy here)
-              val oldReadBuffer = state.readBuffer
-              val partitionId = state.partitionId
-              readExecutor.execute(new Runnable {
-                def run() {
-                  oldReadBuffer.flip()
-                  while (oldReadBuffer.hasRemaining) {
-                    val msgSize = oldReadBuffer.getInt
-                    assert(msgSize >= 0)
-                    val bytes = new Array[Byte](msgSize)
-                    oldReadBuffer.get(bytes)
-                    NIONetworkService.this.receive(partitionId, bytes)
-                  }
-                  oldReadBuffer.clear()
-                  readBufferPool.add(oldReadBuffer)
-                }
-              })
-              // Get a new buffer (this could be null)
-              state.readBuffer = readBufferPool.poll()
-              // Reset the readSizeBuffer to allow for longer reads
-              state.readSizeBuffer.clear()
             }
           }
         }
@@ -206,7 +217,9 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
 
   var connections = new ConcurrentHashMap[NetworkDestinationHandle, ChannelState]
   val writerThread = new WriterThread
-  val readBufferPool = new ConcurrentLinkedQueue[ByteBuffer]
+
+  // Initialize the read buffer pool with buffers
+  val readBufferPool = new LinkedBlockingQueue[ByteBuffer]
   val readerThread = new ReaderThread
   val readExecutor = Executors.newFixedThreadPool(16)
   val nextConnectionID = new AtomicInteger(0)
