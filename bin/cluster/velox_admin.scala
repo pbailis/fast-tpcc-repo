@@ -1,5 +1,5 @@
 #!/bin/sh
-exec scala -cp target/scala-2.10/velox-assembly-0.1.jar -savecompiled "$0" "$@"
+exec scala -cp assembly/target/scala-2.10/velox-assembly-0.1.jar -savecompiled "$0" "$@"
 !#
 
 import edu.berkeley.velox.management.ec2._
