@@ -2,46 +2,60 @@
 exec scala -deprecation -cp assembly/target/scala-2.10/velox-assembly-0.1.jar "$0" "$@"
 !#
 
-import edu.berkeley.velox.management.ec2.EC2Cluster
-import edu.berkeley.velox.management.ec2.EC2Config
+import edu.berkeley.velox.management.ManagementConfig
+import edu.berkeley.velox.management.ec2.EC2ManagedCluster
+import edu.berkeley.velox.management.local.LocalManagedCluster
+
 import java.lang.InterruptedException
 
 
-if(!EC2Config.initialize(args)) {
+if(!ManagementConfig.initialize(args)) {
   sys.exit(-1)
 }
 
-val clusterName = EC2Config.cluster_name
-val pemFile = EC2Config.pemfile
-val numServers = EC2Config.numServers
-val numClients = EC2Config.numClients
+if(ManagementConfig.local) {
+  val localCluster = new LocalManagedCluster(ManagementConfig.numServers, ManagementConfig.numClients)
 
-var curCluster: EC2Cluster = null
+  if(ManagementConfig.client_bench) {
+    localCluster.startVeloxServers()
+    Thread.sleep(6000)
+    localCluster.runVeloxClientScript("velox-client")
+  }
 
-if(EC2Config.launch) {
-  val cluster = new Cluster(clusterName, numServers, numClients, pemFile=pemFile)
-  curCluster = cluster.start
-} else {
-  curCluster = Cluster.getRunning(EC2Config.cluster_name, numServers, numClients, EC2Config.pemfile)
+  sys.exit(0)
 }
 
-if(EC2Config.describe) {
+val clusterName = ManagementConfig.cluster_name
+val pemFile = ManagementConfig.pemfile
+val numServers = ManagementConfig.numServers
+val numClients = ManagementConfig.numClients
+
+var curCluster: EC2ManagedCluster = null
+
+if(ManagementConfig.launch) {
+  val cluster = new EC2ManagedCluster(clusterName, numServers, numClients, pemFile=pemFile)
+  curCluster = cluster.start
+} else {
+  curCluster = EC2ManagedCluster.getRunning(ManagementConfig.cluster_name, numServers, numClients, ManagementConfig.pemfile)
+}
+
+if(ManagementConfig.describe) {
   println(curCluster.publicDns)
 }
 
-if(EC2Config.client_bench) {
+if(ManagementConfig.client_bench) {
   curCluster.startVeloxServers()
   Thread.sleep(6000)
   curCluster.runVeloxClientScript("velox-client")
 }
 
-if(EC2Config.rebuild) {
-  curCluster.rebuildVelox(branch = EC2Config.branch,
-                          remote = EC2Config.remote,
-                          deployKey = EC2Config.deploy_key)
+if(ManagementConfig.rebuild) {
+  curCluster.rebuildVelox(branch = ManagementConfig.branch,
+                          remote = ManagementConfig.remote,
+                          deployKey = ManagementConfig.deploy_key)
 }
 
-if(EC2Config.terminate) {
+if(ManagementConfig.terminate) {
   curCluster.terminate()
 }
 

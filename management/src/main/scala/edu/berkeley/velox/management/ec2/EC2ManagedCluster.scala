@@ -22,15 +22,16 @@ import scala.Some
 import awscala.ec2.KeyPair
 import awscala.ec2.InstanceType
 import scala.sys.process.Process
+import edu.berkley.velox.management.ManagedCluster
 
-object ClusterState extends Enumeration {
+object EC2ClusterState extends Enumeration {
   type ClusterState = Value
   val init, pending, active, closed = Value
 }
 
-import ClusterState._
+import EC2ClusterState._
 
-object EC2Cluster {
+object EC2ManagedCluster {
   val RUNNING_CODE = 16
 
   /** Gets a cluster object for a running cluster
@@ -38,7 +39,7 @@ object EC2Cluster {
     * @param region Region in which cluster was launched
     * @param pemFile Private key file to log into instances
     */
-  def getRunning(name: String, numServers: Int, numClients: Int, pemFile: File, region: Region = Region.Oregon): EC2Cluster = {
+  def getRunning(name: String, numServers: Int, numClients: Int, pemFile: File, region: Region = Region.Oregon): EC2ManagedCluster = {
     val ec2 = VeloxEC2.at(region)
     val tag = new Tag("veloxclustername", name)
     val instances = ec2.instances.filter(inst => {
@@ -51,14 +52,14 @@ object EC2Cluster {
     if (icount == 0)
       throw new Exception(s"No instances running in a cluster named ${name}")
 
-    if(icount != numClients+numServers) {
+    if(icount < numClients+numServers) {
       throw new Exception(s"Requested $numClients clients and $numServers instances, but only $icount servers found!")
     }
 
     val imageId = instances.head.underlying.getImageId
     val itype = InstanceType.T1_Micro // how to get this without grossness?
 
-    val c = new EC2Cluster(name, numServers, numClients, pemFile, imageId, itype, null)
+    val c = new EC2ManagedCluster(name, numServers, numClients, pemFile, imageId, itype, null)
 
     c.clusterInstances = instances
     c.curState = active
@@ -74,14 +75,14 @@ object EC2Cluster {
  * @param numClients How many clients in this cluster
  * @param imageId Amazon ami to use
  * @param instanceType Type of instance to bring up.  See:
- *                     https://github.com/seratch/AWScala/blob/develop/src/main/scala/awscala/ec2/InstanceType.scala
+ *                     https://github.com/seratch/AWScala/blob/develop/src/main/scala/awscala/edu.berkeley.velox.management/InstanceType.scala
  * @param pemFile Private key file for logging into instances
  * @param spotPrice If not None, spot instances will be requested at this price
  * @param region AWS region to run in, defaults to Oregon
  * @param keyPair Key pair to run instances with.  Defaults to first keypair for your account
- * @return EC2Cluster cluster object
+ * @return EC2ManagedCluster cluster object
  */
-class EC2Cluster(name: String,
+class EC2ManagedCluster(name: String,
               var numServers: Int,
               var numClients: Int,
               pemFile: File,
@@ -89,7 +90,7 @@ class EC2Cluster(name: String,
               instanceType: InstanceType = InstanceType.Cr1_8xlarge,
               spotPrice: Option[String] = Option("1.5"),
               region: Region = Region.Oregon,
-              keyPair: KeyPair = null) {
+              keyPair: KeyPair = null) extends ManagedCluster {
 
   implicit val ec2 = VeloxEC2.at(region)
 
@@ -125,7 +126,7 @@ class EC2Cluster(name: String,
 
   def state(): ClusterState = curState
 
-  def start() : EC2Cluster = {
+  def start() : EC2ManagedCluster = {
     if (curState != init) return null
 
     curState = pending
@@ -180,7 +181,7 @@ class EC2Cluster(name: String,
     this
   }
 
-  def terminate() {
+  override def terminate() {
     clusterInstances.map(_.terminate)
 
     println(s"Shutting down ${clusterInstances.size} instances in cluster $name in $region")
@@ -283,7 +284,7 @@ class EC2Cluster(name: String,
     }).foreach{ case (host, ret) => println(s"${host}: ${ret}" )}
   }
 
-  def getIPByInstanceIndex(index: Int) {
+  def getIPByInstanceIndex(index: Int): String = {
     clusterInstances(index).publicDnsName
   }
 
@@ -306,4 +307,4 @@ class EC2Cluster(name: String,
   }
 }
 
-//val c = new EC2Cluster("n1", 1, "ami-6aad335a",awscala.ec2.InstanceType.T1_Micro,new java.io.File("/home/nick/research/.ec2/nick-oregon.pem"))
+//val c = new EC2ManagedCluster("n1", 1, "ami-6aad335a",awscala.edu.berkeley.velox.management.InstanceType.T1_Micro,new java.io.File("/home/nick/research/.edu.berkeley.velox.management/nick-oregon.pem"))

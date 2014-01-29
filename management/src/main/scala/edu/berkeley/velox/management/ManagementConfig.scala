@@ -1,3 +1,5 @@
+package edu.berkeley.velox.management
+
 import java.io.File
 import com.typesafe.scalalogging.slf4j.Logging
 
@@ -7,6 +9,7 @@ object ManagementConfig extends Logging {
   var pemfile: File = null
   var numServers: Integer = 0
   var numClients: Integer = 0
+  var local: Boolean = false
 
   // COMMANDS BEGIN
   var launch: Boolean = false
@@ -20,10 +23,12 @@ object ManagementConfig extends Logging {
   var deploy_key: String = null
 
   val parser = new scopt.OptionParser[Unit]("velox") {
-    opt[String]('n', "cluster_name") required() foreach { i => cluster_name = i } text("EC2Cluster ID")
+    opt[String]('n', "cluster_name") required() foreach { i => cluster_name = i } text("EC2ManagedCluster ID")
     opt[String]('i', "pemfile") foreach { i => pemfile_str = i } text("pem file path")
     opt[Int]('s', "num_servers") foreach { i => numServers = i } text("Number of server instances in cluster")
     opt[Int]('c', "num_clients") foreach { i => numClients = i } text("Number of client instances in cluster")
+    opt[Unit]("local") foreach { i => local = true } text("Launch cluster locally (i.e., non-EC2; default: EC2)")
+
     opt[Unit]("launch") foreach { i => launch = true } text("Launch new cluster")
     opt[Unit]("describe") foreach { i => describe = true } text("Describe existing cluster")
     opt[Unit]("rebuild") foreach { i => rebuild = true } text("Rebuild cluster")
