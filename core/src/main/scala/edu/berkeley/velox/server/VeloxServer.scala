@@ -90,7 +90,7 @@ class VeloxServer extends Logging {
   }
 }
 
-object VeloxServerMain extends Logging {
+object VeloxServer extends Logging {
   def main(args: Array[String]) {
     logger.info("Initializing Server")
     VeloxConfig.initialize(args)
