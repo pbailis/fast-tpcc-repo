@@ -217,6 +217,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
 
   var connections = new ConcurrentHashMap[NetworkDestinationHandle, ChannelState]
   val writerThread = new WriterThread
+  private val connectionSemaphore = new Semaphore(0)
 
   // Initialize the read buffer pool with buffers
   val readBufferPool = new LinkedBlockingQueue[ByteBuffer]
@@ -226,6 +227,10 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
 
   override def setMessageService(messageService: MessageService) {
     this.messageService = messageService
+  }
+
+  def blockForConnections(numConnections: Integer) {
+    connectionSemaphore.acquireUninterruptibly(numConnections)
   }
 
   def _registerConnection(partitionId: NetworkDestinationHandle, channelState: ChannelState) {
@@ -241,8 +246,10 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
       writerThread.newChannels.synchronized {
         writerThread.newChannels.enqueue(channelState)
       }
-      readerThread.selector.wakeup()
-      writerThread.selector.wakeup()
+      readerThread.selector.wakeup
+      writerThread.selector.wakeup
+
+      connectionSemaphore.release
     } else {
       logger.error("Already connected to " + partitionId)
     }
@@ -288,21 +295,29 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
   }
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
-    val clientChannel = SocketChannel.open()
-    clientChannel.connect(address)
-    assert(clientChannel.isConnected)
-    val bos = new ByteArrayOutputStream()
-    val dos = new DataOutputStream(bos)
+    while(true) {
+      try {
+        val clientChannel = SocketChannel.open()
+        clientChannel.connect(address)
+        assert(clientChannel.isConnected)
+        val bos = new ByteArrayOutputStream()
+        val dos = new DataOutputStream(bos)
 
-    if(performIDHandshake) {
-      dos.writeInt(VeloxConfig.partitionId)
-      dos.flush()
-      val bytes = bos.toByteArray()
-      assert(bytes.size == 4)
-      clientChannel.socket.getOutputStream.write(bytes)
+        if(performIDHandshake) {
+          dos.writeInt(VeloxConfig.partitionId)
+          dos.flush()
+          val bytes = bos.toByteArray()
+          assert(bytes.size == 4)
+          clientChannel.socket.getOutputStream.write(bytes)
+        }
+        val socketThread = new ChannelState(handle, clientChannel)
+        _registerConnection(handle, socketThread)
+        return;
+      } catch {
+        case e: Exception => logger.error("Error connecting to "+address, e)
+        Thread.sleep(500)
+      }
     }
-    val socketThread = new ChannelState(handle, clientChannel)
-    _registerConnection(handle, socketThread)
   }
 
   override def connect(address: InetSocketAddress): NetworkDestinationHandle = {
