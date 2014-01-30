@@ -31,7 +31,7 @@ class InternalRPCService extends MessageService {
         connect(partitionId, remoteAddress)
     }
 
-    Thread.sleep(VeloxConfig.bootstrapConnectionWaitSeconds * 1000)
+    networkService.blockForConnections(VeloxConfig.internalServerAddresses.keys.size-1)
     logger.debug(s"${VeloxConfig.partitionId} started internal RPC!")
   }
 }

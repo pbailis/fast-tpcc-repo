@@ -223,6 +223,7 @@ object SSH {
  */
 class SSH(val options: SSHOptions) extends ShellOperations with TransfertOperations {
   private implicit val ssh = this
+
   private val jsch = new JSch
   val jschsession: Session = {
     options.keyfiles2lookup
