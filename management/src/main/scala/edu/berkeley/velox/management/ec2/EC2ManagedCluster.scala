@@ -134,11 +134,12 @@ class EC2ManagedCluster(name: String,
       if (keyPair == null) ec2.keyPairs.head
       else keyPair
 
-    if(!ec2.securityGroup(VELOX_SECURITY_GROUP).isEmpty) {
+    if(!ec2.describeSecurityGroups.getSecurityGroups.asScala.filter(a => a.getGroupName == VELOX_SECURITY_GROUP).isEmpty) {
       ec2.deleteSecurityGroup(VELOX_SECURITY_GROUP)
     }
 
-    ec2.createSecurityGroup(VELOX_SECURITY_GROUP, "velox launch")
+    ec2.createSecurityGroup(new CreateSecurityGroupRequest(VELOX_SECURITY_GROUP, "velox launch"))
+
 
     var permission = new IpPermission
     permission.setIpProtocol("tcp")
@@ -230,12 +231,12 @@ class EC2ManagedCluster(name: String,
 
     (0 until numServers).par.foreach {
       id => runCommandInVelox(id,
-                              s"export JVM_OPTS='$jvmOpts';" +
+                              s"touch test.txt; rm $serverLog; export JVM_OPTS='$jvmOpts';" +
                                "bin/kill_local_velox.sh;" +
                               s"bin/velox-server -i $id " +
                               s"-c $internalClusterConfigStr " +
                               s"-p $veloxInternalPort " +
-                              s"-f $veloxFrontendPort &" +
+                              s"-f $veloxFrontendPort " +
                               (if(inBackground) s"&> $serverLog & disown" else ""),
                               inBackground)
     }
@@ -249,6 +250,7 @@ class EC2ManagedCluster(name: String,
     (numServers until numServers+numClients).par.foreach {
       id => runCommandInVelox(id,
                               s"export JVM_OPTS='$jvmOpts';" +
+                               "bin/kill_local_velox.sh;" +
                               s"bin/$scriptName " +
                               s"-m $externalClusterConfigStr;")
     }
@@ -297,7 +299,8 @@ class EC2ManagedCluster(name: String,
       ssh =>
       if(inBackground) {
         Future {
-          ssh.execute(cmd)
+          val ret = ssh.execute(cmd)
+          println(ret)
         }
       } else {
         ssh.execute(cmd)

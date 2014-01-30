@@ -7,6 +7,7 @@ import edu.berkeley.velox.management.ec2.EC2ManagedCluster
 import edu.berkeley.velox.management.local.LocalManagedCluster
 
 import java.lang.InterruptedException
+import awscala.ec2.InstanceType
 
 
 if(!ManagementConfig.initialize(args)) {

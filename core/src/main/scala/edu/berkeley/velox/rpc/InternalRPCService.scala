@@ -15,10 +15,10 @@ class InternalRPCService extends MessageService {
   networkService.setMessageService(this)
   
   override def initialize() {
-    logger.debug(s"${VeloxConfig.partitionId} starting internal RPC acceptor on port ${VeloxConfig.internalServerPort}")
+    logger.info(s"${VeloxConfig.partitionId} starting internal RPC acceptor on port ${VeloxConfig.internalServerPort}")
     configureInboundListener(VeloxConfig.internalServerPort);
     networkService.start()
-    logger.debug(s"${VeloxConfig.partitionId} internal RPC acceptor listening on port ${VeloxConfig.internalServerPort}")
+    logger.info(s"${VeloxConfig.partitionId} internal RPC acceptor listening on port ${VeloxConfig.internalServerPort}")
 
     Thread.sleep(VeloxConfig.bootstrapConnectionWaitSeconds * 1000)
 
@@ -32,6 +32,6 @@ class InternalRPCService extends MessageService {
     }
 
     networkService.blockForConnections(VeloxConfig.internalServerAddresses.keys.size-1)
-    logger.debug(s"${VeloxConfig.partitionId} started internal RPC!")
+    logger.info(s"${VeloxConfig.partitionId} started internal RPC!")
   }
 }

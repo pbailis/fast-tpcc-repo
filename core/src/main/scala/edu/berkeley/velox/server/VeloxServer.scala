@@ -60,6 +60,7 @@ class VeloxServer extends Logging {
     def receive(src: NetworkDestinationHandle, msg: ClientGetRequest): Value = {
       val f: Future[Value] = internalServer.send(partitioner.getMasterPartition(msg.k), new RoutedGetRequest(msg.k))
       Await.result(f, Duration.Inf)
+      Await.result(f, Duration.Inf)
     }
   }
 

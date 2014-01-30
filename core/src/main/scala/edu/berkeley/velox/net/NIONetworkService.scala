@@ -236,7 +236,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
   def _registerConnection(partitionId: NetworkDestinationHandle, channelState: ChannelState) {
     // Register the connection and attach the selectors
     if (connections.putIfAbsent(partitionId, channelState) == null) {
-      logger.debug(s"Adding connection from $partitionId")
+      logger.info(s"Adding connection from $partitionId")
       val channel = channelState.channel
       channel.configureBlocking(false)
       channel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
