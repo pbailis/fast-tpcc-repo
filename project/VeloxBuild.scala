@@ -13,7 +13,7 @@ object VeloxBuild extends Build {
     "root",
     file("."),
     settings = rootSettings
-  ) aggregate (allProjects: _*)
+  ) aggregate (allProjects: _*) dependsOn(allDeps: _*)
 
 
   lazy val core = Project("core", file("core"), settings = coreSettings)
@@ -31,6 +31,7 @@ object VeloxBuild extends Build {
   lazy val allExternal = Seq[ClasspathDependency](externalJassh)
   lazy val allExternalRefs = Seq[ProjectReference](externalJassh)
   lazy val allProjects = packageProjects ++ allExternalRefs ++ Seq[ProjectReference](assemblyProj)
+  lazy val allDeps = packages ++ allExternal
 
 
   lazy val assembleDeps = TaskKey[Unit]("assemble-deps", "Build assembly of dependencies and packages Spark projects")
