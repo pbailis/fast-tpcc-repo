@@ -24,7 +24,11 @@ if __name__ == "__main__":
     # launch options
     parser.add_argument('--no_spot', dest='no_spot', action='store_true',
                         help='Don\'t use spot instances, default off.')
-    parser.add_argument('--placement_group', dest='placement_group', default="KAIJUCLUSTER")
+    parser.add_argument('--spot_price', dest="spot_price", type=float, default=1.5, help="Spot price")
+    parser.add_argument('--instance_type', dest="instance_type", type=str, default="cr1.8xlarge",
+                        help="EC2 instance type")
+
+    parser.add_argument('--placement_group', dest='placement_group', default="VELOX_CLUSTER")
 
     # rebuild options
     parser.add_argument('--branch', '-b', dest="branch", default="master",
@@ -46,7 +50,7 @@ if __name__ == "__main__":
     parser.add_argument('--terminate', '-t', action='store_true',
                         help='Terminate the EC2 cluster and any matching instances')
     parser.add_argument('--rebuild', '-rb', action='store_true',
-                        help='Rebuild kaiju cluster')
+                        help='Rebuild velox cluster')
 
     parser.add_argument('--client_bench', action='store_true',
                         help='Run THE CRANKSHAW TEST on EC2')
@@ -73,9 +77,9 @@ if __name__ == "__main__":
         region = args.region
 
         if args.no_spot:
-            provision_instances(region, num_hosts)
+            provision_instances(region, num_hosts, instance_type=args.instance_type)
         else:
-            provision_spot(region, num_hosts)
+            provision_spot(region, num_hosts, instance_type=args.instance_type, bid_price=args.spot_price)
 
         wait_all_hosts_up(region, num_hosts)
 
@@ -84,7 +88,7 @@ if __name__ == "__main__":
         claim_instances(region, cluster_id)
 
     if args.rebuild:
-        pprint("Rebuilding kaiju clusters")
+        pprint("Rebuilding velox clusters")
         assign_hosts(region, cluster)
         stop_velox_processes()
         rebuild_servers(branch=args.branch, remote=args.git_remote, deploy_key=args.deploy_key)

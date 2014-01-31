@@ -62,10 +62,10 @@ def fetch_file_single(host, remote, local, user="ubuntu"):
     system("scp -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
 def fetch_file_single_compressed(host, remote, local, user="ubuntu"):
-    system("scp -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
+    system("scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
 def fetch_file_single_compressed_bg(host, remote, local, user="ubuntu"):
-    system("scp -o StrictHostKeyChecking=no %s@%s:%s '%s' &" % (user, host, remote, local))
+    system("scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s' &" % (user, host, remote, local))
 
 def get_host_ips(hosts):
     return open("hosts/%s.txt" % (hosts)).read().split('\n')[:-1]
@@ -227,7 +227,7 @@ def terminate_cluster(region, tag, placement_group="velox"):
     #conn.delete_placement_group(placement_group)
 
 
-def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bidPrice=1.5, placement_group="velox"):
+def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bid_price=1.5, placement_group="velox"):
     global AMIs
 
     setup_security_group(regionName)
@@ -245,7 +245,7 @@ def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bidPric
     except:
         print "Placement group exception "+placement_group
     '''
-    reservations = conn.request_spot_instances(bidPrice,
+    reservations = conn.request_spot_instances(bid_price,
                                                AMIs[regionName],
                                                count=num,
                                                instance_type=instance_type,
