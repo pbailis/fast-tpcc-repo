@@ -1,7 +1,6 @@
 package edu.berkeley.velox.examples
 
-import edu.berkeley.velox.net.NIONetworkService
-import edu.berkeley.velox._
+import edu.berkeley.velox.datamodel.{Key, Value}
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.frontend.VeloxConnection
 

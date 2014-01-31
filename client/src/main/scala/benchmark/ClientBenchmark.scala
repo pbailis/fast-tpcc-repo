@@ -1,10 +1,9 @@
 package edu.berkeley.velox.benchmark
 
 import java.util.concurrent.atomic.AtomicInteger
-import edu.berkeley.velox.{Key, Value}
-import edu.berkeley.velox.conf.VeloxConfig
+import edu.berkeley.velox.datamodel.Key
+import edu.berkeley.velox.datamodel.Value
 import scala.util.Random
-import java.util.concurrent.{Semaphore, LinkedBlockingQueue, TimeUnit, ThreadPoolExecutor}
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 

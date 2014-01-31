@@ -8,6 +8,8 @@ import scala.concurrent.{Await, Future}
 import scala.concurrent.duration.Duration
 import edu.berkeley.velox.cluster.RandomPartitioner
 import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.datamodel.Key
+import edu.berkeley.velox.datamodel.Value
 
 
 // Every server has a single instance of this class. It handles data storage

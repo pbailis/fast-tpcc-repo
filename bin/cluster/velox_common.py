@@ -410,9 +410,6 @@ def client_bench_local_single(numservers, parallelism=64, pct_reads=.5, ops=1000
     system("java -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d" % (
         VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout))
 
-
-
-
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
 def run_velox_client_bench(cluster, parallelism=64, pct_reads=.5, ops=100000, timeout=5):
     cmd = ("pkill -9 java; "
@@ -420,6 +417,73 @@ def run_velox_client_bench(cluster, parallelism=64, pct_reads=.5, ops=100000, ti
           (HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, pct_reads, ops, timeout)
     run_cmd_in_velox("all-clients", cmd)
+
+def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
+    clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, numservers)])
+
+    ycsb_cmd = (("cd external/ycsb; "
+                 "bin/ycsb run velox "
+                 "-s "
+                 "-P %s "
+                 "-threads %d "
+                 "-p readproportion=%s "
+                 "-p updateproportion=%s "
+                 "-p fieldlength=%d "
+                 "-p fieldcount=1 "
+                 "-p recordcount=%d "
+                 "-p operationcount=1000000 "
+                 "-p requestdistribution=%s "
+                 "-p maxexecutiontime=%d "
+                 "-p cluster=%s") %
+                (workload, threads, readprop, 1-readprop, valuesize, recordcount, request_distribution, time, clientConfigStr))
+
+    if dorebuild:
+        pprint("Rebuilding YCSB")
+        system("cd external/ycsb; ./package-ycsb.sh")
+        pprint("YCSB rebuilt!")
+
+    pprint("Loading YCSB on single client...")
+    load_cmd = ycsb_cmd.replace(" run ", " load ")
+    print("cd external/ycsb; "+load_cmd)
+    system(load_cmd)
+    pprint("YCSB loaded!")
+
+    pprint("Running YCSB")
+    print("cd external/ycsb; "+ycsb_cmd)
+    system(ycsb_cmd)
+    pprint("YCSB complete!")
+
+def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
+    ycsb_cmd = (("pkill -9 java;"
+                 "cd /home/ubuntu/external/ycsb; "
+                 "bin/ycsb run velox "
+                 "-s "
+                 "-P %s "
+                 "-threads %d "
+                 "-p readproportion=%s "
+                 "-p updateproportion=%s "
+                 "-p fieldlength=%d "
+                 "-p fieldcount=1 "
+                 "-p recordcount=%d "
+                 "-p operationcount=1000000 "
+                 "-p requestdistribution=%s "
+                 "-p maxexecutiontime=%d "
+                 "-p cluster=%s > run_out.log 2> run_err.log") %
+                (workload, threads, readprop, 1-readprop, valuesize, recordcount, request_distribution, time, cluster.internal_cluster_str))
+
+    if dorebuild:
+        pprint("Rebuilding YCSB")
+        run_cmd("all-clients", "cd /home/ubuntu/external/ycsb; ./package-ycsb.sh")
+        pprint("YCSB rebuilt!")
+
+    pprint("Loading YCSB on single client...")
+    load_cmd = ycsb_cmd.replace(" run ", " load ").replace("run_", "load_")
+    run_cmd_single(cluster.clients[0].ip, "cd /home/ubuntu/external/ycsb; "+load_cmd)
+    pprint("YCSB loaded!")
+
+    pprint("Running YCSB")
+    run_cmd_in_velox("all-clients", ycsb_cmd)
+    pprint("YCSB complete!")
 
 def mkdir(d):
     system("mkdir -p %s" % d)

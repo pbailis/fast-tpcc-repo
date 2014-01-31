@@ -3,10 +3,17 @@ package edu.berkeley.velox.frontend
 import edu.berkeley.velox.rpc.{ClientRPCService, Request}
 import scala.concurrent._
 import scala.concurrent.duration._
-import edu.berkeley.velox._
 import edu.berkeley.velox.server._
 import java.net.InetSocketAddress
+import collection.JavaConversions._
+import edu.berkeley.velox.datamodel.{Key, Value}
 
+
+object VeloxConnection {
+  def makeConnection(addresses: java.lang.Iterable[InetSocketAddress]): VeloxConnection = {
+    return new VeloxConnection(addresses)
+  }
+}
 
 class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
   val ms = new ClientRPCService(serverAddresses)
@@ -20,8 +27,11 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
    * @return The old value if the key previously existed, null otherwise.
    */
   def putValue(k: Key, newVal: Value): Value = {
-    val f: Future[Value] = ms.sendAny(ClientPutRequest(k, newVal))
-    Await.result(f, Duration.Inf)
+    val f = ms.sendAny(ClientPutRequest(k, newVal))
+    Await.result(f, Duration.Inf) match {
+      case v: Value => v
+      case _ => null
+    }
   }
 
   /**
@@ -42,7 +52,10 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
    * @return the value if the key exists, otherwise null
    */
   def getValue(k: Key): Value = {
-    val f: Future[Value] = ms.sendAny(ClientGetRequest(k))
-    Await.result(f, Duration.Inf)
+    val f = ms.sendAny(ClientGetRequest(k))
+    Await.result(f, Duration.Inf) match {
+      case v: Value => v
+      case _ => null
+    }
   }
 }
