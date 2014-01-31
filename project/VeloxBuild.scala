@@ -40,7 +40,7 @@ object VeloxBuild extends Build {
     organization := "edu.berkeley.velox",
     version := "0.1",
     scalaVersion := "2.10.3",
-    scalacOptions := Seq("feature", "-deprecation", "-target:" + SCALAC_JVM_VERSION),
+    scalacOptions := Seq("-feature", "-deprecation", "-target:" + SCALAC_JVM_VERSION),
     javacOptions := Seq("-target", JAVAC_JVM_VERSION, "-source", JAVAC_JVM_VERSION),
     unmanagedJars in Compile <<= baseDirectory map {
       base => (base / "lib" ** "*.jar").classpath
