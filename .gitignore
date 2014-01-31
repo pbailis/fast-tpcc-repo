@@ -2,6 +2,11 @@
 *.log
 *.swp
 *.history
+*.pyc
+
+hosts/
+output/
+*.out
 
 # sbt specific
 bin/cluster/*.jar

@@ -10,8 +10,11 @@ import edu.berkeley.velox.conf.VeloxConfig
 
 class InternalRPCService extends MessageService {
   val name = "internal"
+  serviceID = VeloxConfig.partitionId
 
-  networkService = new NIONetworkService(performIDHandshake = true)
+  networkService = new NIONetworkService(performIDHandshake = true,
+                                         tcpNoDelay = VeloxConfig.tcpNoDelay,
+                                         serverID = VeloxConfig.partitionId)
   networkService.setMessageService(this)
   
   override def initialize() {

@@ -16,7 +16,7 @@ object ExampleClient {
     println("Starting client")
     VeloxConfig.initialize(args)
 
-    val client = new VeloxConnection
+    val client = new VeloxConnection(VeloxConfig.frontendServerAddresses.values)
     println("Client initialized")
 
     val testEntries = List(
