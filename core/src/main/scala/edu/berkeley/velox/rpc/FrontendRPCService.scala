@@ -14,14 +14,14 @@ class FrontendRPCService extends MessageService {
   networkService.setMessageService(this)
   
   override def initialize() {
-    logger.debug(s"${VeloxConfig.partitionId} starting frontend RPC on port ${VeloxConfig.externalServerPort}")
+    logger.info(s"${VeloxConfig.partitionId} starting frontend RPC on port ${VeloxConfig.externalServerPort}")
 
     configureInboundListener(VeloxConfig.externalServerPort)
     networkService.start()
 
-    logger.debug(s"${VeloxConfig.partitionId} frontend RPC listening on port ${VeloxConfig.externalServerPort}")
+    logger.info(s"${VeloxConfig.partitionId} frontend RPC listening on port ${VeloxConfig.externalServerPort}")
 
     Thread.sleep(VeloxConfig.bootstrapConnectionWaitSeconds * 1000)
-    logger.debug(s"${VeloxConfig.partitionId} finished starting frontend RPC!")
+    logger.info(s"${VeloxConfig.partitionId} finished starting frontend RPC!")
   }
 }
