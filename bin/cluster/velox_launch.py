@@ -53,6 +53,11 @@ if __name__ == "__main__":
     parser.add_argument('--client_bench_local', action='store_true',
                         help='Run THE CRANKSHAW TEST locally')
 
+    parser.add_argument('--ycsb_bench', action='store_true',
+                        help='Run YCSB on EC2')
+    parser.add_argument('--ycsb_bench_local', action='store_true',
+                        help='Run YCSB locally')
+
     args, unknown = parser.parse_known_args()
 
     for u in unknown:
@@ -98,13 +103,32 @@ if __name__ == "__main__":
         assign_hosts(region, cluster)
         start_servers(cluster)
         sleep(5)
-        run_velox_client_bench(cluster, parallelism=1, timeout=30, ops=100000, pct_reads=.5)
+        run_velox_client_bench(cluster, parallelism=64, timeout=30, ops=100000, pct_reads=.5)
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")
+
+    if args.ycsb_bench:
+        runid = "YCSB-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
+        pprint("Running YCSB")
+        assign_hosts(region, cluster)
+        start_servers(cluster)
+        sleep(5)
+        run_ycsb(cluster, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
+        stop_velox_processes()
+        fetch_logs(args.output_dir, runid, cluster)
+        pprint("YCSB has completed!")
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")
         start_servers_local(num_servers)
         sleep(5)
         client_bench_local_single(num_servers, parallelism=64, timeout=45, ops=100000, pct_reads=0.5)
+        pprint("THE CRANKSHAW has completed!")
+
+    if args.ycsb_bench_local:
+        pprint("Running YCSB locally! (1 client only)")
+        start_servers_local(num_servers)
+        sleep(5)
+        run_ycsb_local(num_servers, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
+        pprint("YCSB has completed!")
