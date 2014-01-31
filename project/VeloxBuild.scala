@@ -72,12 +72,10 @@ object VeloxBuild extends Build {
   def externalJasshSettings = sharedSettings ++ Seq(
     name := "velox-external",
 
-    resolvers ++= Seq(
-      "JAnalyse Repository" at "http://www.janalyse.fr/repository/"
-    ),
-
     libraryDependencies ++= Seq(
-      "fr.janalyse" %% "janalyse-ssh" % "0.9.10" % "compile"
+      "com.typesafe"      %% "scalalogging-slf4j" % "1.0.1",
+      "com.jcraft"         % "jsch"               % "0.1.50",
+      "org.apache.commons" % "commons-compress"   % "1.7"
     )
   )
 
