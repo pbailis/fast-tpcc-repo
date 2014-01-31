@@ -5,13 +5,13 @@ import scala.concurrent._
 import scala.concurrent.duration._
 import edu.berkeley.velox._
 import edu.berkeley.velox.server._
-import edu.berkeley.velox.conf.VeloxConfig
+import java.net.InetSocketAddress
 
 
-class VeloxConnection {
-  val ms = new ClientRPCService
+class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
+  val ms = new ClientRPCService(serverAddresses)
   ms.initialize()
-  ms.connect(VeloxConfig.frontendServerAddresses.values.toArray)
+  ms.connect(serverAddresses)
 
   /**
    * Puts a value into the datastore at the given key

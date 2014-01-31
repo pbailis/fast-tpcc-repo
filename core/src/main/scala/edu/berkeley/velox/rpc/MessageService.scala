@@ -5,7 +5,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 import scala.concurrent.{Future, Promise}
-import edu.berkeley.velox.conf.VeloxConfig
 import java.nio.ByteBuffer
 import com.twitter.chill.KryoInjection
 import util.{Success, Failure}
@@ -19,6 +18,7 @@ abstract class MessageService extends Logging {
   val requestMap = new ConcurrentHashMap[RequestId, Promise[Any]]
   var networkService: NetworkService = null
   val name: String
+  var serviceID : Integer = -1
 
   /**
    * The collection of handlers for various message types
@@ -55,7 +55,7 @@ abstract class MessageService extends Logging {
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
     requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
-    if (dst == VeloxConfig.partitionId) { // Sending message to self
+    if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
     } else {
       networkService.send(dst, serializeMessage(reqId, msg, isRequest=true))
@@ -73,7 +73,7 @@ abstract class MessageService extends Logging {
   }
 
   private def sendResponse(dst: NetworkDestinationHandle, requestId: RequestId, response: Any) {
-    if (dst == VeloxConfig.partitionId) {
+    if (dst == serviceID) {
       requestMap.remove(requestId) success response
     } else {
       networkService.send(dst, serializeMessage(requestId, response, isRequest=false))
@@ -134,7 +134,7 @@ abstract class MessageService extends Logging {
   def sendLocalRequest(requestId: RequestId, msg: Any) {
     requestExecutor.execute(new Runnable {
       def run() = {
-        recvRequest_(VeloxConfig.partitionId, requestId, msg)
+        recvRequest_(serviceID, requestId, msg)
       }
     })
   }
@@ -154,7 +154,7 @@ abstract class MessageService extends Logging {
     networkService.connect(address)
   }
 
-  def connect(addresses: Array[InetSocketAddress]) = {
+  def connect(addresses: Iterable[InetSocketAddress]) = {
     addresses.foreach(address => networkService.connect(address))
   }
 

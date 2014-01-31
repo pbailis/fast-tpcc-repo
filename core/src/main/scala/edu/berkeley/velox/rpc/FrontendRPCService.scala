@@ -9,6 +9,7 @@ import edu.berkeley.velox.conf.VeloxConfig
 
 class FrontendRPCService extends MessageService {
   val name = "frontend"
+  serviceID = VeloxConfig.partitionId
 
   networkService = new NIONetworkService()
   networkService.setMessageService(this)

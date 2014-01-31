@@ -1,7 +1,6 @@
 package edu.berkeley.velox.net
 
 import java.net.InetSocketAddress
-import edu.berkeley.velox.conf.VeloxConfig
 import java.nio.channels.{SelectionKey, SocketChannel, Selector, ServerSocketChannel}
 import java.util.concurrent._
 import edu.berkeley.velox.NetworkDestinationHandle
@@ -12,7 +11,9 @@ import scala.util.Random
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.rpc.MessageService
 
-class NIONetworkService(val performIDHandshake: Boolean = false) extends NetworkService with Logging {
+class NIONetworkService(val performIDHandshake: Boolean = false,
+                        val tcpNoDelay: Boolean = true,
+                        val serverID: Integer = -1) extends NetworkService with Logging {
 
   class ChannelState (val partitionId: NetworkDestinationHandle,
                       val channel: SocketChannel,
@@ -239,7 +240,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
       logger.info(s"Adding connection from $partitionId")
       val channel = channelState.channel
       channel.configureBlocking(false)
-      channel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
+      channel.socket.setTcpNoDelay(tcpNoDelay)
       readerThread.newChannels.synchronized {
         readerThread.newChannels.enqueue(channelState)
       }
@@ -267,7 +268,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
            while (true) {
              // Accept the client socket
              val clientChannel: SocketChannel = serverChannel.accept
-             clientChannel.socket.setTcpNoDelay(VeloxConfig.tcpNoDelay)
+             clientChannel.socket.setTcpNoDelay(tcpNoDelay)
              //println("Receiving Connection")
              // Get the bytes encoding the source partition Id
              var connectionId: NetworkDestinationHandle = -1;
@@ -304,7 +305,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false) extends Network
         val dos = new DataOutputStream(bos)
 
         if(performIDHandshake) {
-          dos.writeInt(VeloxConfig.partitionId)
+          dos.writeInt(serverID)
           dos.flush()
           val bytes = bos.toByteArray()
           assert(bytes.size == 4)
