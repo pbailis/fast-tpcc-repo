@@ -1,5 +1,6 @@
 package edu.berkeley.velox.conf
 
+import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService,NIONetworkService}
 import java.net.InetSocketAddress
 import edu.berkeley.velox.NetworkDestinationHandle
 
@@ -14,6 +15,8 @@ object VeloxConfig {
   var tcpNoDelay: Boolean = true
   var numBuffersPerRing = 2
   var partitionList: Array[NetworkDestinationHandle] = null
+
+  var networkService = "array"
 
   def initialize(cmdLine: Array[String]): Boolean = {
     val ret = parser.parse(cmdLine)
@@ -30,6 +33,7 @@ object VeloxConfig {
     opt[Int]("buffers_per_ring") foreach { p => numBuffersPerRing = p } text("Port to listen for frontend connections")
     opt[Int]("bootstrap_time") foreach { p => bootstrapConnectionWaitSeconds = p } text("Time to wait for server connect bootstrap")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
+    opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
 
     // 127.0.0.1:8080,127.0.0.1:8081
     opt[String]('c', "internal_cluster") foreach {
@@ -49,4 +53,13 @@ object VeloxConfig {
         }.toMap
       }  text("Comma-separated list of hostname:port pairs for frontend servers in cluster")
     }
+
+  def getNetworkService(performIDHandshake: Boolean = false, tcpNoDelay: Boolean = true, serverID: Integer = -1): NetworkService = {
+    println("Getting network service")
+    networkService match {
+      case "array" => new ArrayNetworkService(performIDHandshake,tcpNoDelay,serverID)
+      case "nio" => new NIONetworkService(performIDHandshake,tcpNoDelay,serverID)
+      case _ => throw new Exception(s"Invalid network service type $networkService")
+    }
+  }
 }

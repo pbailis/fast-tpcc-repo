@@ -1,6 +1,6 @@
 package edu.berkeley.velox.rpc
 
-import edu.berkeley.velox.net.NIONetworkService
+import edu.berkeley.velox.net.{ArrayNetworkService,NIONetworkService}
 import edu.berkeley.velox.conf.VeloxConfig
 
 /*
@@ -11,7 +11,7 @@ class FrontendRPCService extends MessageService {
   val name = "frontend"
   serviceID = VeloxConfig.partitionId
 
-  networkService = new NIONetworkService()
+  networkService = VeloxConfig.getNetworkService()
   networkService.setMessageService(this)
   
   override def initialize() {
