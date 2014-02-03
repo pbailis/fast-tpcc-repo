@@ -1,17 +1,15 @@
 package edu.berkeley.velox.cluster
 
-import edu.berkeley.velox.datamodel.Key
 import edu.berkeley.velox.NetworkDestinationHandle
-import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.server.ZKClient
+import edu.berkeley.velox.datamodel.PrimaryKey
 
 // We give the partitioner a reference to the zkConfig so that it knows
 // the current list of servers in the cluster
 class RandomPartitioner(zkConfig: ZKClient) extends Partitioner {
-  override def getMasterPartition(key: Key): NetworkDestinationHandle = {
+  override def getMasterPartition(key: PrimaryKey): NetworkDestinationHandle = {
     assume(zkConfig != null)
-    val index = Math.abs(key.k.hashCode() % zkConfig.getServersInGroup().size)
-    // TODO: Kind of a hack, we should fix when we figure out dynamic cluster membership
+    val index = Math.abs(key.hashCode() % zkConfig.getServersInGroup().size)
     zkConfig.getServersInGroup().keys.toList(index)
   }
 }

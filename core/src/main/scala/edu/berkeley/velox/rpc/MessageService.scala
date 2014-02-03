@@ -2,7 +2,7 @@ package edu.berkeley.velox.rpc
 
 import edu.berkeley.velox.net.NetworkService
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{Executors, ConcurrentHashMap}
+import java.util.concurrent.{Semaphore, Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 import scala.concurrent.{Future, Promise}
 import java.nio.ByteBuffer
@@ -94,6 +94,17 @@ abstract class MessageService extends Logging {
     p.future
   }
 
+  def sendAll[R](msg: Request[R]): Seq[Future[R]] = {
+   val ret = networkService.getConnections map { c =>
+      val p = Promise[R]
+      val reqId = nextRequestId.getAndIncrement()
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+      networkService.send(c, serializeMessage(reqId, msg, isRequest=true))
+      p.future
+    }
+     ret.toArray :+ send(serviceID, msg)
+  }
+
   private def sendResponse(dst: NetworkDestinationHandle, requestId: RequestId, response: Any) {
     if (dst == serviceID) {
       requestMap.remove(requestId) success response
@@ -138,10 +149,15 @@ abstract class MessageService extends Logging {
     val key = msg.getClass().hashCode()
     assert(handlers.containsKey(key))
     val h = handlers.get(key)
+
     assert(h != null)
-    h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-      case Success(response) => sendResponse(src, requestId, response)
-      case Failure(t) => logger.error(s"Error receiving message $t")
+    try {
+      h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
+        case Success(response) => sendResponse(src, requestId, response)
+        case Failure(t) => logger.error(s"Error receiving message $t", t)
+      }
+    } catch {
+      case e: Exception => logger.error(s"Error handling message $msg", e)
     }
   }
 

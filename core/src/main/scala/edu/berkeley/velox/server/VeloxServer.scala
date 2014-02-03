@@ -4,16 +4,33 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox._
 import edu.berkeley.velox.cluster.RandomPartitioner
 import edu.berkeley.velox.conf.VeloxConfig
-import edu.berkeley.velox.datamodel.{Key, Value}
-import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
-import scala.concurrent.{Future, future}
-import scala.concurrent.ExecutionContext.Implicits.global
+import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler}
+import java.util.{HashMap => JHashMap}
+import scala.concurrent.{Promise, Future, future}
+import edu.berkeley.velox.operations.database.request._
+import edu.berkeley.velox.operations.database.response.{InsertionResponse, CreateTableResponse, CreateDatabaseResponse}
 import edu.berkeley.velox.storage.StorageManager
-import edu.berkeley.velox.datamodel.Catalog
-
-
-// this causes our futures to not thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import edu.berkeley.velox.datamodel.{InsertSet, ResultSet}
+import scala.util.Failure
+import edu.berkeley.velox.operations.database.request.CreateDatabaseRequest
+import edu.berkeley.velox.operations.database.request.CreateTableRequest
+import edu.berkeley.velox.operations.database.response.QueryResponse
+import scala.util.Success
+import edu.berkeley.velox.operations.database.request.InsertionRequest
+import scala.collection.JavaConverters._
+import edu.berkeley.velox.catalog.Catalog
+import java.util
+
+
+// Every server has a single instance of this class. It handles data storage
+// and serves client requests. Data is stored in a concurrent hash map.
+// As requests come in and are served, the hashmap is accessed concurrently
+// by the thread executing the message handlers (and the handlers have a
+// reference to the map. For now, the server is oblivious to the keyrange
+// it owns. It depends on the routing service to route only the correct
+// keys to it.
+
 
 // Every server has a single instance of this class. It handles data storage
 // and serves client requests. Data is stored in a concurrent hash map.
@@ -28,104 +45,124 @@ class VeloxServer(zkConfig: ZKClient,
                   catalog: Catalog,
                   id: NetworkDestinationHandle) extends Logging {
 
-
   val servers = zkConfig.getServersInGroup()
-
-  // Register partitioner after initializing zkConfig
   val partitioner = new RandomPartitioner(zkConfig)
-
 
   val internalServer = new InternalRPCService(id, servers)
   internalServer.initialize()
 
-  internalServer.registerHandler(new InternalPutHandler)
-  internalServer.registerHandler(new InternalGetHandler)
-  internalServer.registerHandler(new InternalInsertHandler)
+  internalServer.registerHandler(new InternalQueryRequestHandler)
+  internalServer.registerHandler(new InternalInsertionRequestHandler)
 
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService(id)
 
-  frontendServer.registerHandler(new FrontendPutRequestHandler)
-  frontendServer.registerHandler(new FrontendPutRequestHandler)
-  frontendServer.registerHandler(new FrontendGetRequestHandler)
-  frontendServer.registerHandler(new FrontendAddDBRequestHandler)
-  frontendServer.registerHandler(new FrontendAddTableRequestHandler)
-
+  frontendServer.registerHandler(new FrontendCreateDatabaseRequestHandler)
+  frontendServer.registerHandler(new FrontendCreateTableRequestHandler)
+  frontendServer.registerHandler(new FrontendQueryRequestHandler)
+  frontendServer.registerHandler(new FrontendInsertionRequestHandler)
 
   frontendServer.initialize()
-
 
   /*
    * Handlers for front-end requests.
    */
 
-  class FrontendPutRequestHandler extends MessageHandler[Value, ClientPutRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientPutRequest): Future[Value] = {
-      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedPutRequest(msg.tname, msg.dbname, msg.k, msg.v))
+  class FrontendCreateDatabaseRequestHandler extends MessageHandler[CreateDatabaseResponse, CreateDatabaseRequest] {
+    def receive(src: NetworkDestinationHandle, msg: CreateDatabaseRequest): Future[CreateDatabaseResponse] = {
+      future {
+        catalog.createDatabase(msg.name)
+        new CreateDatabaseResponse
+      }
     }
   }
 
-  class FrontendInsertRequestHandler extends MessageHandler[Boolean, ClientInsertRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientInsertRequest): Future[Boolean] = {
-      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedInsertRequest(msg.tname, msg.dbname, msg.k, msg.v))
+  class FrontendCreateTableRequestHandler extends MessageHandler[CreateTableResponse, CreateTableRequest] {
+    def receive(src: NetworkDestinationHandle, msg: CreateTableRequest): Future[CreateTableResponse] = {
+      future {
+        catalog.createTable(msg.database, msg.table, msg.schema)
+        new CreateTableResponse
+      }
     }
   }
 
-  class FrontendGetRequestHandler extends MessageHandler[Value, ClientGetRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientGetRequest): Future[Value] = {
-      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedGetRequest(msg.tname, msg.dbname, msg.k))
+  class FrontendInsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] {
+    def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
+      val p = Promise[InsertionResponse]
+
+      val requestsByPartition = new JHashMap[NetworkDestinationHandle, InsertSet]
+
+      msg.insertSet.getRows.foreach(
+        r => {
+          val pkey = catalog.extractPrimaryKey(msg.database, msg.table, r)
+          val partition = partitioner.getMasterPartition(pkey)
+          if(!requestsByPartition.containsKey(partition)) {
+            requestsByPartition.put(partition, new InsertSet)
+          }
+
+          requestsByPartition.get(partition).appendRow(r)
+        }
+      )
+
+      val insertFutures = new util.ArrayList[Future[InsertionResponse]](requestsByPartition.size)
+
+      val rbp_it = requestsByPartition.entrySet.iterator()
+      while(rbp_it.hasNext) {
+        val rbp = rbp_it.next()
+        insertFutures.add(internalServer.send(rbp.getKey, new InsertionRequest(msg.database, msg.table, rbp.getValue)))
+      }
+
+      val f = Future.sequence(insertFutures.asScala)
+
+      f onComplete {
+        case Success(responses) =>
+          p success new InsertionResponse
+        case Failure(t) => {
+          logger.error("Error processing insertion", t)
+          p failure t
+        }
+      }
+
+      p.future
     }
   }
 
-  class FrontendAddTableRequestHandler extends MessageHandler[Boolean, ClientAddTableRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientAddTableRequest): Future[Boolean] = {
-      future {zkConfig.addToSchema(msg.dbname, Some(msg.tname))}
-    }
-  }
-
-  class FrontendAddDBRequestHandler extends MessageHandler[Boolean, ClientAddDBRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientAddDBRequest): Future[Boolean] = {
-      future {zkConfig.addToSchema(msg.dbname, None)}
+  class FrontendQueryRequestHandler extends MessageHandler[QueryResponse, QueryRequest] {
+    def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
+      val p = Promise[QueryResponse]
+      val f = Future.sequence(internalServer.sendAll(msg))
+      f onComplete {
+        case Success(responses) => {
+          var ret = new ResultSet
+          responses foreach { r => ret.merge(r.results) }
+          p success new QueryResponse(ret)
+        }
+        case Failure(t) => {
+          logger.error(s"Error processing query", t)
+          p failure t
+        }
+      }
+      p.future
     }
   }
 
   /*
    * Handlers for internal routed requests
    */
-  class InternalPutHandler extends MessageHandler[Value, RoutedPutRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedPutRequest): Future[Value] = {
-      // returns the old value or null
+
+  class InternalInsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] {
+    def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
       future {
-        if (catalog.checkTableExists(msg.dbname, msg.tname)) {
-          storage.put(msg.tname, msg.dbname, msg.k, msg.v)
-        } else {
-          logger.warn(s"Tried to PUT into ${msg.tname} in ${msg.dbname} that doesn't exist")
-          null
-        }
+        storage.insert(msg.database, msg.table, msg.insertSet)
+        new InsertionResponse
       }
     }
   }
 
-  class InternalGetHandler extends MessageHandler[Value, RoutedGetRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedGetRequest): Future[Value] = {
-      // returns the value or null
-      if (catalog.checkTableExists(msg.dbname, msg.tname)) {
-        future { storage.get(msg.tname, msg.dbname, msg.k) }
-      } else {
-        logger.warn(s"Tried to GET from ${msg.tname} in ${msg.dbname} that doesn't exist")
-        null
-      }
-    }
-  }
-
-  class InternalInsertHandler extends MessageHandler[Boolean, RoutedInsertRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedInsertRequest): Future[Boolean] = {
-      // returns true if there was an old value
-      if (catalog.checkTableExists(msg.dbname, msg.tname)) {
-        future { storage.insert(msg.tname, msg.dbname, msg.k, msg.v) }
-      } else {
-        logger.warn(s"Tried to INSERT into ${msg.tname} in ${msg.dbname} that doesn't exist")
-        null
+  class InternalQueryRequestHandler extends MessageHandler[QueryResponse, QueryRequest] {
+    def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
+      future {
+        new QueryResponse(storage.query(msg.database, msg.table, msg.query))
       }
     }
   }
@@ -147,17 +184,3 @@ object VeloxServer extends Logging {
     val kvserver = new VeloxServer(zkClient, storage, catalog, id)
   }
 }
-
-case class ClientPutRequest (tname: String, dbname: String, k: Key, v: Value) extends Request[Value]
-case class ClientInsertRequest (tname: String, dbname: String, k: Key, v: Value) extends Request[Boolean]
-case class ClientGetRequest (tname: String, dbname: String, k: Key) extends Request[Value]
-// These requests don't get routed to backend server
-case class ClientAddTableRequest (tname: String, dbname: String) extends Request[Boolean]
-case class ClientAddDBRequest (dbname: String) extends Request[Boolean]
-
-case class RoutedPutRequest(tname: String, dbname: String, k: Key, v: Value) extends Request[Value]
-case class RoutedInsertRequest(tname: String, dbname: String, k: Key, v: Value) extends Request[Boolean]
-case class RoutedGetRequest(tname: String, dbname: String, k: Key) extends Request[Value]
-
-
-

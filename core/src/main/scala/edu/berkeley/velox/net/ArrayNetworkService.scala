@@ -13,10 +13,11 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
+import scala.collection.JavaConverters._
 
 class SocketBuffer(
   channel: SocketChannel,
-  pool: SocketBufferPool) {
+  pool: SocketBufferPool) extends Logging {
 
   var buf = ByteBuffer.allocate(VeloxConfig.bufferSize)
   buf.position(4)
@@ -84,6 +85,7 @@ class SocketBuffer(
     */
   def send() {
     try {
+
       if (writePos.get > 4) {
         buf.position(0)
 
@@ -191,11 +193,15 @@ class SocketBufferPool(channel: SocketChannel)  {
 class Receiver(
   bytes: ByteBuffer,
   src: NetworkDestinationHandle,
-  messageService: MessageService) extends Runnable {
+  messageService: MessageService) extends Runnable with Logging {
 
   def run() {
     while(bytes.remaining != 0) {
-      messageService.receiveRemoteMessage(src,bytes)
+      try {
+        messageService.receiveRemoteMessage(src,bytes)
+      } catch {
+        case e: Exception => logger.error("Error receiving message", e)
+      }
     }
   }
 
@@ -408,7 +414,12 @@ class ArrayNetworkService(
     }
 
     val connArray = connections.keySet.toArray
-    send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
+    val recvr = Random.nextInt(connArray.length)
+    send(connArray(recvr).asInstanceOf[NetworkDestinationHandle], buffer)
+  }
+
+  override def getConnections : Iterator[NetworkDestinationHandle] = {
+    connections.keys.asScala
   }
 
   override def disconnect(which: NetworkDestinationHandle) {

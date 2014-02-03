@@ -2,11 +2,15 @@ package edu.berkeley.velox.benchmark
 
 import edu.berkeley.velox.conf.VeloxConfig
 import java.util.concurrent.atomic.AtomicInteger
-import edu.berkeley.velox.datamodel.Key
-import edu.berkeley.velox.datamodel.Value
+import edu.berkeley.velox.datamodel._
+import edu.berkeley.velox.datamodel.Schema
+import edu.berkeley.velox.datamodel.DataModelConverters._
 import scala.util.Random
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
+
 // this causes our futures to not thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
@@ -59,9 +63,6 @@ object ClientBenchmark {
       opt[Int]("sweep_time") foreach {
         p => VeloxConfig.sweepTime = p
       } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
-      opt[Boolean]("usefutures") foreach {
-        i => useFutures = i
-      } text ("Use futures instead of blocking for reply")
       opt[Boolean]("latency") foreach {
         i => computeLatency = i
       } text ("Compute average latency of each request")
@@ -100,80 +101,68 @@ object ClientBenchmark {
     val ostart = System.nanoTime
 
     val client = new VeloxConnection(clusterAddresses)
-    val DB = "client-benchmark-db" + UUID.randomUUID().toString
-    val TABLE = "table1"
-    client.createDatabase(DB)
+    val DB_NAME = "client-benchmark-db" + UUID.randomUUID().toString
+    val TABLE_NAME = "table1"
+    val ID_COL = "id"
+    val STR_COL = "str"
+    val dbf = client.createDatabase(DB_NAME)
+    Await.ready(dbf, Duration.Inf)
     println("database successfully added")
-    client.addTable(TABLE, DB)
+
+    val db = dbf.value.get.get
+
+    val tblf = db.createTable(TABLE_NAME, Schema.pkey(ID_COL).columns(ID_COL->INTEGER_TYPE, STR_COL->STRING_TYPE))
+    Await.ready(tblf, Duration.Inf)
     println("table successfully added")
+
+    val table = tblf.value.get.get
+
 
     println(s"Starting $parallelism threads!")
 
-    if (useFutures) {
-      for (i <- 0 to parallelism) {
-        new Thread(new Runnable {
-          val rand = new Random
-          override def run() = {
-            while (opsSent.get < numops) {
-              if (rand.nextDouble() < pctReads) {
-                val f = client.getValueFuture(TABLE, DB, Key(rand.nextInt(keyrange)))
-                val startTime =
-                  if (computeLatency) System.nanoTime
-                  else 0
-                f onComplete {
-                  case Success(value) => {
-                    if (computeLatency)
-                      updateLatency(System.nanoTime-startTime)
-                    numGets.incrementAndGet()
-                    opDone
-                  }
-                  case Failure(t) => println("An error has occured: " + t.getMessage)
-                }
-              } else {
-                val f = client.putValueFuture(TABLE, DB, Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
-                val startTime =
-                  if (computeLatency) System.nanoTime
-                  else 0
-                f onComplete {
-                  case Success(value) => {
-                    if (computeLatency)
-                      updateLatency(System.nanoTime-startTime)
-                    numPuts.incrementAndGet()
-                    opDone
-                  }
-                  case Failure(t) => println("An error has occured: " + t.getMessage)
-                }
-              }
-              opsSent.incrementAndGet
-            }
-          }
-          println("Thread is done sending")
-        }).start
-      }
-    } else {
-      for (i <- 0 to parallelism) {
-        new Thread(new Runnable {
-          val rand = new Random
-          override def run() = {
-            while (true) {
-              if (rand.nextDouble() < pctReads) {
-                client.getValue(TABLE, DB, Key(rand.nextInt(keyrange)))
+  for (i <- 0 to parallelism) {
+    new Thread(new Runnable {
+      val rand = new Random
+      override def run() = {
+        while (opsSent.get < numops) {
+          if (rand.nextDouble() < pctReads) {
+            val f = (client select STR_COL from table where ID_COL === rand.nextInt(keyrange)).execute
+            val startTime =
+              if (computeLatency) System.nanoTime
+              else 0
+            f onComplete {
+              case Success(value) => {
+                if (computeLatency)
+                  updateLatency(System.nanoTime-startTime)
                 numGets.incrementAndGet()
-              } else {
-                client.putValue(TABLE, DB, Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
-                numPuts.incrementAndGet()
+                opDone
               }
+              case Failure(t) => println("An error has occured: " + t.getMessage)
+            }
+          } else {
+            val key = rand.nextInt(keyrange)
+            val f = (client insert (ID_COL->key, STR_COL->key.toString) into table).execute
 
-              if (opsDone.incrementAndGet() == numops) {
-                opsDone.synchronized {
-                  opsDone.notify
-                }
+            val startTime =
+              if (computeLatency) System.nanoTime
+              else 0
+            f onComplete {
+              case Success(value) => {
+                if (computeLatency)
+                  updateLatency(System.nanoTime-startTime)
+                numPuts.incrementAndGet()
+                opDone
               }
+              case Failure(t) => println("An error has occured: " + t.getMessage)
             }
           }
-        }).start
+          opsSent.incrementAndGet
+        }
       }
-    }
+      println("Thread is done sending")
+    }).start
+  }
+
 
     if(status_time > 0) {
       new Thread(new Runnable {
@@ -182,7 +171,7 @@ object ClientBenchmark {
             Thread.sleep(status_time*1000)
             val curTime = (System.nanoTime-ostart).toDouble/nanospersec
             val curThru = (numGets.get()+numPuts.get()).toDouble/curTime
-            println(s"STATUS @ ${curTime}s: $curThru ops/sec ($opsDone.get ops done)")
+            println(s"STATUS @ ${curTime}s: $curThru ops/sec ($opsDone ops done)")
           }
         }
       }).start
@@ -207,4 +196,7 @@ object ClientBenchmark {
     System.exit(0)
   }
 
+  def nextKey(rand: Random, keyrange: Int): String = {
+    rand.nextInt(keyrange).toString
+  }
 }

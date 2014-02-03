@@ -39,6 +39,6 @@ class InternalRPCService(partitionId: NetworkDestinationHandle,
 
     // we still block until all servers that we know about have connected to us
     networkService.blockForConnections(VeloxConfig.expectedNumInternalServers-1)
-    logger.info(s"$partitionId} started internal RPC!")
+    logger.info(s"$partitionId started internal RPC!")
   }
 }
