@@ -11,6 +11,7 @@ import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Sema
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
+import scala.collection.JavaConverters._
 
 object HackConfig {
   val bufSize = 2000
@@ -327,6 +328,10 @@ class ArrayNetworkService(
 
     val connArray = connections.keySet.toArray
     send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
+  }
+
+  override def getConnections : Iterator[NetworkDestinationHandle] = {
+    connections.keys
   }
 
   override def disconnect(which: NetworkDestinationHandle) {

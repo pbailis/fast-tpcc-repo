@@ -10,6 +10,7 @@ import com.typesafe.scalalogging.slf4j.Logging
 import scala.util.Random
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.rpc.MessageService
+import scala.collection.JavaConversions._
 
 class NIONetworkService(val performIDHandshake: Boolean = false,
                         val tcpNoDelay: Boolean = true,
@@ -342,6 +343,10 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
 
     val connArray = connections.keySet.toArray
     send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
+  }
+
+  override def getConnections : Iterator[NetworkDestinationHandle] = {
+    connections.keys
   }
 
   override def disconnect(which: NetworkDestinationHandle) {

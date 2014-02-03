@@ -30,6 +30,8 @@ trait NetworkService {
 
   def send(dst: NetworkDestinationHandle, buffer: Array[Byte])
   def sendAny(buffer: Array[Byte])
+  def getConnections : Iterator[NetworkDestinationHandle]
+
 
   def blockForConnections(numConnections: Integer)
 }

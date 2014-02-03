@@ -2,7 +2,7 @@ package edu.berkeley.velox.rpc
 
 import edu.berkeley.velox.net.NetworkService
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{Executors, ConcurrentHashMap}
+import java.util.concurrent.{Semaphore, Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 import scala.concurrent.{Future, Promise}
 import java.nio.ByteBuffer
@@ -73,6 +73,17 @@ abstract class MessageService extends Logging {
     requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
     networkService.sendAny(serializeMessage(reqId, msg, isRequest=true))
     p.future
+  }
+
+  def sendAll[R](msg: Request[R]): Array[Future[R]] = {
+   val ret = networkService.getConnections map { c =>
+      val p = Promise[R]
+      val reqId = nextRequestId.getAndIncrement()
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+      networkService.send(c, serializeMessage(reqId, msg, isRequest=true))
+      p.future
+    }
+     ret.toArray :+ send(serviceID, msg)
   }
 
   private def sendResponse(dst: NetworkDestinationHandle, requestId: RequestId, response: Any) {
