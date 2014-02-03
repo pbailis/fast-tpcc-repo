@@ -382,33 +382,39 @@ def start_servers(cluster, **kwargs):
         start_cmd_disown_nobg(server.ip, serverCmd)
 
 def kill_velox_local():
-    system("ps -Af | grep Velox | grep java | cut -d ' ' -f 4 | xargs kill")
+    system("ps ax | grep Velox | grep java |  sed \"s/[ ]*//\" | cut -d ' ' -f 1 | xargs kill")
 
-def start_servers_local(numservers):
+def start_servers_local(numservers,network_service,profile=False,depth=2):
     kill_velox_local()
 
     serverConfigStr = ",".join(["localhost:"+str(VELOX_INTERNAL_PORT_START+id) for id in range(0, numservers)])
 
-    baseCmd = "java -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -p %d -f %d --id %d -c %s 1> /tmp/server-%d.log 2>&1 &"
+    baseCmd = "java %s -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -p %d -f %d --id %d -c %s --network_service %s 1> /tmp/server-%d.log 2>&1 &"
+
 
     for sid in range(0, numservers):
+        if profile:
+            pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server-%d.txt" % (depth,sid)
+        else:
+            pstr = ""
         serverCmd = baseCmd % (
+         pstr,
          VELOX_JAR_LOCATION,
          VELOX_SERVER_CLASS,
          VELOX_INTERNAL_PORT_START+sid,
          VELOX_FRONTEND_PORT_START+sid,
          sid,
          serverConfigStr,
+         network_service,
          sid)
         system(serverCmd)
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(numservers, parallelism=64, pct_reads=.5, ops=100000, timeout=3000):
+def client_bench_local_single(numservers, network_service, parallelism=64, pct_reads=.5, ops=100000, timeout=3000):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, numservers)])
-
-    system("java -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d" % (
-        VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout))
+    system("java -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s" % (
+        VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service))
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
 def run_velox_client_bench(cluster, parallelism=64, pct_reads=.5, ops=100000, timeout=5):

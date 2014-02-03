@@ -50,7 +50,7 @@ object RPCExample extends Logging {
 
     // STart the network -----------------------------------------------------
     // val ns = new BasicNetworkService
-    val ns = new NIONetworkService
+    val ns = VeloxConfig.getNetworkService()
     ns.setMessageService(ms)
     ns.start()
 

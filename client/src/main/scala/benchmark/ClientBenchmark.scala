@@ -1,5 +1,6 @@
 package edu.berkeley.velox.benchmark
 
+import edu.berkeley.velox.conf.VeloxConfig
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.datamodel.Key
 import edu.berkeley.velox.datamodel.Value
@@ -47,6 +48,9 @@ object ClientBenchmark {
       opt[Int]("status_time") foreach {
         i => status_time = i
       }
+      opt[String]("network_service") foreach {
+        i => VeloxConfig.networkService = i
+      } text ("Which network service to use [nio/array]")
     }
 
     val opsDone = new AtomicInteger(0)

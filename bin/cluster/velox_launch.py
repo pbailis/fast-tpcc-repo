@@ -56,6 +56,16 @@ if __name__ == "__main__":
                         help='Run THE CRANKSHAW TEST on EC2')
     parser.add_argument('--client_bench_local', action='store_true',
                         help='Run THE CRANKSHAW TEST locally')
+    parser.add_argument('--network_service', dest='network_service',
+                        default='array', type=str,
+                        help="Which network service to use [array/nio]")
+
+    # jvm options
+    parser.add_argument('--profile', action='store_true',
+                        help='Run JVM with hprof cpu profiling')
+    parser.add_argument('--profile_depth', dest='profile_depth', nargs='?',
+                        default=2, type=int,
+                        help='Stack depth to trace when running profiling, default=2')
 
     parser.add_argument('--ycsb_bench', action='store_true',
                         help='Run YCSB on EC2')
@@ -125,9 +135,9 @@ if __name__ == "__main__":
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")
-        start_servers_local(num_servers)
+        start_servers_local(num_servers,args.network_service,args.profile,args.profile_depth)
         sleep(5)
-        client_bench_local_single(num_servers, parallelism=64, timeout=45, ops=100000, pct_reads=0.5)
+        client_bench_local_single(num_servers, args.network_service, parallelism=64, timeout=45, ops=100000, pct_reads=0.5)
         pprint("THE CRANKSHAW has completed!")
 
     if args.ycsb_bench_local:

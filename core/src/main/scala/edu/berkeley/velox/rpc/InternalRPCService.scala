@@ -1,6 +1,5 @@
 package edu.berkeley.velox.rpc
 
-import edu.berkeley.velox.net.NIONetworkService
 import edu.berkeley.velox.conf.VeloxConfig
 
 
@@ -12,11 +11,11 @@ class InternalRPCService extends MessageService {
   val name = "internal"
   serviceID = VeloxConfig.partitionId
 
-  networkService = new NIONetworkService(performIDHandshake = true,
-                                         tcpNoDelay = VeloxConfig.tcpNoDelay,
-                                         serverID = VeloxConfig.partitionId)
+  networkService = VeloxConfig.getNetworkService(true,
+    tcpNoDelay = VeloxConfig.tcpNoDelay,
+    serverID = VeloxConfig.partitionId)
   networkService.setMessageService(this)
-  
+
   override def initialize() {
     logger.info(s"${VeloxConfig.partitionId} starting internal RPC acceptor on port ${VeloxConfig.internalServerPort}")
     configureInboundListener(VeloxConfig.internalServerPort);
