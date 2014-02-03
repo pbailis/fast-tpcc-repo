@@ -34,6 +34,18 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
     }
   }
 
+  /** Puts a value into the datastore at the given key
+    * returns a future immediatly instead of waiting
+    *
+    * @param k The key to insert at
+    * @param newVal Value to insert
+    * @return A Future[Value] which will contain the old value (if
+    *         it existed) upon completion
+    */
+  def putValueFuture(k: Key, newVal: Value): Future[Value] = {
+    ms.sendAny(ClientPutRequest(k, newVal))
+  }
+
   /**
    * Similar functionality to putValue but does not return the old value
    * @param k the key to insert at
@@ -57,5 +69,15 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
       case v: Value => v
       case _ => null
     }
+  }
+
+  /** Gets a key.  Returns a Future rather than waiting for completion
+   *
+   * @param k The key whose value to get
+   * @return A Future which upon completion will have the value if the key
+   * exists, otherwise null
+   */
+  def getValueFuture(k: Key): Future[Value] = {
+    ms.sendAny(ClientGetRequest(k))
   }
 }

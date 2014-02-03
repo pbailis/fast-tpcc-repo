@@ -56,6 +56,8 @@ if __name__ == "__main__":
                         help='Run THE CRANKSHAW TEST on EC2')
     parser.add_argument('--client_bench_local', action='store_true',
                         help='Run THE CRANKSHAW TEST locally')
+    parser.add_argument('--usefutures', action='store_true',
+                        help='Have THE CRANKSHAW use futures instead of blocking for reply')
     parser.add_argument('--network_service', dest='network_service',
                         default='array', type=str,
                         help="Which network service to use [array/nio]")
@@ -137,7 +139,8 @@ if __name__ == "__main__":
         pprint("Running THE CRANKSHAW locally! (1 client only)")
         start_servers_local(num_servers,args.network_service,args.profile,args.profile_depth)
         sleep(5)
-        client_bench_local_single(num_servers, args.network_service, parallelism=64, timeout=45, ops=100000, pct_reads=0.5)
+        client_bench_local_single(num_servers, args.network_service, args.profile, args.profile_depth,
+                                  parallelism=64, timeout=45, ops=100000, pct_reads=0.5, futures=args.usefutures)
         pprint("THE CRANKSHAW has completed!")
 
     if args.ycsb_bench_local:
