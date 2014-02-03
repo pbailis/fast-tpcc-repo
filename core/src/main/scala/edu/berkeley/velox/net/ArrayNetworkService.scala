@@ -9,10 +9,11 @@ import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Semaphore}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import scala.collection.mutable.StringBuilder
 import scala.util.Random
 
 object HackConfig {
-  val bufSize = 500
+  val bufSize = 2000
 }
 
 class SocketBuffer(channel: SocketChannel) extends Runnable {
@@ -23,6 +24,11 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
   val writers = new AtomicInteger(0)
   val sending = new AtomicBoolean(false)
 
+  /** Write an int into this buffer
+    *
+    * @param i Int to write
+    * @param offset Offset into the buffer to write at
+    */
   private def writeInt(i: Int, offset: Int) {
     buf(offset)   = (i >>> 24).toByte
     buf(offset+1) = (i >>> 16).toByte
@@ -30,12 +36,17 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
     buf(offset+3) = i.toByte
   }
 
+  /** Write bytes into this buffer
+    *
+    * @param bytes The bytes to write
+    */
   def write(bytes: Array[Byte]): Boolean = {
     // indicate our intent to write
     writers.incrementAndGet
 
     // fail if we're already sending this buffer
     if (sending.get) {
+      //println(s"${id} failing to write ${bytes.length} because sending")
       writers.decrementAndGet
       return false
     }
@@ -50,6 +61,7 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
         true
       }
       else {
+        //println(s"${id} failing to write ${bytes.length} due to buffer size")
         writePos.getAndAdd(-len)
         false
       }
@@ -66,23 +78,46 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
     * sending MUST be set to true before asking this class to run
     */
   def run() {
+    try {
+      //println(s"${id} enter write")
+      // wait for any writers to finish
+      while (writers.get > 0) {
+        println("waiting for writers")
+        Thread.sleep(1)
+      }
 
-    // wait for any writers to finish
-    while (writers.get > 0) Thread.sleep(1)
+      // write out full message length (minus 4 for these bytes)
+      writeInt(writePos.get-4,0)
 
-    // write out full message length (minus 4 for these bytes)
-    writeInt(writePos.get-4,0)
+      // wrap the array and write it out
+      //println(s"${id} trying to send: ${writePos.get}")
+      val wrote = channel.write(ByteBuffer.wrap(buf,0,writePos.get))
+      //println(s"${id} sent: ${wrote}")
 
-    // wrap the array and write it out
-    //println("trying to send: "+writePos.get)
-    //println("array: "+java.util.Arrays.toString(buf))
-    val wrote = channel.write(ByteBuffer.wrap(buf,0,writePos.get))
-    //println(s"send: ${wrote}")
+      // reset write position
+      writePos.set(4)
 
-    // reset write position
-    writePos.set(4)
+      sending.set(false)
 
-    sending.set(false)
+      this.synchronized { this.notifyAll }
+
+    } catch {
+      case e: Exception => {
+        System.out.println("EXCEPTION HERE: "+e.getMessage)
+        sending.set(false)
+        throw e
+      }
+    }
+  }
+
+  def id(): Int = System.identityHashCode(this)
+
+  def printStatus() {
+    val builder = new StringBuilder(s"${id} [${channel.getLocalAddress.toString} <-> ${channel.getRemoteAddress.toString}] - ")
+    builder append s" pos: ${writePos.get}"
+    builder append s" sending: ${sending.get}"
+    builder append s" writers: ${writers.get}"
+    println(builder.result)
   }
 
 }
@@ -143,15 +178,19 @@ class SendSweeper(
   connections: ConcurrentHashMap[NetworkDestinationHandle, SocketBuffer],
   executor: ExecutorService) extends Runnable {
 
+  var i = 0
+
   def run() {
     while(true) {
       val cit = connections.keySet.iterator
       while (cit.hasNext) {
         val buf = connections.get(cit.next)
-        if (buf.writePos.get > 4 && buf.sending.compareAndSet(false,true))
+        if (buf.writePos.get > 4 && buf.sending.compareAndSet(false,true)) {
           executor.submit(buf)
+        }
       }
-      Thread.sleep(10)
+      Thread.sleep(500)
+      i+=1
     }
   }
 }
@@ -268,7 +307,13 @@ class ArrayNetworkService(
       if (sockBuf.sending.compareAndSet(false,true)) {
         executor.submit(sockBuf)
       }
-      Thread.sleep(5)
+      //Thread.sleep(5)
+      //sockBuf.printStatus
+      if (sockBuf.sending.get) {
+        //println(s"sleeping here to write ${buffer.length}")
+        sockBuf.synchronized { sockBuf.wait }
+      } // else
+        // println("Spinning because not sending")
     }
   }
 
