@@ -1,15 +1,14 @@
 package edu.berkeley.velox.server
 
-import java.util.concurrent.ConcurrentHashMap
-import edu.berkeley.velox.conf.VeloxConfig
-import edu.berkeley.velox.rpc.{InternalRPCService, Request, FrontendRPCService, MessageHandler}
-import edu.berkeley.velox._
-import scala.concurrent.{Await, Future}
-import scala.concurrent.duration.Duration
-import edu.berkeley.velox.cluster.RandomPartitioner
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.datamodel.Key
-import edu.berkeley.velox.datamodel.Value
+import edu.berkeley.velox._
+import edu.berkeley.velox.cluster.RandomPartitioner
+import edu.berkeley.velox.conf.VeloxConfig
+import edu.berkeley.velox.datamodel.{Key, Value}
+import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
+import java.util.concurrent.ConcurrentHashMap
+import scala.concurrent.{Future, future}
+import scala.concurrent.ExecutionContext.Implicits.global
 
 
 // Every server has a single instance of this class. It handles data storage
@@ -45,23 +44,20 @@ class VeloxServer extends Logging {
    */
 
   class FrontendPutRequestHandler extends MessageHandler[Value, ClientPutRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientPutRequest): Value = {
-      val f: Future[Value] = internalServer.send(partitioner.getMasterPartition(msg.k), new RoutedPutRequest(msg.k, msg.v))
-      Await.result(f, Duration.Inf)
+    def receive(src: NetworkDestinationHandle, msg: ClientPutRequest): Future[Value] = {
+      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedPutRequest(msg.k, msg.v))
     }
   }
 
   class FrontendInsertRequestHandler extends MessageHandler[Boolean, ClientInsertRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientInsertRequest): Boolean = {
-      val f: Future[Boolean] = internalServer.send(partitioner.getMasterPartition(msg.k), new RoutedInsertRequest(msg.k, msg.v))
-      Await.result(f, Duration.Inf)
+    def receive(src: NetworkDestinationHandle, msg: ClientInsertRequest): Future[Boolean] = {
+      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedInsertRequest(msg.k, msg.v))
     }
   }
 
   class FrontendGetRequestHandler extends MessageHandler[Value, ClientGetRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientGetRequest): Value = {
-      val f: Future[Value] = internalServer.send(partitioner.getMasterPartition(msg.k), new RoutedGetRequest(msg.k))
-      Await.result(f, Duration.Inf)
+    def receive(src: NetworkDestinationHandle, msg: ClientGetRequest): Future[Value] = {
+      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedGetRequest(msg.k))
     }
   }
 
@@ -71,23 +67,23 @@ class VeloxServer extends Logging {
 
   // define handlers
   class InternalPutHandler extends MessageHandler[Value, RoutedPutRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedPutRequest): Value = {
+    def receive(src: NetworkDestinationHandle, msg: RoutedPutRequest): Future[Value] = {
       // returns the old value or null
-      datastore.put(msg.k, msg.v)
+      future { datastore.put(msg.k, msg.v) }
     }
   }
 
   class InternalGetHandler extends MessageHandler[Value, RoutedGetRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedGetRequest): Value = {
+    def receive(src: NetworkDestinationHandle, msg: RoutedGetRequest): Future[Value] = {
       // returns the value or null
-      datastore.get(msg.k)
+      future { datastore.get(msg.k) }
     }
   }
 
   class InternalInsertHandler extends MessageHandler[Boolean, RoutedInsertRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedInsertRequest): Boolean = {
+    def receive(src: NetworkDestinationHandle, msg: RoutedInsertRequest): Future[Boolean] = {
       // returns true if there was an old value
-      datastore.put(msg.k, msg.v) != null
+      future { datastore.put(msg.k, msg.v) != null }
     }
   }
 }

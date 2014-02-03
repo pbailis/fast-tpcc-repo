@@ -31,9 +31,9 @@ object RPCExample extends Logging {
     // Define the handler for the fibonacci message
     class FibonacciHandler extends MessageHandler[Int, FibonacciRequest] {
       def fib(x: Int): Int = if (x < 2) x else fib(x - 1) + fib(x - 2)
-      def receive(src: NetworkDestinationHandle, msg: FibonacciRequest): Int = {
+      def receive(src: NetworkDestinationHandle, msg: FibonacciRequest): Future[Int] = {
         println(s"Message from $src received by ${VeloxConfig.partitionId}")
-        fib(msg.input)
+        future { fib(msg.input) }
       }
     }
     ms.registerHandler(new FibonacciHandler)
@@ -42,8 +42,8 @@ object RPCExample extends Logging {
     case class DecMsg(body: Int = 0) extends Request[Int]
     // Define the handler for the fibonacci message
     class DecHandler extends MessageHandler[Int, DecMsg] {
-      def receive(src: Int, msg: DecMsg): Int = {
-        msg.body + 1
+      def receive(src: Int, msg: DecMsg): Future[Int] = {
+        future { msg.body + 1 }
       }
     }
     ms.registerHandler(new DecHandler)

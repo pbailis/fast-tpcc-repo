@@ -12,6 +12,7 @@ import java.net.InetSocketAddress
 import scala.reflect.ClassTag
 import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
+import scala.concurrent.ExecutionContext.Implicits.global
 
 abstract class MessageService extends Logging {
   val nextRequestId = new AtomicInteger()
@@ -25,7 +26,9 @@ abstract class MessageService extends Logging {
    */
   val handlers = new JHashMap[Int, MessageHandler[Any, Request[Any]]]()
 
-  val requestExecutor = Executors.newFixedThreadPool(16)
+  // TODO: What to really do here
+  //val requestExecutor = Executors.newFixedThreadPool(16)
+  val requestExecutor = Executors.newCachedThreadPool
 
   def initialize()
 
@@ -106,14 +109,16 @@ abstract class MessageService extends Logging {
     }
   }
 
-  // blocking
+  // doesn't block, but does set up a handler that will deliver the message when it's ready
   private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any): Unit = {
     val key = msg.getClass().hashCode()
     assert(handlers.containsKey(key))
     val h = handlers.get(key)
     assert(h != null)
-    val response: Any = h.receive(src, msg.asInstanceOf[Request[Any]])
-    sendResponse(src, requestId, response)
+    h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
+      case Success(response) => sendResponse(src, requestId, response)
+      case Failure(t) => logger.error(s"Error receiving message $t")
+    }
   }
 
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
