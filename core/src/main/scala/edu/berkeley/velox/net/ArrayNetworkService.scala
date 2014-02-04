@@ -138,7 +138,7 @@ class Receiver(
     val theArray = bytes.array
     var curPos = 0
     //println("full array: "+java.util.Arrays.toString(theArray))
-    while(bytes.remaining != 0) {
+    while(curPos < theArray.length) {
       val msgLen = IntReader.readInt(theArray,curPos)
       curPos+=4
       //println("msgLen: "+msgLen)
@@ -160,13 +160,15 @@ class ReaderThread(
   val sizeBuffer = ByteBuffer.allocate(4)
   override def run() {
     while(true) {
-      channel.read(sizeBuffer)
+      while (sizeBuffer.remaining != 0)
+        channel.read(sizeBuffer)
       sizeBuffer.flip
       val len = IntReader.readInt(sizeBuffer.array)
       //println(s"message len to read: $len")
       sizeBuffer.rewind
       val readBuffer = ByteBuffer.allocate(len)
-      channel.read(readBuffer)
+      while (readBuffer.remaining != 0)
+        channel.read(readBuffer)
       readBuffer.flip
       //println("read: "+java.util.Arrays.toString(readBuffer.array))
       executor.submit(new Receiver(readBuffer,src,messageService))
@@ -200,7 +202,8 @@ class ArrayNetworkService(
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = Executors.newCachedThreadPool()
+  //val executor = Executors.newCachedThreadPool()
+  val executor = Executors.newFixedThreadPool(16)
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBuffer]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)

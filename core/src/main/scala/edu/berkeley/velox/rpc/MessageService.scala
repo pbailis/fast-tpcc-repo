@@ -27,8 +27,8 @@ abstract class MessageService extends Logging {
   val handlers = new JHashMap[Int, MessageHandler[Any, Request[Any]]]()
 
   // TODO: What to really do here
-  //val requestExecutor = Executors.newFixedThreadPool(16)
-  val requestExecutor = Executors.newCachedThreadPool
+  val requestExecutor = Executors.newFixedThreadPool(16)
+  //val requestExecutor = Executors.newCachedThreadPool
 
   def initialize()
 
