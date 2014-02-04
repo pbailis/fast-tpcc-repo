@@ -190,7 +190,7 @@ object NioBenchmark {
       serv = ServerSocketChannel.open
       serv.configureBlocking(false)
       skey = serv.register(selector,SelectionKey.OP_ACCEPT)
-      serv.bind(new InetSocketAddress(config.port))
+      serv.socket.bind(new InetSocketAddress(config.port))
       println("Starting in server mode")
     }
 

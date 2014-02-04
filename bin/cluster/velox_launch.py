@@ -142,7 +142,7 @@ if __name__ == "__main__":
 
     if args.ycsb_bench_local:
         pprint("Running YCSB locally! (1 client only)")
-        start_servers_local(num_servers)
+        start_servers_local(num_servers,args.network_service,args.profile,args.profile_depth)
         sleep(5)
         run_ycsb_local(num_servers, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
         pprint("YCSB has completed!")
