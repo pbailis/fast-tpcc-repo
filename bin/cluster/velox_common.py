@@ -64,10 +64,9 @@ def fetch_file_single(host, remote, local, user="ubuntu"):
     system("scp -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
 def fetch_file_single_compressed(host, remote, local, user="ubuntu"):
-    system("scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
+    print("bash \"scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s'\"" % (user, host, remote, local))
 
-def fetch_file_single_compressed_bg(host, remote, local, user="ubuntu"):
-    system("scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s' &" % (user, host, remote, local))
+    system("bash \"scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s'\"" % (user, host, remote, local))
 
 def get_host_ips(hosts):
     return open("hosts/%s.txt" % (hosts)).read().split('\n')[:-1]
@@ -342,9 +341,18 @@ def assign_hosts(region, cluster):
 
 def stop_velox_processes():
     pprint("Terminating java processes...")
-    run_cmd("all-hosts", "killall -9 java; pkill -9 java")
+    run_cmd("all-hosts", "killall java; pkill java")
     sleep(5)
     pprint('Termination command sent.')
+
+def install_ykit(cluster):
+    run_cmd("all-hosts", "wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
+    run_cmd("all-hosts", "tar -xvf yjp-2013-build-13072-linux.tar.bz2")
+    run_cmd("all-hosts", "mv yjp-2013-build-13072 yourkit")
+    # master = cluster.clients[0].ip
+    # run_cmd_single(master, "wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
+    # run_cmd("all-hosts", "scp ubuntu@%s:yjp-2013-build-13072-linux.tar.bz2 yjp-2013.tar.bz2" %  master)
+    # run_cmd("all-hosts", "tar -xvf yjp-2013.tar.bz2")
 
 def rebuild_servers(remote, branch, deploy_key=None):
     if deploy_key:
@@ -363,12 +371,19 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "sbt/sbt assembly") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
-def start_servers(cluster, **kwargs):
+def start_servers(cluster, network_service, profile=False, profile_depth=2, **kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/velox/; rm *.log;"
-    baseCmd = HEADER+"java -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s 1>server.log 2>&1 & "
+
+    pstr = ""
+    if profile:
+        # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
+        pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
+
+    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s 1>server.log 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
+                        pstr,
                         HEAP_SIZE_GB,
                         HEAP_SIZE_GB,
                         VELOX_JAR_LOCATION,
@@ -376,7 +391,8 @@ def start_servers(cluster, **kwargs):
                         VELOX_INTERNAL_PORT_START+sid,
                         VELOX_FRONTEND_PORT_START+sid,
                         sid,
-                        cluster.internal_cluster_str)
+                        cluster.internal_cluster_str,
+                        network_service)
 
 
         server = cluster.servers[sid]
@@ -386,7 +402,7 @@ def start_servers(cluster, **kwargs):
 def kill_velox_local():
     system("ps ax | grep Velox | grep java |  sed \"s/[ ]*//\" | cut -d ' ' -f 1 | xargs kill")
 
-def start_servers_local(numservers,network_service,profile=False,depth=2):
+def start_servers_local(numservers, network_service, profile=False, depth=2):
     kill_velox_local()
 
     serverConfigStr = ",".join(["localhost:"+str(VELOX_INTERNAL_PORT_START+id) for id in range(0, numservers)])
@@ -424,11 +440,17 @@ def client_bench_local_single(numservers, network_service, profile, depth, paral
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, parallelism=64, pct_reads=.5, ops=100000, timeout=5):
+def run_velox_client_bench(cluster, network_service, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5):
+    hprof = ""
+
+    if profile:
+        #hprof += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so=disablestacktelemetry,disableexceptiontelemetry"
+        hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
+
     cmd = ("pkill -9 java; "
-           "java -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d  2>&1 | tee client.log") %\
-          (HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, pct_reads, ops, timeout)
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s 2>&1 | tee client.log") %\
+          (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
+           parallelism, pct_reads, ops, timeout, network_service)
     run_cmd_in_velox("all-clients", cmd)
 
 def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
