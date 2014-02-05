@@ -127,7 +127,7 @@ if __name__ == "__main__":
         assign_hosts(region, cluster)
         start_servers(cluster, args.network_service, args.profile, args.profile_depth)
         sleep(5)
-        run_velox_client_bench(cluster, args.network_service, args.profile, args.profile_depth, parallelism=16, timeout=30, ops=100000000, pct_reads=.5)
+        run_velox_client_bench(cluster, args.network_service, args.profile, args.profile_depth, parallelism=32, timeout=300, ops=100000, pct_reads=.5)
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")

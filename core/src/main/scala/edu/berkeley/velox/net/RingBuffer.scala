@@ -16,7 +16,6 @@ class RingBuffer(val mb: Int = 1) {
 
   val poolSize = VeloxConfig.numBuffersPerRing
 
-  val rwLock = new ReentrantReadWriteLock()
   val activeIndex = new AtomicInteger(0)
   var active = Array.fill(poolSize){ ByteBuffer.allocateDirect(mb * MByte) }
   active(0).putInt(-1)
@@ -34,7 +33,6 @@ class RingBuffer(val mb: Int = 1) {
    */
   def writeMessage(bytes: Array[Byte]): Boolean = {
     // Grab the read lock on the active buffer pool so the sending thread cannot swap
-    rwLock.readLock.lock()
     val bufferIndex = activeIndex.getAndIncrement % poolSize
     val lock: Integer = bufferLocks(bufferIndex)
     var bufferResized = false
@@ -62,21 +60,23 @@ class RingBuffer(val mb: Int = 1) {
       active(bufferIndex).put(bytes)
       //println(s"wrote to buffer $active")
     }
-    rwLock.readLock.unlock()
     bufferResized
   }
 
   def finishedSending() {
-    // Swap active and pending
-    rwLock.writeLock.lock()
-    val tmp = active
-    active = pending
-    pending = tmp
-    activeIndex.set(0)
-    active.foreach(_.clear())
-    // Free allocate space at the beginning of the buffer for the size of the buffer
-    active(0).putInt(-1)
-    rwLock.writeLock.unlock()
+    // Swap active and pending buffers one at a time
+    for (i <- 0 until active.size) {
+      val lock = bufferLocks(i)
+      lock.synchronized {
+        val tmp = active(i)
+        active(i) = pending(i)
+        active(i).clear()
+        pending(i) = tmp
+        if (i == 0) {
+          active(i).putInt(-1)
+        }
+      }
+    }
     // Update the frames size for each of the pending buffers
     val totalLength = pending.foldLeft(0)((sum, b) => (sum + b.position)) - 4
     if (totalLength > 4) {

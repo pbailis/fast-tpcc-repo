@@ -48,11 +48,7 @@ object RPCExample extends Logging {
     }
     ms.registerHandler(new DecHandler)
 
-    // STart the network -----------------------------------------------------
-    // val ns = new BasicNetworkService
-    val ns = VeloxConfig.getNetworkService()
-    ns.setMessageService(ms)
-    ns.start()
+    ms.initialize()
 
     // Run the application ---------------------------------------------------
     // Use future to do a non-blocking call

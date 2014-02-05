@@ -61,7 +61,7 @@ def run_script(hosts, script, user="ubuntu"):
     run_cmd(hosts, "bash /tmp/%s" % (script.split("/")[-1]), user)
 
 def fetch_file_single(host, remote, local, user="ubuntu"):
-    system("scp -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
+    system("scp -o StrictHostKeyChecking=no %s@%s:%s %s" % (user, host, remote, local))
 
 def fetch_file_single_compressed(host, remote, local, user="ubuntu"):
     print("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
@@ -446,8 +446,8 @@ def run_velox_client_bench(cluster, network_service, profile=False, profile_dept
     hprof = ""
 
     if profile:
-        #hprof += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so=disablestacktelemetry,disableexceptiontelemetry"
-        hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
+        hprof += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
+        #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s 2>&1 | tee client.log") %\

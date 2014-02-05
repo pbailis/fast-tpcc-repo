@@ -17,7 +17,7 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
 
   class ChannelState (val partitionId: NetworkDestinationHandle,
                       val channel: SocketChannel,
-                      val mb: Int = 16) {
+                      val mb: Int = 1) {
     var isOpen = true;
     val writeBuffers = new RingBuffer(mb)
     var readBuffer: ByteBuffer = ByteBuffer.allocateDirect(mb * 1048576)
@@ -36,8 +36,8 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
     }
 
     def shutdown {
-      isOpen = false;
-      channel.close();
+      isOpen = false
+      channel.close()
     }
   }
 

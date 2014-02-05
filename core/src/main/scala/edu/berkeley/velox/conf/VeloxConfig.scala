@@ -13,7 +13,7 @@ object VeloxConfig {
   var partitionId: NetworkDestinationHandle = -1
   var bootstrapConnectionWaitSeconds = 2
   var tcpNoDelay: Boolean = true
-  var numBuffersPerRing = 2
+  var numBuffersPerRing = 32
   var partitionList: Array[NetworkDestinationHandle] = null
 
   var networkService = "array"
@@ -30,7 +30,7 @@ object VeloxConfig {
     opt[Int]('i', "id") foreach { i => partitionId = i } text("Partition ID for this server")
     opt[Int]('p', "internal_port") foreach { p => internalServerPort = p } text("Port to listen for internal connections")
     opt[Int]('f', "frontend_port") foreach { p => externalServerPort = p } text("Port to listen for frontend connections")
-    opt[Int]("buffers_per_ring") foreach { p => numBuffersPerRing = p } text("Port to listen for frontend connections")
+    opt[Int]("buffers_per_ring") foreach { p => numBuffersPerRing = p } text("Buffers per ring (should be > writing threads)")
     opt[Int]("bootstrap_time") foreach { p => bootstrapConnectionWaitSeconds = p } text("Time to wait for server connect bootstrap")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")

@@ -13,6 +13,7 @@ import scala.reflect.ClassTag
 import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
+import edu.berkeley.velox.util.VeloxKryoRegistrar
 
 abstract class MessageService extends Logging {
   val nextRequestId = new AtomicInteger()
@@ -27,7 +28,7 @@ abstract class MessageService extends Logging {
   val handlers = new JHashMap[Int, MessageHandler[Any, Request[Any]]]()
 
   // TODO: What to really do here
-  val requestExecutor = Executors.newFixedThreadPool(16)
+  //val requestExecutor = Executors.newFixedThreadPool(16)
   //val requestExecutor = Executors.newCachedThreadPool
 
   def initialize()
@@ -94,7 +95,11 @@ abstract class MessageService extends Logging {
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
     firstBB.putLong(header)
-    firstBB.array ++ KryoInjection(msg)
+    // TODO: use Kryo serializer pool instead
+    val kryo = VeloxKryoRegistrar.getKryo()
+    val result = firstBB.array ++ kryo.serialize(msg)
+    VeloxKryoRegistrar.returnKryo(kryo)
+    result
   }
 
   def deserializeMessage(bytes: Array[Byte]): (Any, RequestId, Boolean) = {
@@ -103,10 +108,10 @@ abstract class MessageService extends Logging {
     val isRequest = (headerLong >>> 63) == 1
     val requestId = headerLong & ~(1L << 63)
     // TODO: use Kryo serializer pool instead
-    KryoInjection.invert(bytes.drop(8)) match {
-      case Success(msg) => (msg, requestId, isRequest)
-      case Failure(e) => println(e); throw e
-    }
+    val kryo = VeloxKryoRegistrar.getKryo()
+    val msg = kryo.deserialize(bytes.drop(8))
+    VeloxKryoRegistrar.returnKryo(kryo)
+    (msg, requestId, isRequest)
   }
 
   // doesn't block, but does set up a handler that will deliver the message when it's ready
@@ -123,8 +128,8 @@ abstract class MessageService extends Logging {
 
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: Array[Byte]) {
-    requestExecutor.execute(new Runnable {
-      def run() = {
+    // requestExecutor.execute(new Runnable {
+    //  def run() = {
         val (msg, requestId, isRequest) = deserializeMessage(bytes)
         if(isRequest) {
           recvRequest_(src, requestId, msg)
@@ -132,16 +137,16 @@ abstract class MessageService extends Logging {
           // receive the response message
           requestMap.remove(requestId) success msg
         }
-      }
-    })
+//      }
+//    })
   }
 
   def sendLocalRequest(requestId: RequestId, msg: Any) {
-    requestExecutor.execute(new Runnable {
-      def run() = {
+//    requestExecutor.execute(new Runnable {
+//      def run() = {
         recvRequest_(serviceID, requestId, msg)
-      }
-    })
+//      }
+//    })
   }
 
   def configureInboundListener(port: Integer) {
