@@ -20,11 +20,13 @@ DEFAULT_INSTANCE_TYPE = "cr1.8xlarge"
 VELOX_SERVER_CLASS = "edu.berkeley.velox.server.VeloxServer"
 VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 
-AMIs = {'us-west-2': 'ami-8885e5b8'}
+AMIs = {'us-west-2': 'ami-8885e5b8',
+        'us-east-1': 'ami-b7dbe3de'}
 
 def run_cmd(hosts, cmd, user="ubuntu", time=1000):
-    cmd = "parallel-ssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
+    cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
     print cmd
+    # print "You may need to install pssh (sudo pip install pssh)"
     system(cmd)
 
 def run_cmd_single(host, cmd, user="ubuntu", time = None):
@@ -52,7 +54,7 @@ def run_process_single(host, cmd, user="ubuntu", stdout=None, stderr=None):
 def upload_file(hosts, local_path, remote_path, user="ubuntu"):
     system("cp %s /tmp" % (local_path))
     script = local_path.split("/")[-1]
-    system("parallel-scp -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt /tmp/%s %s" % (user, hosts, script, remote_path))
+    system("pscp -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt /tmp/%s %s" % (user, hosts, script, remote_path))
 
 def run_script(hosts, script, user="ubuntu"):
     upload_file(hosts, script.split(" ")[0], "/tmp", user)
@@ -69,7 +71,7 @@ def fetch_file_single_compressed_bg(host, remote, local, user="ubuntu"):
 
 def get_host_ips(hosts):
     return open("hosts/%s.txt" % (hosts)).read().split('\n')[:-1]
-        
+
 def sed(file, find, repl):
     iOpt = ''
     print 'sed -i -e %s \'s/%s/%s/g\' %s' % (iOpt, escape(find), escape(repl), file)
@@ -347,7 +349,7 @@ def stop_velox_processes():
 def rebuild_servers(remote, branch, deploy_key=None):
     if deploy_key:
         upload_file("all-hosts", deploy_key, "/home/ubuntu/.ssh")
-        run_cmd("all-hosts", "echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config" % (deploy_key.split("/")[-1]))
+        run_cmd("all-hosts", "echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
 
     pprint('Rebuilding clients and servers...')
     run_cmd_in_velox('all-hosts',
