@@ -8,6 +8,9 @@ import scala.util.Random
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 
+import scala.util.{Success, Failure}
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 object ClientBenchmark {
 
@@ -15,8 +18,6 @@ object ClientBenchmark {
     val numPuts = new AtomicInteger()
     val numGets = new AtomicInteger()
 
-
-    val rand = new Random
     val nanospersec = math.pow(10, 9)
 
     val keyrange = 10000
@@ -26,6 +27,7 @@ object ClientBenchmark {
     var pctReads = 0.5
     var status_time = 10
 
+    var useFutures = true
 
     var frontendCluster = ""
 
@@ -48,12 +50,25 @@ object ClientBenchmark {
       opt[Int]("status_time") foreach {
         i => status_time = i
       }
+      opt[Boolean]("usefutures") foreach {
+        i => useFutures = i
+      } text ("Use futures instead of blocking for reply")
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
     }
 
+    val opsSent = new AtomicInteger(0)
     val opsDone = new AtomicInteger(0)
+
+    def opDone() {
+      val o = opsDone.incrementAndGet
+      if (o == numops) {
+        opsDone.synchronized {
+          opsDone.notify
+        }
+      }
+    }
 
     parser.parse(args)
 
@@ -67,26 +82,60 @@ object ClientBenchmark {
 
     println(s"Starting $parallelism threads!")
 
-    for (i <- 0 to parallelism) {
-      new Thread(new Runnable {
-        override def run() = {
-          while (true) {
-            if (rand.nextDouble() < pctReads) {
-              client.getValue(Key(rand.nextInt(keyrange)))
-              numGets.incrementAndGet()
-            } else {
-              client.putValue(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
-              numPuts.incrementAndGet()
+    if (useFutures) {
+      for (i <- 0 to parallelism) {
+        new Thread(new Runnable {
+          val rand = new Random
+          override def run() = {
+            while (opsSent.get < numops) {
+              if (rand.nextDouble() < pctReads) {
+                val f = client.getValueFuture(Key(rand.nextInt(keyrange)))
+                f onComplete {
+                  case Success(value) => {
+                    numGets.incrementAndGet()
+                    opDone
+                  }
+                  case Failure(t) => println("An error has occured: " + t.getMessage)
+                }
+              } else {
+                val f = client.putValueFuture(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
+                f onComplete {
+                  case Success(value) => {
+                    numPuts.incrementAndGet()
+                    opDone
+                  }
+                  case Failure(t) => println("An error has occured: " + t.getMessage)
+                }
+              }
+              opsSent.incrementAndGet
             }
+          }
+          println("Thread is done sending")
+        }).start
+      }
+    } else {
+      for (i <- 0 to parallelism) {
+        new Thread(new Runnable {
+          val rand = new Random
+          override def run() = {
+            while (true) {
+              if (rand.nextDouble() < pctReads) {
+                client.getValue(Key(rand.nextInt(keyrange)))
+                numGets.incrementAndGet()
+              } else {
+                client.putValue(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
+                numPuts.incrementAndGet()
+              }
 
-            if (opsDone.incrementAndGet() == numops) {
-              opsDone.synchronized {
-                opsDone.notify
+              if (opsDone.incrementAndGet() == numops) {
+                opsDone.synchronized {
+                  opsDone.notify
+                }
               }
             }
           }
-        }
-      }).start
+        }).start
+      }
     }
 
     if(status_time > 0) {
