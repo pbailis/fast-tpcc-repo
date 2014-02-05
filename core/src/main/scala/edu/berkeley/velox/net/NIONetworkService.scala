@@ -96,9 +96,9 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
             }
           }
         } // end of while loop over iterator
-        if(bytesWrittenOnRound == 0) {
-          synchronized { wait(100) }
-        }
+        // if(bytesWrittenOnRound == 0) {
+        //   synchronized { wait(100) }
+        // }
       } // end of outer while loop
     } // end of run
   } // end of writer thread
@@ -330,9 +330,9 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
   override def send(dst: NetworkDestinationHandle, buffer: Array[Byte]) {
     assert(connections.containsKey(dst))
     val bufferResized = connections.get(dst).writeMessage(buffer)
-    if (bufferResized) {
-      writerThread.synchronized{ writerThread.notify() }
-    }
+    // if (bufferResized) {
+    //   writerThread.synchronized{ writerThread.notify() }
+    // }
   }
 
   override def sendAny(buffer: Array[Byte]) {
