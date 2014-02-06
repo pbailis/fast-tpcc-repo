@@ -149,6 +149,7 @@ if __name__ == "__main__":
         sleep(5)
         client_bench_local_single(num_servers, args.network_service, args.profile, args.profile_depth,
                                   parallelism=64, timeout=45, ops=100000, pct_reads=0.5, futures=args.usefutures)
+        kill_velox_local()
         pprint("THE CRANKSHAW has completed!")
 
     if args.ycsb_bench_local:
@@ -156,4 +157,5 @@ if __name__ == "__main__":
         start_servers_local(num_servers, args.network_service, args.profile, args.profile_depth)
         sleep(5)
         run_ycsb_local(num_servers, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
+        kill_velox_local()
         pprint("YCSB has completed!")
