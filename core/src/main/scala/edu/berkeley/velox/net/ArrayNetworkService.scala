@@ -13,7 +13,7 @@ import scala.collection.mutable.StringBuilder
 import scala.util.Random
 
 object HackConfig {
-  val bufSize = 2000
+  val bufSize = 16384
 }
 
 class SocketBuffer(channel: SocketChannel) extends Runnable {
@@ -82,20 +82,20 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
       //println(s"${id} enter write")
       // wait for any writers to finish
       while (writers.get > 0) {
-        println("waiting for writers")
         Thread.sleep(1)
       }
 
-      // write out full message length (minus 4 for these bytes)
-      writeInt(writePos.get-4,0)
+      if (writePos.get > 4) {
 
-      // wrap the array and write it out
-      //println(s"${id} trying to send: ${writePos.get}")
-      val wrote = channel.write(ByteBuffer.wrap(buf,0,writePos.get))
-      //println(s"${id} sent: ${wrote}")
+        // write out full message length (minus 4 for these bytes)
+        writeInt(writePos.get-4,0)
 
-      // reset write position
-      writePos.set(4)
+        // wrap the array and write it out
+        val wrote = channel.write(ByteBuffer.wrap(buf,0,writePos.get))
+
+        // reset write position
+        writePos.set(4)
+      }
 
       sending.set(false)
 
@@ -129,21 +129,15 @@ object IntReader {
 }
 
 class Receiver(
-  bytes: ByteBuffer,
+  bytes: Array[Byte],
   src: NetworkDestinationHandle,
   messageService: MessageService) extends Runnable {
   def run() {
-    val total = bytes.getInt
-    assert(bytes.hasArray)
-    val theArray = bytes.array
     var curPos = 0
-    //println("full array: "+java.util.Arrays.toString(theArray))
-    while(curPos < theArray.length) {
-      val msgLen = IntReader.readInt(theArray,curPos)
+    while(curPos < bytes.length) {
+      val msgLen = IntReader.readInt(bytes,curPos)
       curPos+=4
-      //println("msgLen: "+msgLen)
-      val subarray = theArray.slice(curPos,curPos+msgLen)
-      //println("subarray: "+java.util.Arrays.toString(subarray))
+      val subarray = bytes.slice(curPos,curPos+msgLen)
       messageService.receiveRemoteMessage(src,subarray)
       curPos+=msgLen
     }
@@ -157,21 +151,38 @@ class ReaderThread(
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService) extends Thread {
-  val sizeBuffer = ByteBuffer.allocate(4)
+  //val sizeBuffer = ByteBuffer.allocate(4)
+
   override def run() {
+    var readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
     while(true) {
-      while (sizeBuffer.remaining != 0)
-        channel.read(sizeBuffer)
-      sizeBuffer.flip
-      val len = IntReader.readInt(sizeBuffer.array)
-      //println(s"message len to read: $len")
-      sizeBuffer.rewind
-      val readBuffer = ByteBuffer.allocate(len)
-      while (readBuffer.remaining != 0)
-        channel.read(readBuffer)
-      readBuffer.flip
-      //println("read: "+java.util.Arrays.toString(readBuffer.array))
-      executor.submit(new Receiver(readBuffer,src,messageService))
+      var read = readBuffer.position
+      read += channel.read(readBuffer)
+      val len = IntReader.readInt(readBuffer.array)
+      if (read == (len+4)) { // perfect read
+        readBuffer.flip
+        executor.submit(new Receiver(readBuffer.array.slice(4,read),
+          src,messageService))
+        readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
+      } else if (read > (len+4)) { // read more than enough
+        readBuffer.flip
+        var need = len
+        var left = read-4
+        var pos = 0
+        while (left >= 4 && need <= left) {
+          pos += 4
+          val segment = readBuffer.array.slice(pos,pos+need)
+          executor.submit(new Receiver(segment,src,messageService))
+          left -= need
+          pos += need
+          if (left >= 4) {
+            need = IntReader.readInt(readBuffer.array,pos)
+          }
+        }
+        val tmpBuf = ByteBuffer.allocate(HackConfig.bufSize)
+        tmpBuf.put(readBuffer.array,pos,read-pos)
+        readBuffer = tmpBuf
+      }
     }
   }
 }
@@ -308,15 +319,16 @@ class ArrayNetworkService(
     while (!sockBuf.write(buffer)) {
       // If we can't write, try to send
       if (sockBuf.sending.compareAndSet(false,true)) {
-        executor.submit(sockBuf)
-      }
-      //Thread.sleep(5)
-      //sockBuf.printStatus
-      if (sockBuf.sending.get) {
-        //println(s"sleeping here to write ${buffer.length}")
-        sockBuf.synchronized { sockBuf.wait }
-      } // else
-        // println("Spinning because not sending")
+        //executor.submit(sockBuf)
+        sockBuf.run
+      } else if (sockBuf.sending.get) {
+        sockBuf.synchronized {
+          // recheck in case I just finished
+          if (sockBuf.sending.get)
+            sockBuf.wait
+        }
+      } else // something odd happening, wait and try again shortly
+        Thread.sleep(10)
     }
   }
 
