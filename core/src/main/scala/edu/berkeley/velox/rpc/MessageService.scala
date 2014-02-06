@@ -6,7 +6,6 @@ import java.util.concurrent.{Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 import scala.concurrent.{Future, Promise}
 import java.nio.ByteBuffer
-import com.twitter.chill.KryoInjection
 import util.{Success, Failure}
 import java.net.InetSocketAddress
 import scala.reflect.ClassTag
@@ -15,8 +14,25 @@ import com.typesafe.scalalogging.slf4j.Logging
 import scala.concurrent.ExecutionContext.Implicits.global
 import edu.berkeley.velox.util.VeloxKryoRegistrar
 
+class MessageWrapper(private val encRequestId: Long, val body: Any) {
+  def isRequest: Boolean = encRequestId < 0
+  def isResponse: Boolean = encRequestId > 0
+  def requestId: Long = math.abs(encRequestId)
+}
+
+object MessageWrapper {
+  def request(requestId: Long, body: Any) = {
+    assert(requestId > 0)
+    new MessageWrapper(-requestId, body)
+  }
+  def response(requestId: Long, body: Any) = {
+    assert(requestId > 0)
+    new MessageWrapper(requestId, body)
+  }
+}
+
 abstract class MessageService extends Logging {
-  val nextRequestId = new AtomicInteger()
+  val nextRequestId = new AtomicInteger(1) // start at 1 so MessageWrapper logic works
   val requestMap = new ConcurrentHashMap[RequestId, Promise[Any]]
   var networkService: NetworkService = null
   val name: String
@@ -90,26 +106,25 @@ abstract class MessageService extends Logging {
   8 bytes: request ID; high-order bit is request or response boolean
   N bytes: serialized message
  */
-  def serializeMessage(requestId: RequestId, msg: Any, isRequest: Boolean): Array[Byte] = {
-    val firstBB = ByteBuffer.allocate(8)
+  def serializeMessage(requestId: RequestId, msg: Any, isRequest: Boolean): ByteBuffer = {
+    val buffer = ByteBuffer.allocate(4096)
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
-    firstBB.putLong(header)
-    // TODO: use Kryo serializer pool instead
+    buffer.putLong(header)
     val kryo = VeloxKryoRegistrar.getKryo()
-    val result = firstBB.array ++ kryo.serialize(msg)
+    val result = kryo.serialize(msg,buffer)
     VeloxKryoRegistrar.returnKryo(kryo)
+    result.flip
     result
   }
 
-  def deserializeMessage(bytes: Array[Byte]): (Any, RequestId, Boolean) = {
-    val headerBytes = ByteBuffer.wrap(bytes)
-    val headerLong = headerBytes.getLong()
+  def deserializeMessage(bytes: ByteBuffer): (Any, RequestId, Boolean) = {
+    val headerLong = bytes.getLong()
     val isRequest = (headerLong >>> 63) == 1
     val requestId = headerLong & ~(1L << 63)
     // TODO: use Kryo serializer pool instead
     val kryo = VeloxKryoRegistrar.getKryo()
-    val msg = kryo.deserialize(bytes.drop(8))
+    val msg = kryo.deserialize(bytes)
     VeloxKryoRegistrar.returnKryo(kryo)
     (msg, requestId, isRequest)
   }
@@ -127,26 +142,18 @@ abstract class MessageService extends Logging {
   }
 
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
-  def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: Array[Byte]) {
-    // requestExecutor.execute(new Runnable {
-    //  def run() = {
-        val (msg, requestId, isRequest) = deserializeMessage(bytes)
-        if(isRequest) {
-          recvRequest_(src, requestId, msg)
-        } else {
-          // receive the response message
-          requestMap.remove(requestId) success msg
-        }
-//      }
-//    })
+  def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
+    val (msg, requestId, isRequest) = deserializeMessage(bytes)
+    if(isRequest) {
+      recvRequest_(src, requestId, msg)
+    } else {
+      // receive the response message
+      requestMap.remove(requestId) success msg
+    }
   }
 
   def sendLocalRequest(requestId: RequestId, msg: Any) {
-//    requestExecutor.execute(new Runnable {
-//      def run() = {
-        recvRequest_(serviceID, requestId, msg)
-//      }
-//    })
+    recvRequest_(serviceID, requestId, msg)
   }
 
   def configureInboundListener(port: Integer) {

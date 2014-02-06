@@ -7,7 +7,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, Da
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
-import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Semaphore}
+import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Semaphore, ThreadFactory}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
@@ -17,56 +17,43 @@ object HackConfig {
 }
 
 class SocketBuffer(channel: SocketChannel) extends Runnable {
-  var buf = new Array[Byte](HackConfig.bufSize)
+  var buf = ByteBuffer.allocate(HackConfig.bufSize)
+  buf.position(4)
 
   val writePos = new AtomicInteger(4)
 
   val writers = new AtomicInteger(0)
   val sending = new AtomicBoolean(false)
 
-  /** Write an int into this buffer
-    *
-    * @param i Int to write
-    * @param offset Offset into the buffer to write at
-    */
-  private def writeInt(i: Int, offset: Int) {
-    buf(offset)   = (i >>> 24).toByte
-    buf(offset+1) = (i >>> 16).toByte
-    buf(offset+2) = (i >>> 8).toByte
-    buf(offset+3) = i.toByte
-  }
 
   /** Write bytes into this buffer
     *
     * @param bytes The bytes to write
     */
-  def write(bytes: Array[Byte]): Boolean = {
+  def write(bytes: ByteBuffer): Boolean = {
     // indicate our intent to write
     writers.incrementAndGet
 
     // fail if we're already sending this buffer
     if (sending.get) {
-      //println(s"${id} failing to write ${bytes.length} because sending")
       writers.decrementAndGet
       return false
     }
 
-    val len = bytes.length+4
+    val len = bytes.remaining
 
     val writeOffset = writePos.getAndAdd(len)
     val ret =
-      if (writeOffset + len <= buf.length) {
-        writeInt(bytes.length,writeOffset)
-        Array.copy(bytes,0,buf,writeOffset+4,bytes.length)
+      if (writeOffset + len <= buf.limit) {
+        val dup = buf.duplicate
+        dup.position(writeOffset)
+        dup.put(bytes)
         true
       }
       else {
-        //println(s"${id} failing to write ${bytes.length} due to buffer size")
         writePos.getAndAdd(-len)
         false
       }
-
-    //println(this+" at end: "+writePos.get)
 
     writers.decrementAndGet
     ret
@@ -79,21 +66,25 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
     */
   def run() {
     try {
-      //println(s"${id} enter write")
       // wait for any writers to finish
       while (writers.get > 0) {
         Thread.sleep(1)
       }
 
       if (writePos.get > 4) {
+        buf.position(0)
 
         // write out full message length (minus 4 for these bytes)
-        writeInt(writePos.get-4,0)
+        buf.putInt(writePos.get-4)
+        buf.limit(writePos.get)
+        buf.position(0)
 
         // wrap the array and write it out
-        val wrote = channel.write(ByteBuffer.wrap(buf,0,writePos.get))
+        val wrote = channel.write(buf)
 
         // reset write position
+        buf.clear
+        buf.position(4)
         writePos.set(4)
       }
 
@@ -103,7 +94,7 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
 
     } catch {
       case e: Exception => {
-        System.out.println("EXCEPTION HERE: "+e.getMessage)
+        println("EXCEPTION HERE: "+e.getMessage)
         sending.set(false)
         throw e
       }
@@ -129,28 +120,23 @@ object IntReader {
 }
 
 class Receiver(
-  bytes: Array[Byte],
+  bytes: ByteBuffer,
   src: NetworkDestinationHandle,
   messageService: MessageService) extends Runnable {
+
   def run() {
-    var curPos = 0
-    while(curPos < bytes.length) {
-      val msgLen = IntReader.readInt(bytes,curPos)
-      curPos+=4
-      val subarray = bytes.slice(curPos,curPos+msgLen)
-      messageService.receiveRemoteMessage(src,subarray)
-      curPos+=msgLen
+    while(bytes.remaining != 0) {
+      messageService.receiveRemoteMessage(src,bytes)
     }
-    // TODO: Hand off message
-    //executor.submit(new Sender(channel,reqs))
   }
+
 }
 
 class ReaderThread(
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
-  messageService: MessageService) extends Thread {
+  messageService: MessageService) extends Thread("Reader Thread") {
   //val sizeBuffer = ByteBuffer.allocate(4)
 
   override def run() {
@@ -158,30 +144,42 @@ class ReaderThread(
     while(true) {
       var read = readBuffer.position
       read += channel.read(readBuffer)
-      val len = IntReader.readInt(readBuffer.array)
-      if (read == (len+4)) { // perfect read
+      if (read >= 4) {
         readBuffer.flip
-        executor.submit(new Receiver(readBuffer.array.slice(4,read),
-          src,messageService))
-        readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
-      } else if (read > (len+4)) { // read more than enough
-        readBuffer.flip
-        var need = len
-        var left = read-4
-        var pos = 0
-        while (left >= 4 && need <= left) {
-          pos += 4
-          val segment = readBuffer.array.slice(pos,pos+need)
-          executor.submit(new Receiver(segment,src,messageService))
-          left -= need
-          pos += need
-          if (left >= 4) {
-            need = IntReader.readInt(readBuffer.array,pos)
+
+        var len = readBuffer.getInt
+
+        if (readBuffer.remaining == len) { // perfect read
+          executor.submit(new Receiver(readBuffer,src,messageService))
+          readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
+          len = -1 // prevent attempt to copy len below
+        }
+        else {
+          if (readBuffer.remaining < len)
+            println(s"${getName}: Not enough here.  Have ${readBuffer.remaining}, want $len")
+
+          while (readBuffer.remaining >= 4 && readBuffer.remaining > len) { // read more than enough
+            val msgBuf = ByteBuffer.allocate(len)
+            val oldLim = readBuffer.limit
+            readBuffer.limit(readBuffer.position+len)
+            msgBuf.put(readBuffer)
+            readBuffer.limit(oldLim)
+            msgBuf.flip
+            executor.submit(new Receiver(msgBuf,src,messageService))
+            if (readBuffer.remaining >= 4)
+              len = readBuffer.getInt
+            else
+              len = -1 // indicate we can't put the whole int
           }
         }
-        val tmpBuf = ByteBuffer.allocate(HackConfig.bufSize)
-        tmpBuf.put(readBuffer.array,pos,read-pos)
-        readBuffer = tmpBuf
+
+        if (len != -1) {
+          readBuffer.position(readBuffer.position-4)
+          readBuffer.putInt(len)
+          readBuffer.position(readBuffer.position-4)
+        }
+
+        readBuffer.compact
       }
     }
   }
@@ -208,13 +206,26 @@ class SendSweeper(
   }
 }
 
+class ArrayNetworkThreadFactory extends ThreadFactory {
+
+  val defaultFactory = Executors.defaultThreadFactory
+  var threadIdx = 0
+
+  override
+  def newThread(r: Runnable):Thread = {
+    val t = defaultFactory.newThread(r)
+    t.setName(s"ArrayNetworkServiceThread-$threadIdx")
+    threadIdx+=1
+    t
+  }
+}
+
 class ArrayNetworkService(
   val performIDHandshake: Boolean = false,
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  //val executor = Executors.newCachedThreadPool()
-  val executor = Executors.newFixedThreadPool(16)
+  val executor = Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBuffer]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
@@ -292,7 +303,6 @@ class ArrayNetworkService(
           // Accept the client socket
           val clientChannel: SocketChannel = serverChannel.accept
           clientChannel.socket.setTcpNoDelay(tcpNoDelay)
-          //println("Receiving Connection")
           // Get the bytes encoding the source partition Id
           var connectionId: NetworkDestinationHandle = -1;
           if(performIDHandshake) {
@@ -311,7 +321,7 @@ class ArrayNetworkService(
     }.start()
   }
 
-  override def send(dst: NetworkDestinationHandle, buffer: Array[Byte]) {
+  override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
     val sockBuf = connections.get(dst)
 
     // TODO: Something if buffer is null
@@ -332,7 +342,7 @@ class ArrayNetworkService(
     }
   }
 
-  override def sendAny(buffer: Array[Byte]) {
+  override def sendAny(buffer: ByteBuffer) {
     if(connections.isEmpty) {
       logger.error("Empty connections list in sendAny!")
     }

@@ -1,11 +1,18 @@
 package edu.berkeley.velox.util
 
-import com.twitter.chill.{AllScalaRegistrar, Kryo, EmptyScalaKryoInstantiator}
+import com.esotericsoftware.kryo.Kryo
+import com.twitter.chill.{AllScalaRegistrar, EmptyScalaKryoInstantiator}
 import edu.berkeley.velox.rpc.Request
 import java.util.concurrent.LinkedBlockingQueue
-import com.esotericsoftware.kryo.io.{ByteBufferOutputStream, ByteBufferInputStream, Input, Output}
+import com.esotericsoftware.kryo.io.{ByteBufferOutputStream, ByteBufferInputStream, Input, Output,ByteBufferInput}
 import java.nio.ByteBuffer
 
+/** A class that, when constructed with a ByteBuffer,
+  * doesn't do COMPLETELY the wrong thing with it
+  */
+class VeloxByteBufferInput(buffer:ByteBuffer) extends ByteBufferInput {
+  setBuffer(buffer,buffer.position,buffer.remaining)
+}
 
 
 object VeloxKryoRegistrar {
@@ -43,29 +50,18 @@ object VeloxKryoRegistrar {
 }
 
 class KryoSerializer(val kryo: Kryo) {
-  val byteBuffer = ByteBuffer.allocate(4096)
-  val bout = new ByteBufferOutputStream(byteBuffer)
-  val out = new Output(bout)
-  val bin = new ByteBufferInputStream(byteBuffer)
-  val in = new Input(bin)
 
-  def serialize(x: Any): Array[Byte] = {
-    byteBuffer.clear()
+  def serialize(x: Any, buffer: ByteBuffer): ByteBuffer = {
+    val bout = new ByteBufferOutputStream(buffer)
+    val out = new Output(bout)
     kryo.writeClassAndObject(out, x)
     out.flush()
     bout.flush()
-    byteBuffer.flip()
-    val ret = new Array[Byte](byteBuffer.remaining())
-    byteBuffer.get(ret)
-    ret
+    buffer
   }
 
-  def deserialize(bytes: Array[Byte]): Any = {
-    byteBuffer.clear()
-    byteBuffer.put(bytes)
-    byteBuffer.flip()
-    bin.setByteBuffer(byteBuffer)
-    in.setInputStream(bin)
+  def deserialize(buffer: ByteBuffer): Any = {
+    val in = new VeloxByteBufferInput(buffer)
     kryo.readClassAndObject(in)
   }
 

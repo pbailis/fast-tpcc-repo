@@ -105,26 +105,26 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
 
   def processFrames(partition: NetworkDestinationHandle, buffer: ByteBuffer) {
     // Process the read buffer (we make a local copy here)
-    readExecutor.execute(new Runnable {
-      def run() {
-        while (buffer.hasRemaining) {
-          val frameSize = buffer.getInt
-          assert(frameSize <= buffer.remaining)
-          val endOfFrame = buffer.position + frameSize
-          while (buffer.position < endOfFrame) {
-            val msgSize = buffer.getInt
-            assert(msgSize >= 0)
-            val bytes = new Array[Byte](msgSize)
-            buffer.get(bytes)
-            NIONetworkService.this.receive(partition, bytes)
-          }
-        }
-        // We should have now depleted the buffer
-        assert(!buffer.hasRemaining)
-        buffer.clear()
-        readBufferPool.put(buffer)
-      }
-    })
+    // readExecutor.execute(new Runnable {
+    //   def run() {
+    //     while (buffer.hasRemaining) {
+    //       val frameSize = buffer.getInt
+    //       assert(frameSize <= buffer.remaining)
+    //       val endOfFrame = buffer.position + frameSize
+    //       while (buffer.position < endOfFrame) {
+    //         val msgSize = buffer.getInt
+    //         assert(msgSize >= 0)
+    //         val bytes = new Array[Byte](msgSize)
+    //         buffer.get(bytes)
+    //         NIONetworkService.this.receive(partition, bytes)
+    //       }
+    //     }
+    //     // We should have now depleted the buffer
+    //     assert(!buffer.hasRemaining)
+    //     buffer.clear()
+    //     readBufferPool.put(buffer)
+    //   }
+    // })
   }
 
   def getNewReadBuffer(minSize: Int): ByteBuffer = {
@@ -327,21 +327,21 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
     handle
   }
 
-  override def send(dst: NetworkDestinationHandle, buffer: Array[Byte]) {
+  override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
     assert(connections.containsKey(dst))
-    val bufferResized = connections.get(dst).writeMessage(buffer)
+    //val bufferResized = connections.get(dst).writeMessage(buffer)
     // if (bufferResized) {
     //   writerThread.synchronized{ writerThread.notify() }
     // }
   }
 
-  override def sendAny(buffer: Array[Byte]) {
-    if(connections.isEmpty) {
-      logger.error("Empty connections list in sendAny!")
-    }
+  override def sendAny(buffer: ByteBuffer) {
+    // if(connections.isEmpty) {
+    //   logger.error("Empty connections list in sendAny!")
+    // }
 
-    val connArray = connections.keySet.toArray
-    send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
+    // val connArray = connections.keySet.toArray
+    // send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
   }
 
   override def disconnect(which: NetworkDestinationHandle) {
@@ -353,8 +353,8 @@ class NIONetworkService(val performIDHandshake: Boolean = false,
     connections.remove(which)
   }
 
-  def receive(src: NetworkDestinationHandle, buffer: Array[Byte]) {
-    bytesReadMeter.mark(buffer.size)
+  def receive(src: NetworkDestinationHandle, buffer: ByteBuffer) {
+    bytesReadMeter.mark(buffer.remaining)
     messageService.receiveRemoteMessage(src, buffer)
   }
 
