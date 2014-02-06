@@ -51,6 +51,9 @@ if __name__ == "__main__":
                         help='Terminate the EC2 cluster and any matching instances')
     parser.add_argument('--rebuild', '-rb', action='store_true',
                         help='Rebuild velox cluster')
+    parser.add_argument('--install_ykit', '-yk', action='store_true',
+                        help='Install yourkit')
+
 
     parser.add_argument('--client_bench', action='store_true',
                         help='Run THE CRANKSHAW TEST on EC2')
@@ -110,6 +113,11 @@ if __name__ == "__main__":
         stop_velox_processes()
         rebuild_servers(branch=args.branch, remote=args.git_remote, deploy_key=args.deploy_key)
 
+    if args.install_ykit:
+        pprint("Installing Yourkit")
+        assign_hosts(region, cluster)
+        install_ykit(cluster)
+
     if args.terminate:
         terminate_cluster(region, cluster_id)
 
@@ -117,9 +125,9 @@ if __name__ == "__main__":
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
         assign_hosts(region, cluster)
-        start_servers(cluster)
+        start_servers(cluster, args.network_service, args.profile, args.profile_depth)
         sleep(5)
-        run_velox_client_bench(cluster, parallelism=64, timeout=30, ops=100000, pct_reads=.5)
+        run_velox_client_bench(cluster, args.network_service, args.profile, args.profile_depth, parallelism=16, timeout=30, ops=100000000, pct_reads=.5)
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")
@@ -128,7 +136,7 @@ if __name__ == "__main__":
         runid = "YCSB-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running YCSB")
         assign_hosts(region, cluster)
-        start_servers(cluster)
+        start_servers(cluster, args.network_service)
         sleep(5)
         run_ycsb(cluster, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
         stop_velox_processes()
@@ -137,7 +145,7 @@ if __name__ == "__main__":
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")
-        start_servers_local(num_servers,args.network_service,args.profile,args.profile_depth)
+        start_servers_local(num_servers, args.network_service, args.profile, args.profile_depth)
         sleep(5)
         client_bench_local_single(num_servers, args.network_service, args.profile, args.profile_depth,
                                   parallelism=64, timeout=45, ops=100000, pct_reads=0.5, futures=args.usefutures)
@@ -145,7 +153,7 @@ if __name__ == "__main__":
 
     if args.ycsb_bench_local:
         pprint("Running YCSB locally! (1 client only)")
-        start_servers_local(num_servers,args.network_service,args.profile,args.profile_depth)
+        start_servers_local(num_servers, args.network_service, args.profile, args.profile_depth)
         sleep(5)
         run_ycsb_local(num_servers, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
         pprint("YCSB has completed!")
