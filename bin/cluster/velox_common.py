@@ -368,7 +368,9 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "git fetch vremote; "
                       "git checkout -b veloxbranch vremote/%s; "
                       "git reset --hard vremote/%s; "
-                      "sbt/sbt assembly") % (remote, branch, branch))
+                      "sbt/sbt assembly; "
+                      "cd external/ycsb; "
+                      "./package-ycsb.sh") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
 def start_servers(cluster, network_service, profile=False, profile_depth=2, **kwargs):
