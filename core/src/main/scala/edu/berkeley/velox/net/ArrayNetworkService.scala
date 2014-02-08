@@ -136,14 +136,17 @@ class ReaderThread(
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
-  messageService: MessageService) extends Thread("Reader Thread") {
-  //val sizeBuffer = ByteBuffer.allocate(4)
+  messageService: MessageService,
+  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") {
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
     while(true) {
       var read = readBuffer.position
       read += channel.read(readBuffer)
+
+      var allocedBuffer = false
+
       if (read >= 4) {
         readBuffer.flip
 
@@ -152,13 +155,12 @@ class ReaderThread(
         if (readBuffer.remaining == len) { // perfect read
           executor.submit(new Receiver(readBuffer,src,messageService))
           readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
+          allocedBuffer = true
           len = -1 // prevent attempt to copy len below
         }
         else {
-          if (readBuffer.remaining < len)
-            println(s"${getName}: Not enough here.  Have ${readBuffer.remaining}, want $len")
 
-          while (readBuffer.remaining >= 4 && readBuffer.remaining > len) { // read more than enough
+          while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
             val msgBuf = ByteBuffer.allocate(len)
             val oldLim = readBuffer.limit
             readBuffer.limit(readBuffer.position+len)
@@ -179,7 +181,8 @@ class ReaderThread(
           readBuffer.position(readBuffer.position-4)
         }
 
-        readBuffer.compact
+        if (!allocedBuffer) // compact on a new buffer is bad
+          readBuffer.compact
       }
     }
   }
@@ -284,7 +287,7 @@ class ArrayNetworkService(
     if (connections.putIfAbsent(partitionId,buf) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
-      new ReaderThread(channel,executor,partitionId,messageService).start
+      new ReaderThread(channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
       connectionSemaphore.release
     }
   }
