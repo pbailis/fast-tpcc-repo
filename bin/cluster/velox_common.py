@@ -431,14 +431,14 @@ def start_servers_local(numservers, network_service, profile=False, depth=2):
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(numservers, network_service, profile, depth, parallelism=64, pct_reads=.5, ops=100000, timeout=3000, futures=True):
+def client_bench_local_single(numservers, network_service, profile, depth, parallelism=64, pct_reads=.5, ops=100000, timeout=3000, futures=True, latency=False):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, numservers)])
     if profile:
         pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % depth
     else:
         pstr = ""
-    system("java %s -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --usefutures %s" % (
-        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, futures))
+    system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --usefutures %s --latency %s" % (
+        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, futures, latency))
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y

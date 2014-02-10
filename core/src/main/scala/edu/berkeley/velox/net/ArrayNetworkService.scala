@@ -161,6 +161,9 @@ class ReaderThread(
         else {
 
           while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
+            if (len > HackConfig.bufSize) {
+              println(s"OHH NO LEN TO BIG $len")
+            }
             val msgBuf = ByteBuffer.allocate(len)
             val oldLim = readBuffer.limit
             readBuffer.limit(readBuffer.position+len)

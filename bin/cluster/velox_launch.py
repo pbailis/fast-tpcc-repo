@@ -61,6 +61,8 @@ if __name__ == "__main__":
                         help='Run THE CRANKSHAW TEST locally')
     parser.add_argument('--usefutures', action='store_true',
                         help='Have THE CRANKSHAW use futures instead of blocking for reply')
+    parser.add_argument('--latency', action='store_true',
+                        help='Compute average latency when running THE CRANKSHAW')
     parser.add_argument('--network_service', dest='network_service',
                         default='array', type=str,
                         help="Which network service to use [array/nio]")
@@ -148,7 +150,8 @@ if __name__ == "__main__":
         start_servers_local(num_servers, args.network_service, args.profile, args.profile_depth)
         sleep(5)
         client_bench_local_single(num_servers, args.network_service, args.profile, args.profile_depth,
-                                  parallelism=64, timeout=45, ops=100000, pct_reads=0.5, futures=args.usefutures)
+                                  parallelism=64, timeout=45, ops=100000, pct_reads=0.5, 
+                                  futures=args.usefutures,latency=args.latency)
         kill_velox_local()
         pprint("THE CRANKSHAW has completed!")
 
