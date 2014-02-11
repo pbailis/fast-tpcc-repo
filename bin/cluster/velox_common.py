@@ -64,9 +64,9 @@ def fetch_file_single(host, remote, local, user="ubuntu"):
     system("scp -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
 def fetch_file_single_compressed(host, remote, local, user="ubuntu"):
-    print("bash \"scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s'\"" % (user, host, remote, local))
+    print("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
-    system("bash \"scp -o -C StrictHostKeyChecking=no %s@%s:%s '%s'\"" % (user, host, remote, local))
+    system("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
 def get_host_ips(hosts):
     return open("hosts/%s.txt" % (hosts)).read().split('\n')[:-1]
@@ -492,7 +492,7 @@ def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readp
 
 def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
     ycsb_cmd = (("pkill -9 java;"
-                 "cd /home/ubuntu/external/ycsb; "
+                 "cd /home/ubuntu/velox/external/ycsb; "
                  "bin/ycsb run velox "
                  "-s "
                  "-P %s "
@@ -506,16 +506,16 @@ def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, v
                  "-p requestdistribution=%s "
                  "-p maxexecutiontime=%d "
                  "-p cluster=%s > run_out.log 2> run_err.log") %
-                (workload, threads, readprop, 1-readprop, valuesize, recordcount, request_distribution, time, cluster.internal_cluster_str))
+                (workload, threads, readprop, 1-readprop, valuesize, recordcount, request_distribution, time, cluster.frontend_cluster_str))
 
     if dorebuild:
         pprint("Rebuilding YCSB")
-        run_cmd("all-clients", "cd /home/ubuntu/external/ycsb; ./package-ycsb.sh")
+        run_cmd("all-clients", "cd /home/ubuntu/velox/external/ycsb; ./package-ycsb.sh")
         pprint("YCSB rebuilt!")
 
     pprint("Loading YCSB on single client...")
     load_cmd = ycsb_cmd.replace(" run ", " load ").replace("run_", "load_")
-    run_cmd_single(cluster.clients[0].ip, "cd /home/ubuntu/external/ycsb; "+load_cmd)
+    run_cmd_single(cluster.clients[0].ip, "cd /home/ubuntu/velox/external/ycsb; "+load_cmd)
     pprint("YCSB loaded!")
 
     pprint("Running YCSB")
@@ -532,8 +532,10 @@ def fetch_logs(output_dir, runid, cluster):
         s_dir = log_dir+"/S"+server.ip
         mkdir(s_dir)
         fetch_file_single_compressed(server.ip, VELOX_BASE_DIR+"/*.log", s_dir)
+        fetch_file_single_compressed(server.ip, VELOX_BASE_DIR+"/external/ycsb/*.log", s_dir)
 
     for client in cluster.clients:
         c_dir = log_dir+"/C"+client.ip
         mkdir(c_dir)
         fetch_file_single_compressed(client.ip, VELOX_BASE_DIR+"/*.log", c_dir)
+        fetch_file_single_compressed(client.ip, VELOX_BASE_DIR+"/external/ycsb/*.log", c_dir)

@@ -87,7 +87,7 @@ if __name__ == "__main__":
     num_servers = args.num_servers
     num_clients = args.num_clients
 
-    cluster = Cluster(region, cluster_id, num_clients, num_servers)
+    cluster = Cluster(region, cluster_id, num_servers, num_clients)
 
     if args.launch:
         pprint("Launching velox clusters")
