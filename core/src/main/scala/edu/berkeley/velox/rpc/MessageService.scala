@@ -11,7 +11,7 @@ import java.net.InetSocketAddress
 import scala.reflect.ClassTag
 import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.util.VeloxKryoRegistrar
+import edu.berkeley.velox.util.{VeloxKryoRegistrar,KryoThreadLocal}
 
 // this causes our futures to no thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
@@ -113,9 +113,10 @@ abstract class MessageService extends Logging {
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
     buffer.putLong(header)
-    val kryo = VeloxKryoRegistrar.getKryo()
+    //val kryo = VeloxKryoRegistrar.getKryo()
+    val kryo = KryoThreadLocal.kryoTL.get
     val result = kryo.serialize(msg,buffer)
-    VeloxKryoRegistrar.returnKryo(kryo)
+    //VeloxKryoRegistrar.returnKryo(kryo)
     result.flip
     result
   }
@@ -125,9 +126,10 @@ abstract class MessageService extends Logging {
     val isRequest = (headerLong >>> 63) == 1
     val requestId = headerLong & ~(1L << 63)
     // TODO: use Kryo serializer pool instead
-    val kryo = VeloxKryoRegistrar.getKryo()
+    //val kryo = VeloxKryoRegistrar.getKryo()
+    val kryo = KryoThreadLocal.kryoTL.get
     val msg = kryo.deserialize(bytes)
-    VeloxKryoRegistrar.returnKryo(kryo)
+    //VeloxKryoRegistrar.returnKryo(kryo)
     (msg, requestId, isRequest)
   }
 

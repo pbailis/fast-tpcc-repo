@@ -14,23 +14,29 @@ class VeloxByteBufferInput(buffer:ByteBuffer) extends ByteBufferInput {
   setBuffer(buffer,buffer.position,buffer.remaining)
 }
 
+object KryoThreadLocal {
+  val kryoTL = new ThreadLocal[KryoSerializer]() {
+    override protected
+    def initialValue(): KryoSerializer = VeloxKryoRegistrar.makeKryo()
+  }
+}
 
 object VeloxKryoRegistrar {
 
   val pool = new LinkedBlockingQueue[KryoSerializer]()
 
-  def getKryo(): KryoSerializer = {
-    var ret = pool.poll
-    if(ret != null) {
-      return ret
-    }
+  // def getKryo(): KryoSerializer = {
+  //   var ret = pool.poll
+  //   if(ret != null) {
+  //     return ret
+  //   }
 
-    makeKryo()
-  }
+  //   makeKryo()
+  // }
 
-  def returnKryo(kryo: KryoSerializer) = {
-    pool.put(kryo)
-  }
+  // def returnKryo(kryo: KryoSerializer) = {
+  //   pool.put(kryo)
+  // }
 
   var classes = Seq.empty[Class[_]]
   def makeKryo(): KryoSerializer = {
