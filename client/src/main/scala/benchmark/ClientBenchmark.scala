@@ -11,10 +11,9 @@ import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 
 import scala.util.{Success, Failure}
-import scala.concurrent.ExecutionContext.Implicits.global
-
 import scala.collection.JavaConversions._
-
+// this causes our futures to not thread
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
 object ClientBenchmark {
 

@@ -203,7 +203,8 @@ class SendSweeper(
       while (cit.hasNext) {
         val buf = connections.get(cit.next)
         if (buf.writePos.get > 4 && buf.sending.compareAndSet(false,true)) {
-          executor.submit(buf)
+          //executor.submit(buf)
+          buf.run()
         }
       }
       Thread.sleep(500)

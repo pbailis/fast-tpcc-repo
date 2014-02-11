@@ -11,8 +11,10 @@ import java.net.InetSocketAddress
 import scala.reflect.ClassTag
 import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
-import scala.concurrent.ExecutionContext.Implicits.global
 import edu.berkeley.velox.util.VeloxKryoRegistrar
+
+// this causes our futures to no thread
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
 class MessageWrapper(private val encRequestId: Long, val body: Any) {
   def isRequest: Boolean = encRequestId < 0
