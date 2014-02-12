@@ -172,13 +172,13 @@ class SocketBufferPool(channel: SocketChannel)  {
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
-    if (!currentBuffer.needsend.get) {
-      currentBuffer.writers.incrementAndGet
-      if (currentBuffer.needsend.compareAndSet(false,true))
-        swap(null)
-      if (currentBuffer.writers.decrementAndGet == 0)
-        currentBuffer.send
-    }
+    // if (!currentBuffer.needsend.get) {
+    //   currentBuffer.writers.incrementAndGet
+    //   if (currentBuffer.needsend.compareAndSet(false,true))
+    //     swap(null)
+    //   if (currentBuffer.writers.decrementAndGet == 0)
+    //     currentBuffer.send
+    // }
   }
 
 }
