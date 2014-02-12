@@ -7,6 +7,7 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, Da
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
+import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Semaphore, ThreadFactory}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.mutable.StringBuilder
@@ -16,29 +17,34 @@ object HackConfig {
   val bufSize = 16384
 }
 
-class SocketBuffer(channel: SocketChannel) extends Runnable {
+class SocketBuffer(
+  channel: SocketChannel,
+  pool: SocketBufferPool) {
+
   var buf = ByteBuffer.allocate(HackConfig.bufSize)
   buf.position(4)
 
   val writePos = new AtomicInteger(4)
 
   val writers = new AtomicInteger(0)
+  val needsend = new AtomicBoolean(false)
   val sending = new AtomicBoolean(false)
 
 
   /** Write bytes into this buffer
     *
     * @param bytes The bytes to write
+    * @param swapFunc A function that will swap this buffer out at a higher
+    *                 level (and write its bytes)
+    * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
+    // fail if we're already sending this buffer
+    if (needsend.get)
+      return false
+
     // indicate our intent to write
     writers.incrementAndGet
-
-    // fail if we're already sending this buffer
-    if (sending.get) {
-      writers.decrementAndGet
-      return false
-    }
 
     val len = bytes.remaining
 
@@ -52,24 +58,33 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
       }
       else {
         writePos.getAndAdd(-len)
-        false
+        if (needsend.compareAndSet(false,true)) {
+          // I'm the guy setting needsend for this buffer
+          // swap the pointer
+          pool.swap(bytes)
+        }
+        else
+          false
       }
 
-    writers.decrementAndGet
+    // Check if I need to send and I'm the last writer
+    // If so, write this buffer out
+    if (writers.decrementAndGet == 0 && needsend.get)
+      send
+
     ret
   }
 
   /**
-    * Calling this class as a runnable sends the current data
-    *
-    * sending MUST be set to true before asking this class to run
+    * Send the current data
     */
-  def run() {
+  def send() {
     try {
-      // wait for any writers to finish
-      while (writers.get > 0) {
-        Thread.sleep(1)
-      }
+
+      if (!sending.compareAndSet(false,true))
+        return // someone else already sending
+
+      while (writers.get != 0) Thread.sleep(1)
 
       if (writePos.get > 4) {
         buf.position(0)
@@ -88,14 +103,17 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
         writePos.set(4)
       }
 
-      sending.set(false)
+      // we clear the sending/needsend flags when
+      // this buffer is taken out of the pool
+      // to reduce chance of useless work
 
-      this.synchronized { this.notifyAll }
+      pool.returnBuffer(this)
 
     } catch {
       case e: Exception => {
         println("EXCEPTION HERE: "+e.getMessage)
-        sending.set(false)
+        e.printStackTrace
+        needsend.set(false)
         throw e
       }
     }
@@ -106,17 +124,63 @@ class SocketBuffer(channel: SocketChannel) extends Runnable {
   def printStatus() {
     val builder = new StringBuilder(s"${id} [${channel.getLocalAddress.toString} <-> ${channel.getRemoteAddress.toString}] - ")
     builder append s" pos: ${writePos.get}"
-    builder append s" sending: ${sending.get}"
+    builder append s" needsend: ${needsend.get}"
     builder append s" writers: ${writers.get}"
     println(builder.result)
   }
 
 }
 
-object IntReader {
-  def readInt(array: Array[Byte], offset: Int=0):Int = {
-    (array(offset) << 24) + ((array(offset+1) & 0xFF) << 16) + ((array(offset+2) & 0xFF) << 8) + (array(offset+3) & 0xFF)
+class SocketBufferPool(channel: SocketChannel)  {
+
+  val pool = new LinkedBlockingQueue[SocketBuffer]()
+  @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
+
+  def send(bytes: ByteBuffer) {
+    var i = 0
+    while(!currentBuffer.write(bytes)) {
+      //println(s"SPIN $i")
+      i+=1
+    }
   }
+
+  def swap(bytes: ByteBuffer):Boolean = {
+    var newBuf = pool.poll
+
+    // TODO: Should probably have a limit on the number of buffers we create
+    if (newBuf == null)
+      newBuf = new SocketBuffer(channel,this)
+    else {
+      newBuf.sending.set(false)
+      newBuf.needsend.set(false)
+    }
+
+    val ret =
+      if (bytes != null)
+        newBuf.write(bytes)
+      else
+        false
+
+    currentBuffer = newBuf
+
+    ret
+  }
+
+  def returnBuffer(buf: SocketBuffer) = pool.put(buf)
+
+  /**
+    * Force the current buffer to be sent immediately
+    */
+  def forceSend() {
+    if (!currentBuffer.needsend.get) {
+      currentBuffer.writers.incrementAndGet
+      if (currentBuffer.needsend.compareAndSet(false,true))
+        swap(null)
+      if (currentBuffer.writers.decrementAndGet == 0)
+        currentBuffer.send
+    }
+  }
+
 }
 
 class Receiver(
@@ -192,23 +256,15 @@ class ReaderThread(
 }
 
 class SendSweeper(
-  connections: ConcurrentHashMap[NetworkDestinationHandle, SocketBuffer],
+  connections: ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool],
   executor: ExecutorService) extends Runnable {
-
-  var i = 0
 
   def run() {
     while(true) {
-      val cit = connections.keySet.iterator
-      while (cit.hasNext) {
-        val buf = connections.get(cit.next)
-        if (buf.writePos.get > 4 && buf.sending.compareAndSet(false,true)) {
-          //executor.submit(buf)
-          buf.run()
-        }
-      }
       Thread.sleep(500)
-      i+=1
+      val cit = connections.keySet.iterator
+      while (cit.hasNext)
+        connections.get(cit.next).forceSend
     }
   }
 }
@@ -233,7 +289,7 @@ class ArrayNetworkService(
   val serverID: Integer = -1) extends NetworkService with Logging {
 
   val executor = Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
-  val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBuffer]
+  val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
 
@@ -287,8 +343,8 @@ class ArrayNetworkService(
     * and allow sends to this channel through the service
     */
   def _registerConnection(partitionId: NetworkDestinationHandle, channel: SocketChannel) {
-    val buf = new SocketBuffer(channel)
-    if (connections.putIfAbsent(partitionId,buf) == null) {
+    val bufPool = new SocketBufferPool(channel)
+    if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
       new ReaderThread(channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
@@ -329,24 +385,9 @@ class ArrayNetworkService(
   }
 
   override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
-    val sockBuf = connections.get(dst)
-
+    val sockBufPool = connections.get(dst)
     // TODO: Something if buffer is null
-
-    while (!sockBuf.write(buffer)) {
-      // If we can't write, try to send
-      if (sockBuf.sending.compareAndSet(false,true)) {
-        //executor.submit(sockBuf)
-        sockBuf.run
-      } else if (sockBuf.sending.get) {
-        sockBuf.synchronized {
-          // recheck in case I just finished
-          if (sockBuf.sending.get)
-            sockBuf.wait
-        }
-      } else // something odd happening, wait and try again shortly
-        Thread.sleep(10)
-    }
+    sockBufPool.send(buffer)
   }
 
   override def sendAny(buffer: ByteBuffer) {
