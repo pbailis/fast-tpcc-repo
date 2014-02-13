@@ -89,14 +89,13 @@ object ClientBenchmark {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
 
-    val runningTimeMap =
-      if (computeLatency)
-        new ConcurrentHashMap[Future[Value],Long]()
-      else null
+    // (num reqs, avg)
+    var currentLatency = (0, 0.0)
 
-    def computeRuntime(f: Future[Value]) {
-      val time = System.nanoTime - runningTimeMap.get(f)
-      runningTimeMap.put(f,time)
+    def updateLatency(runtime: Long) = synchronized {
+      val ttl = currentLatency._1 * currentLatency._2
+      val nc = currentLatency._1 + 1
+      currentLatency = (nc,(ttl+runtime)/nc)
     }
 
     val ostart = System.nanoTime
@@ -113,22 +112,28 @@ object ClientBenchmark {
             while (opsSent.get < numops) {
               if (rand.nextDouble() < pctReads) {
                 val f = client.getValueFuture(Key(rand.nextInt(keyrange)))
-                if (computeLatency) runningTimeMap.put(f,System.nanoTime)
+                val startTime =
+                  if (computeLatency) System.nanoTime
+                  else 0
                 f onComplete {
                   case Success(value) => {
+                    if (computeLatency)
+                      updateLatency(System.nanoTime-startTime)
                     numGets.incrementAndGet()
-                    if (computeLatency) computeRuntime(f)
                     opDone
                   }
                   case Failure(t) => println("An error has occured: " + t.getMessage)
                 }
               } else {
                 val f = client.putValueFuture(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
-                if (computeLatency) runningTimeMap.put(f,System.nanoTime)
+                val startTime =
+                  if (computeLatency) System.nanoTime
+                  else 0
                 f onComplete {
                   case Success(value) => {
+                    if (computeLatency)
+                      updateLatency(System.nanoTime-startTime)
                     numPuts.incrementAndGet()
-                    if (computeLatency) computeRuntime(f)
                     opDone
                   }
                   case Failure(t) => println("An error has occured: " + t.getMessage)
@@ -192,14 +197,8 @@ object ClientBenchmark {
     val gthruput = nGets.toDouble / gtime.toDouble
     val totthruput = (nPuts + nGets).toDouble / gtime.toDouble
     println(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
-    if (computeLatency) {
-      runningTimeMap.values.foreach(v => {
-        if (v > 30000000000000l) println("SOMEHTING BAD")
-      })
-      val total = runningTimeMap.values.filter(_<30000000000000l).foldLeft(0l)(_+_)
-      val avg = (total/runningTimeMap.size.toDouble)/1000000.0
-      println(s"Average latency $avg milliseconds")
-    }
+    if (computeLatency)
+      println(s"Average latency ${currentLatency._2} milliseconds")
     System.exit(0)
   }
 
