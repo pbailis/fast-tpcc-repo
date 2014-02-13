@@ -2,27 +2,23 @@ package edu.berkeley.velox.net
 
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.NetworkDestinationHandle
+import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.MessageService
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Semaphore, ThreadFactory}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
-
-object HackConfig {
-  val bufSize = 16384
-}
 
 class SocketBuffer(
   channel: SocketChannel,
   pool: SocketBufferPool) {
 
-  var buf = ByteBuffer.allocate(HackConfig.bufSize)
+  var buf = ByteBuffer.allocate(VeloxConfig.bufferSize)
   buf.position(4)
 
   val writePos = new AtomicInteger(4)
@@ -35,8 +31,7 @@ class SocketBuffer(
   /** Write bytes into this buffer
     *
     * @param bytes The bytes to write
-    * @param swapFunc A function that will swap this buffer out at a higher
-    *                 level (and write its bytes)
+    *
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
@@ -131,6 +126,14 @@ class SocketBufferPool(channel: SocketChannel)  {
     while(!currentBuffer.write(bytes)) {}
   }
 
+  /** Swap the active buffer.  This should only be called by a thread
+    * holding a write lock on currentBuffer
+    *
+    * @param bytes Data to write into the buffer that will be active after
+    *              this call, or null to write nothing
+    *
+    * @return true if requested bytes written successfully into new buffer
+    */
   def swap(bytes: ByteBuffer):Boolean = {
     var newBuf = pool.poll
 
@@ -189,7 +192,7 @@ class ReaderThread(
   remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") {
 
   override def run() {
-    var readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
+    var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
     while(true) {
       var read = readBuffer.position
       read += channel.read(readBuffer)
@@ -203,14 +206,14 @@ class ReaderThread(
 
         if (readBuffer.remaining == len) { // perfect read
           executor.submit(new Receiver(readBuffer,src,messageService))
-          readBuffer = ByteBuffer.allocate(HackConfig.bufSize)
+          readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
           len = -1 // prevent attempt to copy len below
         }
         else {
 
           while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
-            if (len > HackConfig.bufSize) {
+            if (len > VeloxConfig.bufferSize) {
               println(s"OHH NO LEN TO BIG $len")
             }
             val msgBuf = ByteBuffer.allocate(len)
@@ -246,7 +249,7 @@ class SendSweeper(
 
   def run() {
     while(true) {
-      Thread.sleep(500)
+      Thread.sleep(VeloxConfig.sweepTime)
       val cit = connections.keySet.iterator
       while (cit.hasNext)
         connections.get(cit.next).forceSend

@@ -54,6 +54,12 @@ object ClientBenchmark {
       opt[Int]("status_time") foreach {
         i => status_time = i
       }
+      opt[Int]('b', "buffer_size") foreach {
+        p => VeloxConfig.bufferSize = p
+      } text("Size (in bytes) to make the network buffer")
+      opt[Int]("sweep_time") foreach {
+        p => VeloxConfig.sweepTime = p
+      } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
       opt[Boolean]("usefutures") foreach {
         i => useFutures = i
       } text ("Use futures instead of blocking for reply")
