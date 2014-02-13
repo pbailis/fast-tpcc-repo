@@ -8,6 +8,7 @@ import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, Semaphore, ThreadFactory}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.mutable.StringBuilder
@@ -26,9 +27,9 @@ class SocketBuffer(
 
   val writePos = new AtomicInteger(4)
 
-  val writers = new AtomicInteger(0)
-  val needsend = new AtomicBoolean(false)
-  val sending = new AtomicBoolean(false)
+  var needsend = false
+
+  val rwlock = new ReentrantReadWriteLock()
 
 
   /** Write bytes into this buffer
@@ -39,12 +40,8 @@ class SocketBuffer(
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
-    // fail if we're already sending this buffer
-    if (needsend.get)
+    if (!rwlock.readLock.tryLock)
       return false
-
-    // indicate our intent to write
-    writers.incrementAndGet
 
     val len = bytes.remaining
 
@@ -54,38 +51,42 @@ class SocketBuffer(
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
+        rwlock.readLock.unlock
         true
       }
       else {
         writePos.getAndAdd(-len)
-        if (needsend.compareAndSet(false,true)) {
-          // I'm the guy setting needsend for this buffer
-          // swap the pointer
-          pool.swap(bytes)
-        }
-        else
-          false
-      }
 
-    // Check if I need to send and I'm the last writer
-    // If so, write this buffer out
-    if (writers.decrementAndGet == 0 && needsend.get)
-      send
+        needsend = true
+        // can't upgrade to write lock, so unlock
+        rwlock.readLock.unlock
+        rwlock.writeLock.lock
+        // recheck in case someone else got it
+        if (needsend) {
+          val r = pool.swap(bytes)
+          send
+          needsend = false
+          rwlock.writeLock.unlock
+          pool.returnBuffer(this)
+          r
+        }
+        else {
+          rwlock.writeLock.unlock
+          false
+        }
+      }
 
     ret
   }
 
   /**
     * Send the current data
+    *
+    * The write lock MUST be held before calling this method
+    *
     */
   def send() {
     try {
-
-      if (!sending.compareAndSet(false,true))
-        return // someone else already sending
-
-      while (writers.get != 0) Thread.sleep(1)
-
       if (writePos.get > 4) {
         buf.position(0)
 
@@ -102,18 +103,10 @@ class SocketBuffer(
         buf.position(4)
         writePos.set(4)
       }
-
-      // we clear the sending/needsend flags when
-      // this buffer is taken out of the pool
-      // to reduce chance of useless work
-
-      pool.returnBuffer(this)
-
     } catch {
       case e: Exception => {
         println("EXCEPTION HERE: "+e.getMessage)
         e.printStackTrace
-        needsend.set(false)
         throw e
       }
     }
@@ -124,8 +117,6 @@ class SocketBuffer(
   def printStatus() {
     val builder = new StringBuilder(s"${id} [${channel.getLocalAddress.toString} <-> ${channel.getRemoteAddress.toString}] - ")
     builder append s" pos: ${writePos.get}"
-    builder append s" needsend: ${needsend.get}"
-    builder append s" writers: ${writers.get}"
     println(builder.result)
   }
 
@@ -137,11 +128,7 @@ class SocketBufferPool(channel: SocketChannel)  {
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
 
   def send(bytes: ByteBuffer) {
-    var i = 0
-    while(!currentBuffer.write(bytes)) {
-      //println(s"SPIN $i")
-      i+=1
-    }
+    while(!currentBuffer.write(bytes)) {}
   }
 
   def swap(bytes: ByteBuffer):Boolean = {
@@ -150,10 +137,6 @@ class SocketBufferPool(channel: SocketChannel)  {
     // TODO: Should probably have a limit on the number of buffers we create
     if (newBuf == null)
       newBuf = new SocketBuffer(channel,this)
-    else {
-      newBuf.sending.set(false)
-      newBuf.needsend.set(false)
-    }
 
     val ret =
       if (bytes != null)
@@ -172,13 +155,15 @@ class SocketBufferPool(channel: SocketChannel)  {
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
-    // if (!currentBuffer.needsend.get) {
-    //   currentBuffer.writers.incrementAndGet
-    //   if (currentBuffer.needsend.compareAndSet(false,true))
-    //     swap(null)
-    //   if (currentBuffer.writers.decrementAndGet == 0)
-    //     currentBuffer.send
-    // }
+    val buf = currentBuffer
+    buf.needsend = true
+    buf.rwlock.writeLock.lock()
+    if (buf.needsend) {
+      swap(null)
+      buf.send
+      buf.needsend = false
+    }
+    buf.rwlock.writeLock.unlock()
   }
 
 }
