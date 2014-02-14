@@ -1,16 +1,19 @@
 package edu.berkeley.velox.benchmark
 
 import edu.berkeley.velox.conf.VeloxConfig
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.datamodel.Key
 import edu.berkeley.velox.datamodel.Value
+import scala.concurrent.Future
 import scala.util.Random
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 
 import scala.util.{Success, Failure}
-import scala.concurrent.ExecutionContext.Implicits.global
-
+import scala.collection.JavaConversions._
+// this causes our futures to not thread
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
 object ClientBenchmark {
 
@@ -28,6 +31,7 @@ object ClientBenchmark {
     var status_time = 10
 
     var useFutures = true
+    var computeLatency = false
 
     var frontendCluster = ""
 
@@ -50,9 +54,18 @@ object ClientBenchmark {
       opt[Int]("status_time") foreach {
         i => status_time = i
       }
+      opt[Int]('b', "buffer_size") foreach {
+        p => VeloxConfig.bufferSize = p
+      } text("Size (in bytes) to make the network buffer")
+      opt[Int]("sweep_time") foreach {
+        p => VeloxConfig.sweepTime = p
+      } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
       opt[Boolean]("usefutures") foreach {
         i => useFutures = i
       } text ("Use futures instead of blocking for reply")
+      opt[Boolean]("latency") foreach {
+        i => computeLatency = i
+      } text ("Compute average latency of each request")
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
@@ -76,6 +89,15 @@ object ClientBenchmark {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
 
+    // (num reqs, avg)
+    var currentLatency = (0, 0.0)
+
+    def updateLatency(runtime: Long) = synchronized {
+      val ttl = currentLatency._1 * currentLatency._2
+      val nc = currentLatency._1 + 1
+      currentLatency = (nc,(ttl+runtime)/nc)
+    }
+
     val ostart = System.nanoTime
 
     val client = new VeloxConnection(clusterAddresses)
@@ -90,8 +112,13 @@ object ClientBenchmark {
             while (opsSent.get < numops) {
               if (rand.nextDouble() < pctReads) {
                 val f = client.getValueFuture(Key(rand.nextInt(keyrange)))
+                val startTime =
+                  if (computeLatency) System.nanoTime
+                  else 0
                 f onComplete {
                   case Success(value) => {
+                    if (computeLatency)
+                      updateLatency(System.nanoTime-startTime)
                     numGets.incrementAndGet()
                     opDone
                   }
@@ -99,8 +126,13 @@ object ClientBenchmark {
                 }
               } else {
                 val f = client.putValueFuture(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
+                val startTime =
+                  if (computeLatency) System.nanoTime
+                  else 0
                 f onComplete {
                   case Success(value) => {
+                    if (computeLatency)
+                      updateLatency(System.nanoTime-startTime)
                     numPuts.incrementAndGet()
                     opDone
                   }
@@ -145,7 +177,7 @@ object ClientBenchmark {
             Thread.sleep(status_time*1000)
             val curTime = (System.nanoTime-ostart).toDouble/nanospersec
             val curThru = (numGets.get()+numPuts.get()).toDouble/curTime
-            println(s"STATUS @ ${curTime}s: $curThru ops/sec")
+            println(s"STATUS @ ${curTime}s: $curThru ops/sec ($opsDone.get ops done)")
           }
         }
       }).start
@@ -165,6 +197,8 @@ object ClientBenchmark {
     val gthruput = nGets.toDouble / gtime.toDouble
     val totthruput = (nPuts + nGets).toDouble / gtime.toDouble
     println(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
+    if (computeLatency)
+      println(s"Average latency ${currentLatency._2} milliseconds")
     System.exit(0)
   }
 

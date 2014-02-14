@@ -13,10 +13,12 @@ object VeloxConfig {
   var partitionId: NetworkDestinationHandle = -1
   var bootstrapConnectionWaitSeconds = 2
   var tcpNoDelay: Boolean = true
-  var numBuffersPerRing = 2
+  var numBuffersPerRing = 32
   var partitionList: Array[NetworkDestinationHandle] = null
 
+  var bufferSize = 16384*8
   var networkService = "array"
+  var sweepTime = 500
 
   def initialize(cmdLine: Array[String]): Boolean = {
     val ret = parser.parse(cmdLine)
@@ -30,8 +32,10 @@ object VeloxConfig {
     opt[Int]('i', "id") foreach { i => partitionId = i } text("Partition ID for this server")
     opt[Int]('p', "internal_port") foreach { p => internalServerPort = p } text("Port to listen for internal connections")
     opt[Int]('f', "frontend_port") foreach { p => externalServerPort = p } text("Port to listen for frontend connections")
-    opt[Int]("buffers_per_ring") foreach { p => numBuffersPerRing = p } text("Port to listen for frontend connections")
+    opt[Int]("buffers_per_ring") foreach { p => numBuffersPerRing = p } text("Buffers per ring (should be > writing threads)")
     opt[Int]("bootstrap_time") foreach { p => bootstrapConnectionWaitSeconds = p } text("Time to wait for server connect bootstrap")
+    opt[Int]('b', "buffer_size") foreach { p => bufferSize = p } text("Size (in bytes) to make the network buffer")
+    opt[Int]("sweep_time") foreach { p => sweepTime = p } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
 

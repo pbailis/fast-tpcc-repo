@@ -4,6 +4,7 @@ import edu.berkeley.velox._
 import com.codahale.metrics.MetricRegistry
 import java.net.InetSocketAddress
 import edu.berkeley.velox.rpc.MessageService
+import java.nio.ByteBuffer
 
 trait NetworkService {
 
@@ -28,8 +29,8 @@ trait NetworkService {
   def connect(address: InetSocketAddress): NetworkDestinationHandle
   def disconnect(which: NetworkDestinationHandle)
 
-  def send(dst: NetworkDestinationHandle, buffer: Array[Byte])
-  def sendAny(buffer: Array[Byte])
+  def send(dst: NetworkDestinationHandle, buffer: ByteBuffer)
+  def sendAny(buffer: ByteBuffer)
 
   def blockForConnections(numConnections: Integer)
 }

@@ -8,8 +8,9 @@ import edu.berkeley.velox.datamodel.{Key, Value}
 import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{Future, future}
-import scala.concurrent.ExecutionContext.Implicits.global
 
+// this causes our futures to not thread
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
 // Every server has a single instance of this class. It handles data storage
 // and serves client requests. Data is stored in a concurrent hash map.

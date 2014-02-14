@@ -62,6 +62,7 @@ object VeloxBuild extends Build {
 
     libraryDependencies ++= Seq(
       "com.github.scopt" %% "scopt" % "3.2.0",
+      "com.esotericsoftware.kryo" % "kryo" % "2.23.0",
       "com.twitter" % "chill_2.10" % "0.3.5",
       "com.twitter" % "chill-bijection_2.10" % "0.3.5",
       "com.codahale.metrics" % "metrics-core" % "3.0.1",

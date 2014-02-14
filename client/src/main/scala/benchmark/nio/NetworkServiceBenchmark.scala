@@ -3,6 +3,7 @@ package edu.berkeley.velox.benchmark.nio
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.net.{NetworkService, NIONetworkService}
 import edu.berkeley.velox.rpc.{InternalRPCService, MessageService}
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.NetworkDestinationHandle
 import java.util.concurrent.Executors
@@ -23,14 +24,15 @@ class PingMessageService(val totalPing: Int,
       sendExecutor.execute(new Runnable {
         def run() {
           for (j <- 0 until totalPing / 10) {
-            PingMessageService.this.networkService.send(partitionId, bytes)
+            PingMessageService.this.networkService.send(partitionId, ByteBuffer.wrap(bytes))
           }
         }
       })
     }
   }
 
-  override def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: Array[Byte]): Unit = {
+  override def receiveRemoteMessage(src: NetworkDestinationHandle, bytebuf: ByteBuffer): Unit = {
+    val bytes = bytebuf.array
     val count = pings.incrementAndGet()
     if (count == totalPing) {
       val endTime = System.currentTimeMillis()
@@ -69,14 +71,15 @@ class PingPongMessageService(val totalPingPongs: Int,
       sendExecutor.execute(new Runnable {
         def run() {
           for (j <- 0 until totalPingPongs / 10) {
-            ns.send(partitionId, bytes)
+            ns.send(partitionId, ByteBuffer.wrap(bytes))
           }
         }
       })
     }
   }
 
-  override def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: Array[Byte]): Unit = {
+  override def receiveRemoteMessage(src: NetworkDestinationHandle, bytesbuf: ByteBuffer): Unit = {
+    val bytes = bytesbuf.array
     val isPong = bytes(0) == 3
     if (isPong) {
       val count = pingPongs.incrementAndGet()
@@ -102,7 +105,7 @@ class PingPongMessageService(val totalPingPongs: Int,
           val ns: NetworkService = PingPongMessageService.this.networkService
           // make bytes a pong message
           bytes(0) = 3
-          ns.send(src, bytes)
+          ns.send(src, ByteBuffer.wrap(bytes))
 //        }
 //      })
     }

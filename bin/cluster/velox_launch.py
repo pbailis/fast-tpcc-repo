@@ -61,9 +61,17 @@ if __name__ == "__main__":
                         help='Run THE CRANKSHAW TEST locally')
     parser.add_argument('--usefutures', action='store_true',
                         help='Have THE CRANKSHAW use futures instead of blocking for reply')
+    parser.add_argument('--latency', action='store_true',
+                        help='Compute average latency when running THE CRANKSHAW')
     parser.add_argument('--network_service', dest='network_service',
                         default='array', type=str,
                         help="Which network service to use [array/nio]")
+    parser.add_argument('--buffer_size', dest='buffer_size',
+                        default=16384*8, type=int,
+                        help='Size (in bytes) to make the network buffer')
+    parser.add_argument('--sweep_time', dest='sweep_time',
+                        default=500, type=int,
+                        help='Time the ArrayNetworkService send sweep thread should wait between sweeps')
 
     # jvm options
     parser.add_argument('--profile', action='store_true',
@@ -125,9 +133,12 @@ if __name__ == "__main__":
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
         assign_hosts(region, cluster)
-        start_servers(cluster, args.network_service, args.profile, args.profile_depth)
+        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth)
         sleep(5)
-        run_velox_client_bench(cluster, args.network_service, args.profile, args.profile_depth, parallelism=16, timeout=30, ops=100000000, pct_reads=.5)
+        run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                               args.profile, args.profile_depth,
+                               parallelism=32, timeout=300, ops=100000000, pct_reads=.5,
+                               futures=args.usefutures,latency=args.latency)
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")
@@ -145,10 +156,12 @@ if __name__ == "__main__":
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")
-        start_servers_local(num_servers, args.network_service, args.profile, args.profile_depth)
+        start_servers_local(num_servers, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth)
         sleep(5)
-        client_bench_local_single(num_servers, args.network_service, args.profile, args.profile_depth,
-                                  parallelism=64, timeout=45, ops=100000, pct_reads=0.5, futures=args.usefutures)
+        client_bench_local_single(num_servers, args.network_service, args.buffer_size, args.sweep_time,
+                                  args.profile, args.profile_depth,
+                                  parallelism=64, timeout=45, ops=100000, pct_reads=0.5,
+                                  futures=args.usefutures,latency=args.latency)
         kill_velox_local()
         pprint("THE CRANKSHAW has completed!")
 
