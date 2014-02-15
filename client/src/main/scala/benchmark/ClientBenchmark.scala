@@ -1,25 +1,30 @@
 package edu.berkeley.velox.benchmark
 
 import edu.berkeley.velox.conf.VeloxConfig
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicInteger
-import edu.berkeley.velox.datamodel.Key
-import edu.berkeley.velox.datamodel.Value
-import scala.concurrent.Future
+import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 import scala.util.Random
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 
 import scala.util.{Success, Failure}
-import scala.collection.JavaConversions._
-// this causes our futures to not thread
-import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.{Await, Future}
+import scala.concurrent
+import scala.concurrent.duration.Duration
+import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderRequest, TPCCNewOrderResponse}
+import edu.berkeley.velox.benchmark.util.RandomGenerator
+import java.util._
+
 
 object ClientBenchmark {
+  var totalWarehouses = -1
+  val generator = new RandomGenerator
+
 
   def main(args: Array[String]) {
-    val numPuts = new AtomicInteger()
-    val numGets = new AtomicInteger()
+    val numOps = new AtomicInteger()
+    val numAborts = new AtomicInteger()
+    val numMs = new AtomicLong()
 
     val nanospersec = math.pow(10, 9)
 
@@ -29,9 +34,9 @@ object ClientBenchmark {
     var waitTimeSeconds = 20
     var pctReads = 0.5
     var status_time = 10
-
-    var useFutures = true
-    var computeLatency = false
+    var warehouses_per_server = 1
+    var load = false
+    var run = false
 
     var frontendCluster = ""
 
@@ -60,12 +65,13 @@ object ClientBenchmark {
       opt[Int]("sweep_time") foreach {
         p => VeloxConfig.sweepTime = p
       } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
-      opt[Boolean]("usefutures") foreach {
-        i => useFutures = i
-      } text ("Use futures instead of blocking for reply")
-      opt[Boolean]("latency") foreach {
-        i => computeLatency = i
-      } text ("Compute average latency of each request")
+
+      opt[Int]("warehouses_per_server") foreach {
+        i => warehouses_per_server = i
+      }
+      opt[Unit]("load") foreach { p => load = true }
+      opt[Unit]("run") foreach { p => run = true }
+
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
@@ -89,85 +95,48 @@ object ClientBenchmark {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
 
-    // (num reqs, avg)
-    var currentLatency = (0, 0.0)
-
-    def updateLatency(runtime: Long) = synchronized {
-      val ttl = currentLatency._1 * currentLatency._2
-      val nc = currentLatency._1 + 1
-      currentLatency = (nc,(ttl+runtime)/nc)
-    }
-
     val ostart = System.nanoTime
 
     val client = new VeloxConnection(clusterAddresses)
 
+    totalWarehouses = clusterAddresses.size*warehouses_per_server
+
+    if(load) {
+      println(s"Loading $totalWarehouses warehouses...}")
+      val loadFuture = Future.sequence((1 to totalWarehouses).map(wh => client.loadTPCC(wh)))
+      Await.result(loadFuture, Duration.Inf)
+      println(s"...loaded ${totalWarehouses} warehouses")
+    }
+
+    if(!run) {
+      System.exit(0)
+    }
+
+
     println(s"Starting $parallelism threads!")
 
-    if (useFutures) {
-      for (i <- 0 to parallelism) {
-        new Thread(new Runnable {
-          val rand = new Random
-          override def run() = {
-            while (opsSent.get < numops) {
-              if (rand.nextDouble() < pctReads) {
-                val f = client.getValueFuture(Key(rand.nextInt(keyrange)))
-                val startTime =
-                  if (computeLatency) System.nanoTime
-                  else 0
-                f onComplete {
-                  case Success(value) => {
-                    if (computeLatency)
-                      updateLatency(System.nanoTime-startTime)
-                    numGets.incrementAndGet()
-                    opDone
-                  }
-                  case Failure(t) => println("An error has occured: " + t.getMessage)
+    for (i <- 0 to parallelism) {
+      new Thread(new Runnable {
+        val rand = new Random
+        override def run() = {
+          while (opsSent.get < numops) {
+            val request = singleNewOrder(client)
+            request.future onComplete {
+              case Success(value) => {
+                numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
+                if(!value.committed) {
+                 numAborts.incrementAndGet()
                 }
-              } else {
-                val f = client.putValueFuture(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
-                val startTime =
-                  if (computeLatency) System.nanoTime
-                  else 0
-                f onComplete {
-                  case Success(value) => {
-                    if (computeLatency)
-                      updateLatency(System.nanoTime-startTime)
-                    numPuts.incrementAndGet()
-                    opDone
-                  }
-                  case Failure(t) => println("An error has occured: " + t.getMessage)
-                }
+                numOps.incrementAndGet()
               }
-              opsSent.incrementAndGet
+              case Failure(t) => println("An error has occured: " + t.getMessage)
             }
-          }
-          println("Thread is done sending")
-        }).start
-      }
-    } else {
-      for (i <- 0 to parallelism) {
-        new Thread(new Runnable {
-          val rand = new Random
-          override def run() = {
-            while (true) {
-              if (rand.nextDouble() < pctReads) {
-                client.getValue(Key(rand.nextInt(keyrange)))
-                numGets.incrementAndGet()
-              } else {
-                client.putValue(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
-                numPuts.incrementAndGet()
-              }
 
-              if (opsDone.incrementAndGet() == numops) {
-                opsDone.synchronized {
-                  opsDone.notify
-                }
-              }
-            }
+            opsSent.incrementAndGet
           }
-        }).start
-      }
+        }
+        println("Thread is done sending")
+      }).start
     }
 
     if(status_time > 0) {
@@ -176,8 +145,8 @@ object ClientBenchmark {
           while(opsDone.get() < numops) {
             Thread.sleep(status_time*1000)
             val curTime = (System.nanoTime-ostart).toDouble/nanospersec
-            val curThru = (numGets.get()+numPuts.get()).toDouble/curTime
-            println(s"STATUS @ ${curTime}s: $curThru ops/sec ($opsDone.get ops done)")
+            val curThru = (numAborts.get()+numOps.get()).toDouble/curTime
+            println(s"STATUS @ ${curTime}s: $curThru ops/sec")
           }
         }
       }).start
@@ -190,16 +159,48 @@ object ClientBenchmark {
     val gstop = System.nanoTime
     val gtime = (gstop - ostart) / nanospersec
 
-    val nPuts = numPuts.get()
-    val nGets = numGets.get()
+    val nOps = numOps.get()
+    val latency = numMs.get()/numOps.get().toDouble
 
-    val pthruput = nPuts.toDouble / gtime.toDouble
-    val gthruput = nGets.toDouble / gtime.toDouble
-    val totthruput = (nPuts + nGets).toDouble / gtime.toDouble
-    println(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
-    if (computeLatency)
-      println(s"Average latency ${currentLatency._2} milliseconds")
+    val pthruput = nOps.toDouble / gtime.toDouble
+    println(s"In $gtime seconds and with $parallelism threads, completed $numOps, $numAborts aborts \nTOTAL THROUGHPUT: $pthruput ops/sec (avg latency ${latency} ms)")
     System.exit(0)
   }
+
+  def singleNewOrder(conn: VeloxConnection): OutstandingNewOrderRequest = {
+    val W_ID = generator.number(1, totalWarehouses)
+    val D_ID: Int = generator.number(1, 10)
+    val C_ID: Int = generator.NURand(1023, 1, 3000)
+    val OL_CNT: Int = generator.number(5, 15)
+    val rollback: Boolean = generator.nextDouble < .01
+    var warehouseIDs = new ArrayList[Int]()
+
+    for(i <- 1 to OL_CNT) {
+      var O_W_ID = W_ID
+      if (totalWarehouses > 1 && generator.nextDouble() < .01) {
+        O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
+      }
+
+      warehouseIDs.add(O_W_ID)
+    }
+
+    var OL_I_IDs = new ArrayList[Int]()
+    var OL_QUANTITY_LIST = new ArrayList[Int]()
+
+    for(ol_cnt <- 1 to OL_CNT) {
+      var OL_I_ID = generator.NURand(8191, 1, 100000)
+      if(rollback && ol_cnt == OL_CNT) {
+        OL_I_ID = -1
+      }
+
+      OL_I_IDs.add(OL_I_ID)
+      OL_QUANTITY_LIST.add(generator.number(1, 10))
+    }
+
+    return new OutstandingNewOrderRequest(conn.newOrder(new TPCCNewOrderRequest(W_ID, D_ID, C_ID, OL_I_IDs, warehouseIDs, OL_QUANTITY_LIST)),
+                                          System.currentTimeMillis())
+  }
+
+  case class OutstandingNewOrderRequest(future: Future[TPCCNewOrderResponse], startTimeMs: Long)
 
 }

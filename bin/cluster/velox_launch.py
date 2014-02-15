@@ -137,8 +137,8 @@ if __name__ == "__main__":
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=32, timeout=300, ops=100000000, pct_reads=.5,
-                               futures=args.usefutures,latency=args.latency)
+                               parallelism=1, timeout=300, ops=10000000, pct_reads=.5,
+                               )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")
@@ -160,7 +160,7 @@ if __name__ == "__main__":
         sleep(5)
         client_bench_local_single(num_servers, args.network_service, args.buffer_size, args.sweep_time,
                                   args.profile, args.profile_depth,
-                                  parallelism=64, timeout=45, ops=100000, pct_reads=0.5,
+                                  parallelism=1, timeout=45, ops=1000000, pct_reads=0.5,
                                   futures=args.usefutures,latency=args.latency)
         kill_velox_local()
         pprint("THE CRANKSHAW has completed!")

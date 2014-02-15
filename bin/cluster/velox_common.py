@@ -361,16 +361,14 @@ def rebuild_servers(remote, branch, deploy_key=None):
 
     pprint('Rebuilding clients and servers...')
     run_cmd_in_velox('all-hosts',
-                     ("git remote rm vremote; "
+                     ("rm *.log; git remote rm vremote; "
                       "git remote add vremote %s; "
                       "git checkout master; "
                       "git branch -D veloxbranch; "
                       "git fetch vremote; "
                       "git checkout -b veloxbranch vremote/%s; "
                       "git reset --hard vremote/%s; "
-                      "sbt/sbt assembly; "
-                      "cd external/ycsb; "
-                      "./package-ycsb.sh") % (remote, branch, branch))
+                      "sbt/sbt assembly; ") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, **kwargs):
@@ -440,12 +438,12 @@ def client_bench_local_single(numservers, network_service, buffer_size, sweep_ti
         pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % depth
     else:
         pstr = ""
-    system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
-        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, futures, latency))
+    system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d" % (
+        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time))
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5, futures=True, latency=False):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5):
     hprof = ""
 
     if profile:
@@ -453,9 +451,13 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --run 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, futures, latency)
+           parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time)
+
+    load_cmd = cmd.replace("--run", "--load")
+    run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd)
+
     run_cmd_in_velox("all-clients", cmd)
 
 def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):

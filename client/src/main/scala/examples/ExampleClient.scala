@@ -1,6 +1,5 @@
 package edu.berkeley.velox.examples
 
-import edu.berkeley.velox.datamodel.{Key, Value}
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.frontend.VeloxConnection
 
@@ -11,6 +10,7 @@ import edu.berkeley.velox.frontend.VeloxConnection
 object ExampleClient {
 
   def main(args: Array[String]) {
+    /*
     // Parse client args and setup environment
     println("Starting client")
     VeloxConfig.initialize(args)
@@ -30,6 +30,7 @@ object ExampleClient {
     println("All entries inserted.\nRetrieving entries.")
     testEntries.foreach { e => assert(client.getValue(e._1) == e._2) }
     println("Entries retrieved. Ready to shut down.")
+    */
     
   } 
 }

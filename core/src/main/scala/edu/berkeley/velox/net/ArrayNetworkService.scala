@@ -276,7 +276,7 @@ class ArrayNetworkService(
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
+  val executor = Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory())
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
