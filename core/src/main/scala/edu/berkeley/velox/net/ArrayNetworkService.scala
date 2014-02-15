@@ -331,7 +331,7 @@ class ArrayNetworkService(
   }
 
   override def getConnections : Iterator[NetworkDestinationHandle] = {
-    connections.keys
+    connections.keys.asScala
   }
 
   override def disconnect(which: NetworkDestinationHandle) {

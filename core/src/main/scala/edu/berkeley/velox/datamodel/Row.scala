@@ -2,24 +2,29 @@ package edu.berkeley.velox.datamodel
 
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
+import scala.collection.JavaConversions._
 
-class Row {
+protected[velox] class Row {
   // TODO : this is expensive
-  val columns = new ConcurrentHashMap[Column, Value]
+  val columns = new ConcurrentHashMap[ColumnLabel, Value]
 
-  def column(column: Column, value: Value) : Row = {
+  def set(column: ColumnLabel, value: Value) : Row = {
     columns.put(column, value)
     this
   }
 
-  def column(column: Column) : Value = {
+  def get(column: ColumnLabel) : Value = {
     columns.get(column)
   }
 
-  def project(columns: Seq[Column]) : Row = {
+  def getColumnLabels(): Seq[ColumnLabel] = {
+    columns.keys.toSeq
+  }
+
+  def project(columns: Seq[ColumnLabel]) : Row = {
     val ret = new Row()
     columns foreach {
-      c => ret.column(c, this.column(c))
+      c => ret.set(c, this.get(c))
     }
     ret
   }
@@ -32,14 +37,6 @@ class Row {
     var ret = 0
     columns.entrySet.asScala.foreach(pair => ret *= pair.getKey.name.hashCode*pair.getValue.hashCode())
     ret
-  }
-}
-
-object RowConversion {
-  implicit final def toRow(values: Seq[(Column, Value)]): Row = {
-    val row = new Row
-    values.foreach { case (c: Column, v: Value) => row.column(c, v) }
-    row
   }
 }
 

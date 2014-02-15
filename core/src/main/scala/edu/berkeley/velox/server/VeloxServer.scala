@@ -8,12 +8,20 @@ import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHa
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{Promise, Future, future}
 import scala.concurrent.ExecutionContext.Implicits.global
-import edu.berkeley.velox.operations.database.request.{SelectionRequest, InsertionRequest, CreateTableRequest, CreateDatabaseRequest}
-import edu.berkeley.velox.operations.database.response.{SelectionResponse, InsertionResponse, CreateTableResponse, CreateDatabaseResponse}
+import edu.berkeley.velox.operations.database.request._
+import edu.berkeley.velox.operations.database.response.{QueryResponse, InsertionResponse, CreateTableResponse, CreateDatabaseResponse}
 import edu.berkeley.velox.storage.StorageManager
 import edu.berkeley.velox.catalog.SystemCatalog
-import edu.berkeley.velox.datamodel.{ResultSet, Row}
+import edu.berkeley.velox.datamodel.{InsertSet, ResultSet, Row}
 import scala.util.{Failure, Success}
+import scala.util.Failure
+import edu.berkeley.velox.operations.database.request.CreateDatabaseRequest
+import edu.berkeley.velox.operations.database.request.CreateTableRequest
+import edu.berkeley.velox.operations.database.response.QueryResponse
+import scala.util.Success
+import edu.berkeley.velox.operations.database.request.InsertionRequest
+import scala.collection.mutable
+import scala.collection.JavaConversions
 
 
 // Every server has a single instance of this class. It handles data storage
@@ -35,7 +43,7 @@ class VeloxServer extends Logging {
 
   internalServer.registerHandler(new InternalCreateDatabaseRequestHandler)
   internalServer.registerHandler(new InternalCreateTableRequestHandler)
-  internalServer.registerHandler(new InternalSelectionRequestHandler)
+  internalServer.registerHandler(new InternalQueryRequestHandler)
   internalServer.registerHandler(new InternalInsertionRequestHandler)
 
   // create the message service first, register handlers, then start the network
@@ -43,7 +51,7 @@ class VeloxServer extends Logging {
 
   frontendServer.registerHandler(new FrontendCreateDatabaseRequestHandler)
   frontendServer.registerHandler(new FrontendCreateTableRequestHandler)
-  frontendServer.registerHandler(new FrontendSelectionRequestHandler)
+  frontendServer.registerHandler(new FrontendQueryRequestHandler)
   frontendServer.registerHandler(new FrontendInsertionRequestHandler)
 
   frontendServer.initialize()
@@ -86,21 +94,45 @@ class VeloxServer extends Logging {
 
   class FrontendInsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] {
     def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
-      internalServer.send(partitioner.getMasterPartition(catalog.extractPrimaryKey(msg.row)), msg)
+      val p = Promise[InsertionResponse]
+
+      val requestsByPartition: Map[NetworkDestinationHandle, InsertSet] = Map().withDefaultValue(new InsertSet)
+
+      msg.insertSet.getRows.foreach(
+        r => {
+          val pkey = catalog.extractPrimaryKey(msg.database, msg.table, r)
+          val partition = partitioner.getMasterPartition(pkey)
+          requestsByPartition(partition).appendRow(r)
+        }
+      )
+
+      val f = Future.sequence(requestsByPartition.map {
+        case (destination, insertSet) => internalServer.send(destination, new InsertionRequest(msg.database, msg.table, insertSet))
+      })
+
+      f onComplete {
+        case Success(responses) =>
+          p success new InsertionResponse
+        case Failure(t) =>
+          logger.error("Error processing insertion", t)
+          p failure t
+      }
+
+      p.future
     }
   }
 
-  class FrontendSelectionRequestHandler extends MessageHandler[SelectionResponse, SelectionRequest] {
-    def receive(src: NetworkDestinationHandle, msg: SelectionRequest): Future[SelectionResponse] = {
-      val p = Promise[SelectionResponse]
+  class FrontendQueryRequestHandler extends MessageHandler[QueryResponse, QueryRequest] {
+    def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
+      val p = Promise[QueryResponse]
       val f = Future.sequence(internalServer.sendAll(msg))
       f onComplete {
         case Success(responses) =>
-          var ret = ResultSet.EMPTY
-          responses foreach { r => ret.combine(r.results) }
-          p success new SelectionResponse(ret)
+          var ret = new ResultSet
+          responses foreach { r => ret.merge(r.results) }
+          p success new QueryResponse(ret)
         case Failure(t) => {
-          logger.error(s"Error processing selection", t)
+          logger.error(s"Error processing query", t)
           p failure t
         }
       }
@@ -115,16 +147,16 @@ class VeloxServer extends Logging {
   class InternalInsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] {
     def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
       future {
-        storage.insert(msg.database, msg.table, msg.row)
+        storage.insert(msg.database, msg.table, msg.insertSet)
         new InsertionResponse
       }
     }
   }
 
-  class InternalSelectionRequestHandler extends MessageHandler[SelectionResponse, SelectionRequest] {
-    def receive(src: NetworkDestinationHandle, msg: SelectionRequest): Future[SelectionResponse] = {
+  class InternalQueryRequestHandler extends MessageHandler[QueryResponse, QueryRequest] {
+    def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
       future {
-        new SelectionResponse(storage.select(msg.database, msg.table, msg.columns, msg.predicate))
+        new QueryResponse(storage.query(msg.database, msg.table, msg.query))
       }
     }
   }

@@ -75,7 +75,7 @@ abstract class MessageService extends Logging {
     p.future
   }
 
-  def sendAll[R](msg: Request[R]): Array[Future[R]] = {
+  def sendAll[R](msg: Request[R]): Seq[Future[R]] = {
    val ret = networkService.getConnections map { c =>
       val p = Promise[R]
       val reqId = nextRequestId.getAndIncrement()

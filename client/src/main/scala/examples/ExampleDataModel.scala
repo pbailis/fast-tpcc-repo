@@ -2,11 +2,10 @@ package edu.berkeley.velox.datamodel
 
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
-import edu.berkeley.velox.datamodel.ValueConversions._
-import edu.berkeley.velox.datamodel.KeyConversion._
 import edu.berkeley.velox.frontend.api.Database
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import edu.berkeley.velox.datamodel.DataModelConverters._
 
 object ExampleDataModel {
   def main(args: Array[String]) {
@@ -18,13 +17,13 @@ object ExampleDataModel {
     val table = db.table("test_table")
 
     // or table insert(...) execute()
-    conn insert("id"-> 5, "name" -> "peter") into table execute()
+    conn insert("id"-> 5, "name" -> "peter") insert ("id" -> 6, "name" -> "lanham") into table execute()
 
     // or table select (..) where (..) execute()
-    val resultSet = Await.result(conn select("id","name") from table where("id" ~= 5) execute(), Duration.Inf)
+    val resultSet = Await.result(conn select("id","name") from table where("id" === 5) execute(), Duration.Inf)
 
-    assert(resultSet.rows.size == 1)
-    assert(resultSet.rows(0).column("id") == 5)
+    assert(resultSet.size == 1)
+    assert(resultSet.getInt("id") == 5)
 
     val nickTable = db.table("nick-table")
 

@@ -6,7 +6,4 @@ package object datamodel {
 
   type DatabaseName = String
   type TableName = String
-  type PrimaryKey = Row
-
-  implicit def stringToColumnID(name: String) : Column = { Column(name) }
 }

@@ -7,20 +7,25 @@ import edu.berkeley.velox.server._
 import java.net.InetSocketAddress
 import collection.JavaConversions._
 import edu.berkeley.velox.frontend.api.{Table, Database}
-import edu.berkeley.velox.datamodel.api.operation.{Insertion, Selection, Operation}
-import edu.berkeley.velox.operations.database.request.{InsertionRequest, SelectionRequest, CreateTableRequest, CreateDatabaseRequest}
+import edu.berkeley.velox.datamodel.api.operation.{InsertionOperation, QueryOperation, Operation}
+import edu.berkeley.velox.operations.database.request._
 import edu.berkeley.velox.datamodel._
 import scala.util.{Success, Failure}
 import com.typesafe.scalalogging.slf4j.Logging
 import scala.util.Success
-import edu.berkeley.velox.operations.database.request.SelectionRequest
+import scala.util.Failure
+import edu.berkeley.velox.datamodel.Schema
+import edu.berkeley.velox.datamodel.ColumnLabel
+import edu.berkeley.velox.datamodel.DataModelConverters._
+import scala.util.Success
 import edu.berkeley.velox.operations.database.request.InsertionRequest
 import scala.util.Failure
 import edu.berkeley.velox.datamodel.Schema
 import edu.berkeley.velox.operations.database.request.CreateDatabaseRequest
+import edu.berkeley.velox.datamodel.ColumnLabel
 import edu.berkeley.velox.operations.database.request.CreateTableRequest
-import edu.berkeley.velox.datamodel.Column
-import edu.berkeley.velox.datamodel.RowConversion._
+import scala.concurrent.ExecutionContext.Implicits.global
+
 
 object VeloxConnection {
   def makeConnection(addresses: java.lang.Iterable[InetSocketAddress]): VeloxConnection = {
@@ -66,20 +71,20 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logg
     df.future
   }
 
-  def select(names: Column*) : Selection = {
-    new Selection(null, names)
+  def select(names: ColumnLabel*) : QueryOperation = {
+    new QueryOperation(null, names)
   }
 
-  def insert(values: (Column, Value)*) : Insertion = {
-    new Insertion(null, values)
+  def insert(values: (ColumnLabel, Value)*) : InsertionOperation = {
+    new InsertionOperation(null, values)
   }
 
   def execute(database: Database, table: Table, operation: Operation) : Future[ResultSet] = {
     val resultSetPromise = Promise[ResultSet]
 
     operation match {
-      case s: Selection => {
-        ms.sendAny(new SelectionRequest(database.name, table.name, s.columns, s.predicate)) onComplete {
+      case s: QueryOperation => {
+        ms.sendAny(new QueryRequest(database.name, table.name, new Query(s.columns, s.predicate))) onComplete {
           // TODO: FIX
           case Success(value) => resultSetPromise success null
           case Failure(t) => {
@@ -89,9 +94,9 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logg
         }
       }
 
-      case i: Insertion => {
-        ms.sendAny(new InsertionRequest(database.name, table.name, i.row)) onComplete {
-          case Success(value) => resultSetPromise success ResultSet.EMPTY
+      case i: InsertionOperation => {
+        ms.sendAny(new InsertionRequest(database.name, table.name, i.insertSet)) onComplete {
+          case Success(value) => resultSetPromise success new ResultSet
           case Failure(t) => {
             logger.error("Error executing insertion", t)
             resultSetPromise failure t

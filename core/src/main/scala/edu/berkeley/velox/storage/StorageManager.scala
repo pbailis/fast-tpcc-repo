@@ -6,12 +6,9 @@ import edu.berkeley.velox.datamodel._
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, LinkedList}
 import edu.berkeley.velox.catalog.SystemCatalog
-import edu.berkeley.velox.datamodel.Column
+import edu.berkeley.velox.datamodel.ColumnLabel
+import edu.berkeley.velox.datamodel.api.operation.QueryOperation
 
-/**
- * Created by crankshaw on 2/6/14.
- * This is the beginning of a backend storage API.
- */
 class StorageManager(val catalog: SystemCatalog) {
 
   // Correct but dumb implementations of database and tables.
@@ -45,43 +42,43 @@ class StorageManager(val catalog: SystemCatalog) {
     dbs.keySet().asScala
   }
 
-  def insert(database: DatabaseName, table: TableName, row: Row) {
-    dbs.get(database).get(table).insert(catalog.extractPrimaryKey(row), row)
+  def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet) {
+    val table =  dbs.get(databaseName).get(tableName)
+    insertSet.getRows foreach {
+      r => table.insert(catalog.extractPrimaryKey(databaseName, tableName, r), r)
+    }
   }
 
-  def select(database: DatabaseName,
-             table: TableName,
-             columns: Seq[Column],
-             predicate: Option[Predicate] = None) : ResultSet = {
+  def query(databaseName: DatabaseName,
+            tableName: TableName,
+            query: Query) : ResultSet = {
     val rows = new ArrayBuffer[Row]
 
-    val table = dbs.get(database).get(table)
+    val table = dbs.get(databaseName).get(tableName)
 
     table.rows.values.asScala foreach {
-      row => predicate match {
+      row => query.predicate match {
         case Some(p) => {
           p match {
-            case eqp: EqualityPredicate => if(row.column(eqp.column) == eqp.value) rows += row.project(columns)
+            case eqp: EqualityPredicate => if(row.get(eqp.column) == eqp.value) rows += row.project(query.columns)
           }
         }
-        case None => rows :+ row.project(columns)
+        case None => rows :+ row.project(query.columns)
       }
     }
-
 
     new ResultSet(rows)
   }
 }
 
 class Table {
-  // question: why can't we make this a PrimaryKey, Row?
-  val rows = new ConcurrentHashMap[Row, Row]()
+  val rows = new ConcurrentHashMap[PrimaryKey, Row]()
 
   def get(key: Row) : Row = {
     rows.get(key)
   }
 
-  def insert(key: Row, row: Row) {
+  def insert(key: PrimaryKey, row: Row) {
     rows.put(key, row)
   }
 }

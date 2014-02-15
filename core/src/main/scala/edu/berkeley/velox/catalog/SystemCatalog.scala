@@ -16,11 +16,16 @@ class SystemCatalog {
     schemas.get(database).putIfAbsent(table, schema)
   }
 
-  def extractPrimaryKey(row: Row)(implicit database: DatabaseName, table: TableName)  = {
-    val ret = new PrimaryKey
-    schemas.get(database).get(table).pkey.value.foreach (
-      col => ret.column(col, row.column(col))
+  def extractPrimaryKey(database: DatabaseName, table: TableName, row: Row): PrimaryKey  = {
+    val definition = schemas.get(database).get(table).pkey
+    val ret = new Array[Value](definition.value.size)
+    var i = 0
+    definition.value.foreach (
+      col => {
+        ret(i) = row.get(col)
+        i += 1
+      }
     )
-    ret
+    new PrimaryKey(ret)
   }
 }
