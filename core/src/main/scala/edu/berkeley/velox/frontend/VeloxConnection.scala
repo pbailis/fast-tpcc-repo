@@ -6,7 +6,9 @@ import scala.concurrent.duration._
 import edu.berkeley.velox.server._
 import java.net.InetSocketAddress
 import collection.JavaConversions._
-import edu.berkeley.velox.datamodel.{Key, Value}
+import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderResponse, TPCCNewOrderRequest, TPCCLoadRequest, TPCCLoadResponse}
+import edu.berkeley.velox.cluster.TPCCPartitioner
+import com.typesafe.scalalogging.slf4j.Logging
 
 
 object VeloxConnection {
@@ -15,69 +17,23 @@ object VeloxConnection {
   }
 }
 
-class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
+class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
   ms.initialize()
   ms.connect(serverAddresses)
 
-  /**
-   * Puts a value into the datastore at the given key
-   * @param k The key to insert at
-   * @param newVal The value to insert
-   * @return The old value if the key previously existed, null otherwise.
-   */
-  def putValue(k: Key, newVal: Value): Value = {
-    val f = ms.sendAny(ClientPutRequest(k, newVal))
-    Await.result(f, Duration.Inf) match {
-      case v: Value => v
-      case _ => null
-    }
+
+  def warehouseToServer(W_ID: Int) = {
+    (W_ID) % (serverAddresses.size+1)
   }
 
-  /** Puts a value into the datastore at the given key
-    * returns a future immediatly instead of waiting
-    *
-    * @param k The key to insert at
-    * @param newVal Value to insert
-    * @return A Future[Value] which will contain the old value (if
-    *         it existed) upon completion
-    */
-  def putValueFuture(k: Key, newVal: Value): Future[Value] = {
-    ms.sendAny(ClientPutRequest(k, newVal))
+  def loadTPCC(W_ID: Int): Future[TPCCLoadResponse] = {
+    val serverNo = warehouseToServer(W_ID)
+    logger.info(s"Loading warehouse ${W_ID} on server ${serverNo}")
+    ms.send(serverNo, new TPCCLoadRequest(W_ID))
   }
 
-  /**
-   * Similar functionality to putValue but does not return the old value
-   * @param k the key to insert at
-   * @param v the value to insert
-   * @return True if the value was replaced, false otherwise.
-   */
-  def insertValue(k: Key, v: Value): Boolean = {
-    val f: Future[Boolean] = ms.sendAny(ClientInsertRequest(k, v))
-    Await.result(f, Duration.Inf)
-
-  }
-
-  /**
-   *
-   * @param k The key whose value to get
-   * @return the value if the key exists, otherwise null
-   */
-  def getValue(k: Key): Value = {
-    val f = ms.sendAny(ClientGetRequest(k))
-    Await.result(f, Duration.Inf) match {
-      case v: Value => v
-      case _ => null
-    }
-  }
-
-  /** Gets a key.  Returns a Future rather than waiting for completion
-   *
-   * @param k The key whose value to get
-   * @return A Future which upon completion will have the value if the key
-   * exists, otherwise null
-   */
-  def getValueFuture(k: Key): Future[Value] = {
-    ms.sendAny(ClientGetRequest(k))
+  def newOrder(request: TPCCNewOrderRequest): Future[TPCCNewOrderResponse] = {
+    ms.send(warehouseToServer(request.W_ID), request)
   }
 }

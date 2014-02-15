@@ -2,17 +2,18 @@ package edu.berkeley.velox.server
 
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox._
-import edu.berkeley.velox.cluster.RandomPartitioner
+import edu.berkeley.velox.cluster.{TPCCPartitioner}
 import edu.berkeley.velox.conf.VeloxConfig
-import edu.berkeley.velox.datamodel.{Key, Value}
 import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{Future, future}
+import edu.berkeley.velox.util.NonThreadedExecutionContext._
+import edu.berkeley.velox.storage.StorageEngine
+import edu.berkeley.velox.benchmark.operation._
+import edu.berkeley.benchmark.tpcc.TPCCNewOrder
 
-// this causes our futures to not thread
-import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
-// Every server has a single instance of this class. It handles data storage
+// Every server has a single instance of this class. It handles data edu.berkeley.velox.storage
 // and serves client requests. Data is stored in a concurrent hash map.
 // As requests come in and are served, the hashmap is accessed concurrently
 // by the thread executing the message handlers (and the handlers have a
@@ -21,22 +22,22 @@ import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 // keys to it.
 
 class VeloxServer extends Logging {
-  val datastore = new ConcurrentHashMap[Key, Value]()
-  val partitioner = new RandomPartitioner
+  val storageEngine = new StorageEngine
+  storageEngine.initialize
+  val partitioner = new TPCCPartitioner
 
   val internalServer = new InternalRPCService
   internalServer.initialize()
 
-  internalServer.registerHandler(new InternalPutHandler)
-  internalServer.registerHandler(new InternalGetHandler)
-  internalServer.registerHandler(new InternalInsertHandler)
+  internalServer.registerHandler(new InternalGetAllHandler)
+  internalServer.registerHandler(new InternalPreparePutAllHandler)
+  internalServer.registerHandler(new InternalCommitPutAllHandler)
 
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService
 
-  frontendServer.registerHandler(new FrontendPutRequestHandler)
-  frontendServer.registerHandler(new FrontendPutRequestHandler)
-  frontendServer.registerHandler(new FrontendGetRequestHandler)
+  frontendServer.registerHandler(new TPCCLoadRequestHandler)
+  frontendServer.registerHandler(new TPCCNewOrderRequestHandler)
 
   frontendServer.initialize()
 
@@ -44,21 +45,17 @@ class VeloxServer extends Logging {
    * Handlers for front-end requests.
    */
 
-  class FrontendPutRequestHandler extends MessageHandler[Value, ClientPutRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientPutRequest): Future[Value] = {
-      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedPutRequest(msg.k, msg.v))
+  class TPCCLoadRequestHandler extends MessageHandler[TPCCLoadResponse, TPCCLoadRequest] {
+    def receive(src: NetworkDestinationHandle, msg: TPCCLoadRequest): Future[TPCCLoadResponse] = {
+      logger.info(s"Loading TPCC warehouse ${msg.W_ID}")
+      TPCCLoader.doLoad(msg.W_ID, partitioner, internalServer, storageEngine)
+      future { new TPCCLoadResponse }
     }
   }
 
-  class FrontendInsertRequestHandler extends MessageHandler[Boolean, ClientInsertRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientInsertRequest): Future[Boolean] = {
-      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedInsertRequest(msg.k, msg.v))
-    }
-  }
-
-  class FrontendGetRequestHandler extends MessageHandler[Value, ClientGetRequest] {
-    def receive(src: NetworkDestinationHandle, msg: ClientGetRequest): Future[Value] = {
-      internalServer.send(partitioner.getMasterPartition(msg.k), RoutedGetRequest(msg.k))
+  class TPCCNewOrderRequestHandler extends MessageHandler[TPCCNewOrderResponse, TPCCNewOrderRequest] {
+    def receive(src: NetworkDestinationHandle, msg: TPCCNewOrderRequest): Future[TPCCNewOrderResponse] = {
+      TPCCNewOrder.execute(msg, partitioner, internalServer, storageEngine)
     }
   }
 
@@ -67,24 +64,28 @@ class VeloxServer extends Logging {
    */
 
   // define handlers
-  class InternalPutHandler extends MessageHandler[Value, RoutedPutRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedPutRequest): Future[Value] = {
-      // returns the old value or null
-      future { datastore.put(msg.k, msg.v) }
+  class InternalPreparePutAllHandler extends MessageHandler[PreparePutAllResponse, PreparePutAllRequest] {
+    def receive(src: NetworkDestinationHandle, msg: PreparePutAllRequest): Future[PreparePutAllResponse] = {
+      future {
+        storageEngine.putPending(msg.values)
+        new PreparePutAllResponse
+      }
     }
   }
 
-  class InternalGetHandler extends MessageHandler[Value, RoutedGetRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedGetRequest): Future[Value] = {
-      // returns the value or null
-      future { datastore.get(msg.k) }
+  class InternalCommitPutAllHandler extends MessageHandler[CommitPutAllResponse, CommitPutAllRequest] {
+    def receive(src: NetworkDestinationHandle, msg: CommitPutAllRequest): Future[CommitPutAllResponse] = {
+      future {
+        storageEngine.putGood(msg.timestamp)
+        new CommitPutAllResponse
+      }
     }
   }
 
-  class InternalInsertHandler extends MessageHandler[Boolean, RoutedInsertRequest] {
-    def receive(src: NetworkDestinationHandle, msg: RoutedInsertRequest): Future[Boolean] = {
+  class InternalGetAllHandler extends MessageHandler[GetAllResponse, GetAllRequest] {
+    def receive(src: NetworkDestinationHandle, msg: GetAllRequest): Future[GetAllResponse] = {
       // returns true if there was an old value
-      future { datastore.put(msg.k, msg.v) != null }
+      future { new GetAllResponse(storageEngine.getAll(msg.keys)) }
     }
   }
 }
@@ -97,11 +98,3 @@ object VeloxServer extends Logging {
     val kvserver = new VeloxServer
   }
 }
-
-case class ClientPutRequest (k: Key, v: Value) extends Request[Value]
-case class ClientInsertRequest (k: Key, v: Value) extends Request[Boolean]
-case class ClientGetRequest (k: Key) extends Request[Value]
-
-case class RoutedPutRequest(k: Key, v: Value) extends Request[Value]
-case class RoutedInsertRequest(k: Key, v: Value) extends Request[Boolean]
-case class RoutedGetRequest(k: Key) extends Request[Value]

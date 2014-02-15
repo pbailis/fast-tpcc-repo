@@ -76,6 +76,7 @@ abstract class MessageService extends Logging {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
+
     requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
@@ -89,6 +90,7 @@ abstract class MessageService extends Logging {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
+
     requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
     networkService.sendAny(serializeMessage(reqId, msg, isRequest=true))
     p.future
@@ -109,7 +111,7 @@ abstract class MessageService extends Logging {
   N bytes: serialized message
  */
   def serializeMessage(requestId: RequestId, msg: Any, isRequest: Boolean): ByteBuffer = {
-    val buffer = ByteBuffer.allocate(4096)
+    val buffer = ByteBuffer.allocate(16384)
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
     buffer.putLong(header)
@@ -140,7 +142,9 @@ abstract class MessageService extends Logging {
     val h = handlers.get(key)
     assert(h != null)
     h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-      case Success(response) => sendResponse(src, requestId, response)
+      case Success(response) => {
+        sendResponse(src, requestId, response)
+      }
       case Failure(t) => logger.error(s"Error receiving message $t")
     }
   }
