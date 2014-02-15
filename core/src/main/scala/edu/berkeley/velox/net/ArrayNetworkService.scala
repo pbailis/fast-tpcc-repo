@@ -16,14 +16,14 @@ import scala.util.Random
 
 class SocketBuffer(
   channel: SocketChannel,
-  pool: SocketBufferPool) {
+  pool: SocketBufferPool) extends Logging {
 
   var buf = ByteBuffer.allocate(VeloxConfig.bufferSize)
   buf.position(4)
 
   val writePos = new AtomicInteger(4)
 
-  var needsend = false
+  @volatile var needsend = false
 
   val rwlock = new ReentrantReadWriteLock()
 
@@ -37,6 +37,12 @@ class SocketBuffer(
   def write(bytes: ByteBuffer): Boolean = {
     if (!rwlock.readLock.tryLock)
       return false
+
+    // ensure we're still looking at the right buffer
+    if (pool.currentBuffer != this) {
+      rwlock.readLock.unlock
+      return false
+    }
 
     val len = bytes.remaining
 
@@ -57,9 +63,9 @@ class SocketBuffer(
         rwlock.readLock.unlock
         rwlock.writeLock.lock
         // recheck in case someone else got it
-        if (needsend) {
+        if (pool.currentBuffer == this && needsend) {
           val r = pool.swap(bytes)
-          send
+          send(false)
           needsend = false
           rwlock.writeLock.unlock
           pool.returnBuffer(this)
@@ -80,7 +86,7 @@ class SocketBuffer(
     * The write lock MUST be held before calling this method
     *
     */
-  def send() {
+  def send(forced: Boolean) {
     try {
       if (writePos.get > 4) {
         buf.position(0)
@@ -92,6 +98,7 @@ class SocketBuffer(
 
         // wrap the array and write it out
         val wrote = channel.write(buf)
+        pool.lastSent = System.currentTimeMillis
 
         // reset write position
         buf.clear
@@ -117,10 +124,21 @@ class SocketBuffer(
 
 }
 
-class SocketBufferPool(channel: SocketChannel)  {
+class SocketBufferPool(channel: SocketChannel) extends Logging {
 
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
+  @volatile var lastSent = 0l
+
+  // Create an runnable that calls forceSend so we
+  // don't have to create a new object every time
+  val forceRunner = new Runnable() {
+    def run() = forceSend()
+  }
+
+  def needSend(): Boolean = {
+    (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime
+  }
 
   def send(bytes: ByteBuffer) {
     while(!currentBuffer.write(bytes)) {}
@@ -161,20 +179,23 @@ class SocketBufferPool(channel: SocketChannel)  {
     val buf = currentBuffer
     buf.needsend = true
     buf.rwlock.writeLock.lock()
-    if (buf.needsend) {
+    if (buf == currentBuffer && buf.needsend && buf.writePos.get > 4) {
       swap(null)
-      buf.send
+      buf.send(true)
       buf.needsend = false
+      returnBuffer(buf)
+    } else {
+      lastSent = System.currentTimeMillis()
     }
     buf.rwlock.writeLock.unlock()
   }
 
 }
 
-class Receiver(
+class Receiver (
   bytes: ByteBuffer,
   src: NetworkDestinationHandle,
-  messageService: MessageService) extends Runnable {
+  messageService: MessageService) extends Runnable with Logging {
 
   def run() {
     while(bytes.remaining != 0) {
@@ -184,12 +205,12 @@ class Receiver(
 
 }
 
-class ReaderThread(
+class ReaderThread (
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") {
+  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") with Logging {
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
@@ -251,8 +272,11 @@ class SendSweeper(
     while(true) {
       Thread.sleep(VeloxConfig.sweepTime)
       val cit = connections.keySet.iterator
-      while (cit.hasNext)
-        connections.get(cit.next).forceSend
+      while (cit.hasNext) {
+        val sp = connections.get(cit.next)
+        if (sp.needSend)
+          executor.submit(sp.forceRunner)
+      }
     }
   }
 }
@@ -397,4 +421,3 @@ class ArrayNetworkService(
   }
 
 }
-
