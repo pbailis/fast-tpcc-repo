@@ -32,7 +32,7 @@ object ClientBenchmark {
     var parallelism = 64
     var numops = 100000
     var waitTimeSeconds = 20
-    var pctReads = 0.5
+    var chance_remote = 0.01
     var status_time = 10
     var warehouses_per_server = 1
     var load = false
@@ -53,8 +53,8 @@ object ClientBenchmark {
       opt[Int]("parallelism") foreach {
         i => parallelism = i
       } text ("Parallelism in thread pool")
-      opt[Double]("pct_reads") foreach {
-        i => pctReads = i
+      opt[Double]("chance_remote") foreach {
+        i => chance_remote = i
       } text ("Percentage read vs. write operations")
       opt[Int]("status_time") foreach {
         i => status_time = i
@@ -120,7 +120,7 @@ object ClientBenchmark {
         val rand = new Random
         override def run() = {
           while (opsSent.get < numops) {
-            val request = singleNewOrder(client)
+            val request = singleNewOrder(client, chance_remote)
             request.future onComplete {
               case Success(value) => {
                 numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
@@ -167,7 +167,7 @@ object ClientBenchmark {
     System.exit(0)
   }
 
-  def singleNewOrder(conn: VeloxConnection): OutstandingNewOrderRequest = {
+  def singleNewOrder(conn: VeloxConnection, chance_remote: Double): OutstandingNewOrderRequest = {
     val W_ID = generator.number(1, totalWarehouses)
     val D_ID: Int = generator.number(1, 10)
     val C_ID: Int = generator.NURand(1023, 1, 3000)
@@ -177,7 +177,7 @@ object ClientBenchmark {
 
     for(i <- 1 to OL_CNT) {
       var O_W_ID = W_ID
-      if (totalWarehouses > 1 && generator.nextDouble() < 0) {
+      if (totalWarehouses > 1 && generator.nextDouble() < chance_remote) {
         O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
       }
 

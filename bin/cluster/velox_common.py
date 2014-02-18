@@ -443,7 +443,7 @@ def client_bench_local_single(numservers, network_service, buffer_size, sweep_ti
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5):
     hprof = ""
 
     if profile:
@@ -451,9 +451,9 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --run 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --run 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time)
+           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time)
 
     load_cmd = cmd.replace("--run", "--load")
     run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd)

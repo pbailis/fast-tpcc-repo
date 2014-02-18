@@ -149,7 +149,7 @@ if __name__ == "__main__":
         assign_hosts(region, cluster)
         start_servers(cluster, args.network_service)
         sleep(5)
-        run_ycsb(cluster, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
+        run_ycsb(cluster, threads=64, chance_remote=1, valuesize=1, recordcount=10000, time=60)
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("YCSB has completed!")
