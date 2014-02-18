@@ -92,6 +92,7 @@ class SocketBuffer(
 
         // wrap the array and write it out
         val wrote = channel.write(buf)
+        pool.lastSent = System.currentTimeMillis
 
         // reset write position
         buf.clear
@@ -121,6 +122,17 @@ class SocketBufferPool(channel: SocketChannel)  {
 
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
+  @volatile var lastSent = 0l
+
+  // Create an runnable that calls forceSend so we
+  // don't have to create a new object every time
+  val forceRunner = new Runnable() {
+    def run() = forceSend()
+  }
+
+  def needSend(): Boolean = {
+    (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime
+  }
 
   def send(bytes: ByteBuffer) {
     while(!currentBuffer.write(bytes)) {}
@@ -167,6 +179,7 @@ class SocketBufferPool(channel: SocketChannel)  {
       buf.needsend = false
     }
     buf.rwlock.writeLock.unlock()
+    returnBuffer(buf)
   }
 
 }
@@ -251,8 +264,11 @@ class SendSweeper(
     while(true) {
       Thread.sleep(VeloxConfig.sweepTime)
       val cit = connections.keySet.iterator
-      while (cit.hasNext)
-        connections.get(cit.next).forceSend
+      while (cit.hasNext) {
+        val sp = connections.get(cit.next)
+        if (sp.needSend)
+          executor.submit(sp.forceRunner)
+      }
     }
   }
 }
