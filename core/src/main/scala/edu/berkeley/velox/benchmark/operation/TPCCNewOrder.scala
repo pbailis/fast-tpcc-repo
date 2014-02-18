@@ -15,16 +15,18 @@ import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.storage.StorageEngine
 
 object TPCCNewOrder extends Logging {
   def execute(request: TPCCNewOrderRequest,
               partitioner: TPCCPartitioner,
-              messageService: InternalRPCService): Future[TPCCNewOrderResponse] = {
+              messageService: InternalRPCService,
+              storage: StorageEngine): Future[TPCCNewOrderResponse] = {
 
     val p = Promise[TPCCNewOrderResponse]
 
-    val readTxn = new Transaction(-1)
-    val writeTxn = new Transaction(Timestamp.assignNewTimestamp())
+    val readTxn = new Transaction(-1, partitioner, storage, messageService)
+    val writeTxn = new Transaction(Timestamp.assignNewTimestamp(), partitioner, storage, messageService)
     val shadow_O_ID = Timestamp.assignNewTimestamp.asInstanceOf[Int]
     val W_ID = request.W_ID
     val C_ID = request.C_ID
@@ -77,7 +79,7 @@ object TPCCNewOrder extends Logging {
       }
     }
 
-    val readFuture = readTxn.executeRead(partitioner, messageService)
+    val readFuture = readTxn.executeRead
 
     readFuture onComplete {
       case Success(_) => {
@@ -132,7 +134,7 @@ object TPCCNewOrder extends Logging {
         //writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, new DeferredCounter(TPCCConstants.getDistrictNextOID(W_ID, D_ID), 1)))
         writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, 1))
 
-        val writeFuture = writeTxn.executeWrite(partitioner, messageService)
+        val writeFuture = writeTxn.executeWrite
 
         writeFuture onComplete {
           case Success(_) => {

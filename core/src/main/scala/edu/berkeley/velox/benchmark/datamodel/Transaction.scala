@@ -13,95 +13,114 @@ import edu.berkeley.velox.benchmark.operation.{GetAllRequest, CommitPutAllReques
 import scala.concurrent.{Promise, Future}
 import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
+import edu.berkeley.velox.conf.VeloxConfig
 
 
-
-class Transaction(val txId: Long) {
+class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage: StorageEngine, val messageService: InternalRPCService) {
   def table(tableName: Int): Table = {
     return new Table(tableName, this)
   }
 
   def put(key: ItemKey, value: AnyRef): Transaction = {
-    toPut.put(key, new DataItem(txId, value))
+    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
+      toPutLocal.put(key, new DataItem(txId, value))
+    else
+      toPutRemote.put(key, new DataItem(txId, value))
+
     return this
   }
 
   def get(key: ItemKey): Transaction = {
-    toGet.add(key)
+    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
+      toGetLocal.add(key)
+    else
+      toGetRemote.add(key)
+
     return this
   }
 
   def executeWriteNonRAMP(engine: StorageEngine) {
-    engine.putAll(toPut)
-    toPut.clear()
+    engine.putAll(toPutRemote)
+    toPutRemote.clear()
   }
 
   def executeRead(engine: StorageEngine) {
     results.clear()
-    results = engine.getAll(toGet)
-    toGet.clear()
+    results = engine.getAll(toGetRemote)
+    toGetRemote.clear()
   }
 
-  def executeWrite(partitioner: TPCCPartitioner,
-                   messageService: InternalRPCService) : Future[Transaction]  = {
+  def executeWrite = {
 
     val p = Promise[Transaction]
 
-    val allKeys = new util.ArrayList[ItemKey](toPut.size)
+    storage.putPending(toPutLocal)
 
-    for(p <- toPut.keySet.asScala) {
-      allKeys.add(p)
-    }
+    if(!toPutRemote.isEmpty) {
 
-    toPut.values.asScala.foreach(
-     d => d.transactionKeys = allKeys
-    )
+      val allKeys = new util.ArrayList[ItemKey](toPutRemote.size)
 
-    val writesByPartition = new util.HashMap[NetworkDestinationHandle, PreparePutAllRequest]
-
-    for(pair: java.util.Map.Entry[ItemKey, DataItem] <- toPut.entrySet.asScala) {
-      val partition = partitioner.getMasterPartition(pair.getKey)
-      if(!writesByPartition.containsKey(partition)) {
-        writesByPartition.put(partition, new PreparePutAllRequest(new util.HashMap[ItemKey, DataItem]))
+      for(p <- toPutRemote.keySet.asScala) {
+        allKeys.add(p)
       }
 
-      writesByPartition.get(partition).values.put(pair.getKey, pair.getValue)
-    }
+      toPutRemote.values.asScala.foreach(
+       d => d.transactionKeys = allKeys
+      )
 
-    val prepareFuture = Future.sequence(writesByPartition.asScala.map {
-      case (destination, write) => messageService.send(destination, write)
-    })
+      val writesByPartition = new util.HashMap[NetworkDestinationHandle, PreparePutAllRequest]
 
-    prepareFuture onComplete {
-      case Success(responses) => {
-        val commitFuture = Future.sequence(writesByPartition.keySet.asScala.map {
-          case destination => messageService.send(destination, new CommitPutAllRequest(txId))
-        })
+      for(pair: java.util.Map.Entry[ItemKey, DataItem] <- toPutRemote.entrySet.asScala) {
+        val partition = partitioner.getMasterPartition(pair.getKey)
+        if(!writesByPartition.containsKey(partition)) {
+          writesByPartition.put(partition, new PreparePutAllRequest(new util.HashMap[ItemKey, DataItem]))
+        }
 
-        commitFuture onComplete {
-          case Success(responses) => p success this
-          case Failure(t) => p failure t
+        writesByPartition.get(partition).values.put(pair.getKey, pair.getValue)
+      }
+
+      val prepareFuture = Future.sequence(writesByPartition.asScala.map {
+        case (destination, write) => messageService.send(destination, write)
+      })
+
+      prepareFuture onComplete {
+        case Success(responses) => {
+          storage.putGood(toPutLocal.values().iterator().next().timestamp)
+          toPutLocal.clear()
+
+          val commitFuture = Future.sequence(writesByPartition.keySet.asScala.map {
+            case destination => messageService.send(destination, new CommitPutAllRequest(txId))
+          })
+
+          commitFuture onComplete {
+            case Success(responses) => p success this
+            case Failure(t) => p failure t
+          }
+        }
+        case Failure(t) => {
+          p.failure(t)
         }
       }
-      case Failure(t) => {
-        p.failure(t)
-      }
+
+      toPutRemote.clear()
+    } else {
+      storage.putGood(toPutLocal.values().iterator().next().timestamp)
+      toPutLocal.clear()
+      p success this
     }
 
-    toPut.clear()
     p.future
   }
 
-  def executeRead(partitioner: TPCCPartitioner,
-                  messageService: InternalRPCService) : Future[Transaction]  = {
+  def executeRead = {
 
     val p = Promise[Transaction]
     results.clear()
 
-
+    if(!toGetRemote.isEmpty) {
      val readsByPartition = new util.HashMap[NetworkDestinationHandle, GetAllRequest]
 
-      toGet.asScala.foreach(
+      toGetRemote.asScala.foreach(
         k => {
           val partition = partitioner.getMasterPartition(k)
           if(!readsByPartition.containsKey(partition)) {
@@ -116,6 +135,9 @@ class Transaction(val txId: Long) {
        case (destination, read) => messageService.send(destination, read)
      })
 
+      results.putAll(storage.getAll(toGetLocal))
+
+
      getFuture onComplete {
        case Success(responses) => {
          responses foreach {
@@ -129,7 +151,14 @@ class Transaction(val txId: Long) {
        }
      }
 
-     toPut.clear()
+     toGetLocal.clear
+     toGetRemote.clear
+    } else {
+      results.putAll(storage.getAll(toGetLocal))
+      toGetLocal.clear
+      p success this
+    }
+
      p.future
    }
 
@@ -141,8 +170,11 @@ class Transaction(val txId: Long) {
     return results.get(itemKey)
   }
 
-  private var toPut = new util.HashMap[ItemKey, DataItem]
-  private var toGet = new util.ArrayList[ItemKey]
+  private var toPutLocal = new util.HashMap[ItemKey, DataItem]
+  private var toGetLocal = new util.ArrayList[ItemKey]
+
+  private var toPutRemote = new util.HashMap[ItemKey, DataItem]
+  private var toGetRemote = new util.ArrayList[ItemKey]
   var results = new util.HashMap[ItemKey, DataItem]
 }
 

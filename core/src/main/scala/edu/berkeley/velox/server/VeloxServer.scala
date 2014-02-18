@@ -48,14 +48,14 @@ class VeloxServer extends Logging {
   class TPCCLoadRequestHandler extends MessageHandler[TPCCLoadResponse, TPCCLoadRequest] {
     def receive(src: NetworkDestinationHandle, msg: TPCCLoadRequest): Future[TPCCLoadResponse] = {
       logger.info(s"Loading TPCC warehouse ${msg.W_ID}")
-      TPCCLoader.doLoad(msg.W_ID, storageEngine)
+      TPCCLoader.doLoad(msg.W_ID, partitioner, internalServer, storageEngine)
       future { new TPCCLoadResponse }
     }
   }
 
   class TPCCNewOrderRequestHandler extends MessageHandler[TPCCNewOrderResponse, TPCCNewOrderRequest] {
     def receive(src: NetworkDestinationHandle, msg: TPCCNewOrderRequest): Future[TPCCNewOrderResponse] = {
-      TPCCNewOrder.execute(msg, partitioner, internalServer)
+      TPCCNewOrder.execute(msg, partitioner, internalServer, storageEngine)
     }
   }
 

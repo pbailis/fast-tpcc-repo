@@ -8,6 +8,8 @@ import edu.berkeley.velox.storage.StorageEngine
 import edu.berkeley.velox.datamodel.Timestamp
 import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.cluster.TPCCPartitioner
+import edu.berkeley.velox.rpc.InternalRPCService
 
 object TPCCLoader extends Logging {
   val lastNameStrings = Array("BAR", "OUGHT", "ABLE", "PRI", "PRES", "ESE", "ANTI", "CALLY", "ATION", "EING")
@@ -32,8 +34,11 @@ object TPCCLoader extends Logging {
     else return lastNameStrings(customerNo % 10) + lastNameStrings(customerNo / 10 % 10) + lastNameStrings(customerNo / 100 % 10)
   }
 
-  def doLoad(w_id: Int, storage: StorageEngine) {
-    val loadTxn = new Transaction(Timestamp.assignNewTimestamp())
+  def doLoad(w_id: Int,
+                partitioner: TPCCPartitioner,
+                messageService: InternalRPCService,
+                storage: StorageEngine) {
+    val loadTxn = new Transaction(Timestamp.assignNewTimestamp(), partitioner, storage, messageService)
     val itemTable = loadTxn.table(TPCCConstants.ITEM_TABLE)
 
     logger.info(s"Creating items...")
