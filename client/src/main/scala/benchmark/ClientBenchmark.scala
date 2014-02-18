@@ -177,7 +177,7 @@ object ClientBenchmark {
 
     for(i <- 1 to OL_CNT) {
       var O_W_ID = W_ID
-      if (totalWarehouses > 1 && generator.nextDouble() < .01) {
+      if (totalWarehouses > 1 && generator.nextDouble() < 0) {
         O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
       }
 
