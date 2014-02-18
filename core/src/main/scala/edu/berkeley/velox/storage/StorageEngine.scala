@@ -76,7 +76,6 @@ class StorageEngine extends Logging {
   }
 
   def putAll(pairs: Map[ItemKey, DataItem]) {
-    assert(!pairs.isEmpty)
     for (pair: Map.Entry[ItemKey, DataItem] <- pairs.entrySet) {
       put(pair.getKey, pair.getValue)
     }
