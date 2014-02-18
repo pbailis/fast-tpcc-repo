@@ -185,12 +185,12 @@ def make_instancefile(name, hosts):
         f.write("%s\n" % (host.ip))
     f.close
 
-def check_for_instances(region, tag):
+def check_for_instances(cluster):
     numRunningAnywhere = 0
     numUntagged = 0
-    numRunning = get_num_nonterminated_instances(region, tag)
+    numRunning = get_num_nonterminated_instances(cluster.regionName, cluster.clusterID)
     numRunningAnywhere += numRunning
-    numUntagged += get_num_nonterminated_instances(region, None)
+    numUntagged += get_num_nonterminated_instances(cluster.regionName, None)
 
     if numRunningAnywhere > 0:
         pprint("NOTICE: You appear to have %d instances up already." % numRunningAnywhere)
@@ -206,100 +206,104 @@ def check_for_instances(region, tag):
 
 
 
-def terminate_cluster(region, tag, placement_group="velox"):
-    allHosts = get_instances(region, tag) + get_instances(region, None)
+def terminate_cluster(cluster, placement_group="velox", **kwargs):
+    allHosts = get_instances(cluster.regionName, cluster.clusterID) + get_instances(cluster.regionName, None)
     instance_ids = [h.instanceid for h in allHosts]
-    spot_request_ids = get_spot_request_ids(region)
+    spot_request_ids = get_spot_request_ids(cluster.regionName)
 
-    conn = ec2.connect_to_region(region)
+    conn = ec2.connect_to_region(cluster.regionName)
 
     if len(instance_ids) > 0:
-        pprint('Terminating instances (tagged & untagged) in %s...' % region)
+        pprint('Terminating instances (tagged & untagged) in %s...' % cluster.regionName)
         conn.terminate_instances(instance_ids)
     else:
-        pprint('No instances to terminate in %s, skipping...' % region)
+        pprint('No instances to terminate in %s, skipping...' % cluster.regionName)
 
     if len(spot_request_ids) > 0:
-        pprint('Cancelling spot requests in %s...' % region)
+        pprint('Cancelling spot requests in %s...' % cluster.regionName)
         conn.cancel_spot_instance_requests(spot_request_ids)
     else:
-        pprint('No spot requests to cancel in %s, skipping...' % region)
+        pprint('No spot requests to cancel in %s, skipping...' % cluster.regionName)
 
     #conn.delete_placement_group(placement_group)
 
 
-def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bid_price=1.5, placement_group="velox"):
+def provision_spot(cluster, instance_type=DEFAULT_INSTANCE_TYPE, spot_price=1.5, placement_group="velox", **kwargs):
     global AMIs
 
-    setup_security_group(regionName)
+    num_instances = cluster.numServers + cluster.numClients
+    setup_security_group(cluster.regionName)
 
     f = raw_input("spinning up %d spot instances in %s; okay? (y/N) " %
-                  (num, regionName))
+                  (num_instances, cluster.regionName))
 
     if f != "Y" and f != "y":
         exit(-1)
 
-    conn = ec2.connect_to_region(regionName)
+    conn = ec2.connect_to_region(cluster.regionName)
     '''
     try:
         conn.create_placement_group(placement_group)
     except:
         print "Placement group exception "+placement_group
     '''
-    reservations = conn.request_spot_instances(bid_price,
-                                               AMIs[regionName],
-                                               count=num,
+    reservations = conn.request_spot_instances(spot_price,
+                                               AMIs[cluster.regionName],
+                                               count=num_instances,
                                                instance_type=instance_type,
                                                security_groups=[VELOX_SECURITY_GROUP])
     #                                           placement_group=placement_group)
 
-def provision_instances(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, placement_group="velox"):
+def provision_instances(cluster, instance_type=DEFAULT_INSTANCE_TYPE, placement_group="velox", **kwargs):
     global AMIs
 
-    setup_security_group(regionName)
+    num_instances = cluster.numServers + cluster.numClients
+    setup_security_group(cluster.regionName)
 
     f = raw_input("spinning up %d instances in %s; okay? (y/N) " %
-                  (num, regionName))
+                  (num_instances, cluster.regionName))
 
     if f != "Y" and f != "y":
         exit(-1)
 
-    conn = ec2.connect_to_region(regionName)
+    conn = ec2.connect_to_region(cluster.regionName)
     '''
     try:
         conn.create_placement_group(placement_group)
     except:
         print "Placement group exception "+placement_group
     '''
-    reservations = conn.run_instances(AMIs[regionName],
-                                       count=num,
-                                       instance_type=instance_type,
-                                       security_groups=[VELOX_SECURITY_GROUP])
+    reservations = conn.run_instances(AMIs[cluster.regionName],
+                                      min_count=num_instances,
+                                      max_count=num_instances,
+                                      instance_type=instance_type,
+                                      security_groups=[VELOX_SECURITY_GROUP])
     #                                   placement_group=placement_group)
 
-def wait_all_hosts_up(region, num_hosts):
-    pprint("Waiting for instances in %s to start..." % region)
+def wait_all_hosts_up(cluster):
+    pprint("Waiting for instances in %s to start..." % cluster.regionName)
+    num_hosts = cluster.numServers + cluster.numClients
     while True:
-        numInstancesInRegion = get_num_running_instances(region, None)
+        numInstancesInRegion = get_num_running_instances(cluster.regionName, None)
         if numInstancesInRegion >= num_hosts:
             break
         else:
             pprint("Got %d of %d hosts; sleeping..." % (numInstancesInRegion, num_hosts))
         sleep(5)
-    pprint("All instances in %s alive!" % region)
+    pprint("All instances in %s alive!" % cluster.regionName)
 
     # Since ssh takes some time to come up
     pprint("Waiting for instances to warm up... ")
     sleep(10)
     pprint("Awake!")
 
-def claim_instances(region, cluster_id):
-    instances = get_instances(region, None)
+def claim_instances(cluster):
+    instances = get_instances(cluster.regionName, None)
     instanceString = ' '.join([host.instanceid for host in instances])
     pprint("Claiming %s..." % instanceString)
-    conn = ec2.connect_to_region(region)
+    conn = ec2.connect_to_region(cluster.regionName)
     instances = [i.instanceid for i in instances]
-    reservations = conn.create_tags(instances, {"cluster":cluster_id})
+    reservations = conn.create_tags(instances, {"cluster": cluster.clusterID})
     pprint("Claimed!")
 
 def setup_security_group(region, group_name=VELOX_SECURITY_GROUP):
@@ -310,16 +314,16 @@ def setup_security_group(region, group_name=VELOX_SECURITY_GROUP):
         group = conn.create_security_group(group_name, "Velox EC2 all-open SG")
         group.authorize('tcp', 0, 65535, '0.0.0.0/0')
     except Exception as e:
-        pprint("Oops; couldn't create a new security group (%s). This is probably fine: "+e % (group_name))
+        pprint("Oops; couldn't create a new security group (%s). This is probably fine: " + str(e) % (group_name))
 
 
 # Assigns hosts to clusters (and specifically as servers, clients)
 # Also logs the assignments in the hosts/ files.
-def assign_hosts(region, cluster):
+def assign_hosts(cluster):
     system("mkdir -p hosts")
 
-    hosts = get_instances(region, cluster.clusterID)
-    pprint("Assigning %d hosts to %s:% s... " % (len(hosts), region, cluster.clusterID))
+    hosts = get_instances(cluster.regionName, cluster.clusterID)
+    pprint("Assigning %d hosts to %s:% s... " % (len(hosts), cluster.regionName, cluster.clusterID))
 
     cluster.allocateHosts(hosts[:cluster.getNumHosts()])
     frontend_servers = []
@@ -354,7 +358,7 @@ def install_ykit(cluster):
     # run_cmd("all-hosts", "scp ubuntu@%s:yjp-2013-build-13072-linux.tar.bz2 yjp-2013.tar.bz2" %  master)
     # run_cmd("all-hosts", "tar -xvf yjp-2013.tar.bz2")
 
-def rebuild_servers(remote, branch, deploy_key=None):
+def rebuild_servers(git_remote, branch, deploy_key=None, **kwargs):
     if deploy_key:
         upload_file("all-hosts", deploy_key, "/home/ubuntu/.ssh")
         run_cmd("all-hosts", "echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
@@ -370,8 +374,8 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "git reset --hard vremote/%s; "
                       "sbt/sbt assembly; "
                       "cd external/ycsb; "
-                      "./package-ycsb.sh") % (remote, branch, branch))
-    pprint('Rebuilt to %s/%s!' % (remote, branch))
+                      "./package-ycsb.sh") % (git_remote, branch, branch))
+    pprint('Rebuilt to %s/%s!' % (git_remote, branch))
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, **kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/velox/; rm *.log;"
@@ -405,17 +409,17 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
 def kill_velox_local():
     system("ps ax | grep Velox | grep java |  sed \"s/[ ]*//\" | cut -d ' ' -f 1 | xargs kill")
 
-def start_servers_local(numservers, network_service, buffer_size, sweep_time, profile=False, depth=2):
+def start_servers_local(num_servers, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, **kwargs):
     kill_velox_local()
 
-    serverConfigStr = ",".join(["localhost:"+str(VELOX_INTERNAL_PORT_START+id) for id in range(0, numservers)])
+    serverConfigStr = ",".join(["localhost:"+str(VELOX_INTERNAL_PORT_START+id) for id in range(0, num_servers)])
 
     baseCmd = "java %s -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1> /tmp/server-%d.log 2>&1 &"
 
 
-    for sid in range(0, numservers):
+    for sid in range(0, num_servers):
         if profile:
-            pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server-%d.txt" % (depth,sid)
+            pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server-%d.txt" % (profile_depth, sid)
         else:
             pstr = ""
         serverCmd = baseCmd % (
@@ -434,18 +438,18 @@ def start_servers_local(numservers, network_service, buffer_size, sweep_time, pr
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(numservers, network_service, buffer_size, sweep_time, profile, depth, parallelism=64, pct_reads=.5, ops=100000, timeout=3000, futures=True, latency=False):
-    clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, numservers)])
+def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism=64, pct_reads=.5, ops=100000, timeout=3000, usefutures=True, latency=False, **kwargs):
+    clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
     if profile:
-        pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % depth
+        pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % profile_depth
     else:
         pstr = ""
     system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
-        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, futures, latency))
+        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, usefutures, latency))
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5, futures=True, latency=False):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5, usefutures=True, latency=False, **kwargs):
     hprof = ""
 
     if profile:
@@ -455,11 +459,11 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
     cmd = ("pkill -9 java; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, futures, latency)
+           parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, usefutures, latency)
     run_cmd_in_velox("all-clients", cmd)
 
-def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
-    clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, numservers)])
+def run_ycsb_local(num_servers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True, **kwargs):
+    clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
 
     ycsb_cmd = (("cd external/ycsb; "
                  "bin/ycsb run velox "
@@ -493,7 +497,7 @@ def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readp
     system(ycsb_cmd)
     pprint("YCSB complete!")
 
-def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
+def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True, **kwargs):
     ycsb_cmd = (("pkill -9 java;"
                  "cd /home/ubuntu/velox/external/ycsb; "
                  "bin/ycsb run velox "
@@ -528,7 +532,7 @@ def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, v
 def mkdir(d):
     system("mkdir -p %s" % d)
 
-def fetch_logs(output_dir, runid, cluster):
+def fetch_logs(cluster, runid, output_dir, **kwargs):
     log_dir = "%s/%s/" % (output_dir, runid)
     mkdir(log_dir)
     for server in cluster.servers:
