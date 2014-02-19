@@ -179,13 +179,13 @@ class SocketBufferPool(channel: SocketChannel)  {
     val buf = currentBuffer
     buf.needsend = true
     buf.rwlock.writeLock.lock()
-    if (buf == currentBuffer && buf.needsend) {
+    if (buf.needsend) {
       swap(null)
       buf.send
       buf.needsend = false
+      returnBuffer(buf)
     }
     buf.rwlock.writeLock.unlock()
-    returnBuffer(buf)
   }
 
 }
