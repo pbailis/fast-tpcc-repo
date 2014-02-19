@@ -23,7 +23,7 @@ class SocketBuffer(
 
   val writePos = new AtomicInteger(4)
 
-  var needsend = false
+  @volatile var needsend = false
 
   val rwlock = new ReentrantReadWriteLock()
 
