@@ -183,7 +183,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     buf.needsend = true
     buf.rwlock.writeLock.lock()
     if (buf == currentBuffer && buf.needsend) {
-      logger.error(s"forceSend $buf ${buf.channel.socket().getRemoteSocketAddress}")
+      logger.error(s"forceSend $buf ${channel.socket().getRemoteSocketAddress}")
 
       swap(null)
       buf.send
