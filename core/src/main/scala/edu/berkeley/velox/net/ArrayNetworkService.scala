@@ -49,8 +49,6 @@ class SocketBuffer(
     val writeOffset = writePos.getAndAdd(len)
     val ret =
       if (writeOffset + len <= buf.limit) {
-        logger.error(s"not sending buffer! $this writeOffset is ${writeOffset}, len is $len, bytes is $bytes ${channel.socket().getRemoteSocketAddress}")
-
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)

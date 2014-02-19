@@ -149,6 +149,8 @@ abstract class MessageService extends Logging {
     assert(h != null)
     h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
       case Success(response) => {
+        logger.error(s"got response $msg; sending response!")
+
         sendResponse(src, requestId, response)
         logger.error("done sending response!")
 
