@@ -85,7 +85,6 @@ object TPCCNewOrder extends Logging {
       case Success(_) => {
         logger.error(s"SUCCESS readfuture!")
 
-
         var totalAmount: Double = 0
         var newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
 
@@ -103,6 +102,7 @@ object TPCCNewOrder extends Logging {
             logger.error(s"returning")
             p.success(new TPCCNewOrderResponse(false))
             return
+
           }
 
           val I_PRICE = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_PRICE_COL)).asInstanceOf[Double]
