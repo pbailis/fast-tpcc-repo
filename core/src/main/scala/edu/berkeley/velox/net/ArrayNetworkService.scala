@@ -211,12 +211,12 @@ class Receiver(
 
 }
 
-class ReaderThread(
+class ReaderThread (
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") {
+  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") with Logging {
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
@@ -232,6 +232,9 @@ class ReaderThread(
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
+
+          logger.error(s"perfect read $len byte message from $src")
+
           executor.submit(new Receiver(readBuffer,src,messageService))
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
@@ -249,6 +252,9 @@ class ReaderThread(
             msgBuf.put(readBuffer)
             readBuffer.limit(oldLim)
             msgBuf.flip
+
+            logger.error(s"read $len byte message from $src")
+
             executor.submit(new Receiver(msgBuf,src,messageService))
             if (readBuffer.remaining >= 4)
               len = readBuffer.getInt
@@ -266,6 +272,9 @@ class ReaderThread(
         if (!allocedBuffer) // compact on a new buffer is bad
           readBuffer.compact
       }
+
+      logger.error(s"broke from read $src")
+
     }
   }
 }
