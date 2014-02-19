@@ -99,6 +99,7 @@ abstract class MessageService extends Logging {
       requestMap.remove(requestId) success response
     } else {
       networkService.send(dst, serializeMessage(requestId, response, isRequest=false))
+      logger.error(s"RESP: FINISHED SENDING RESPONSE REQUEST ID $requestId TO $dst")
     }
   }
 

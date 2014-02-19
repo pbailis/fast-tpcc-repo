@@ -39,8 +39,10 @@ class SocketBuffer(
       return false
 
     // ensure we're still looking at the right buffer
-    if (pool.currentBuffer != this)
+    if (pool.currentBuffer != this) {
+      rwlock.readLock.unlock
       return false
+    }
 
     val len = bytes.remaining
 
