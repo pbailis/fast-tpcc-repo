@@ -155,7 +155,7 @@ abstract class MessageService extends Logging {
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
 
-    logger.error(s"Got message ${msg.getClass} from $src request ID $requestId")
+    logger.error(s"Got message ${msg.getClass} from $src request ID $requestId, bytes is $bytes")
 
     if(isRequest) {
       recvRequest_(src, requestId, msg)
