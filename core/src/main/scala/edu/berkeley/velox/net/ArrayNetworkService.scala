@@ -23,8 +23,6 @@ class SocketBuffer(
 
   val writePos = new AtomicInteger(4)
 
-  var needsend = false
-
   val rwlock = new ReentrantReadWriteLock()
 
 
@@ -58,15 +56,13 @@ class SocketBuffer(
       else {
         writePos.getAndAdd(-len)
 
-        needsend = true
         // can't upgrade to write lock, so unlock
         rwlock.readLock.unlock
         rwlock.writeLock.lock
         // recheck in case someone else got it
-        if (needsend) {
+        if (pool.currentBuffer == this) {
           val r = pool.swap(bytes)
           send
-          needsend = false
           rwlock.writeLock.unlock
           pool.returnBuffer(this)
           r
@@ -137,7 +133,8 @@ class SocketBufferPool(channel: SocketChannel)  {
   }
 
   def needSend(): Boolean = {
-    (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime
+    (currentBuffer.writePos.get > 4) &&
+    ((System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime)
   }
 
   def send(bytes: ByteBuffer) {
@@ -177,15 +174,16 @@ class SocketBufferPool(channel: SocketChannel)  {
     */
   def forceSend() {
     val buf = currentBuffer
-    buf.needsend = true
     buf.rwlock.writeLock.lock()
-    if (buf.needsend) {
+    var didsend = false
+    if (currentBuffer == buf && buf.writePos.get > 4) {
       swap(null)
       buf.send
-      buf.needsend = false
+      didsend = true
     }
     buf.rwlock.writeLock.unlock()
-    returnBuffer(buf)
+    if (didsend)
+      returnBuffer(buf)
   }
 
 }
