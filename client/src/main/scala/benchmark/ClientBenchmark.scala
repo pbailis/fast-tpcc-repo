@@ -127,7 +127,7 @@ object ClientBenchmark {
                 if(!value.committed) {
                  numAborts.incrementAndGet()
                 }
-                numOps.incrementAndGet()
+                opDone()
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }
