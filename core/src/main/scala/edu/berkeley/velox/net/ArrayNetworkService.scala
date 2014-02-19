@@ -38,6 +38,10 @@ class SocketBuffer(
     if (!rwlock.readLock.tryLock)
       return false
 
+    // ensure we're still looking at the right buffer
+    if (pool.currentBuffer != this)
+      return false
+
     val len = bytes.remaining
 
     val writeOffset = writePos.getAndAdd(len)
