@@ -16,7 +16,7 @@ import scala.util.Random
 
 class SocketBuffer(
   channel: SocketChannel,
-  pool: SocketBufferPool) {
+  pool: SocketBufferPool) extends Logging {
 
   var buf = ByteBuffer.allocate(VeloxConfig.bufferSize)
   buf.position(4)
@@ -49,6 +49,9 @@ class SocketBuffer(
     val writeOffset = writePos.getAndAdd(len)
     val ret =
       if (writeOffset + len <= buf.limit) {
+        logger.error(s"not sending buffer! $this ${channel.socket().getRemoteSocketAddress}")
+
+
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
@@ -124,7 +127,7 @@ class SocketBuffer(
 
 }
 
-class SocketBufferPool(channel: SocketChannel)  {
+class SocketBufferPool(channel: SocketChannel) extends Logging {
 
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
@@ -180,6 +183,8 @@ class SocketBufferPool(channel: SocketChannel)  {
     buf.needsend = true
     buf.rwlock.writeLock.lock()
     if (buf == currentBuffer && buf.needsend) {
+      logger.error(s"forceSend $buf ${buf.channel.socket().getRemoteSocketAddress}")
+
       swap(null)
       buf.send
       buf.needsend = false
