@@ -272,9 +272,6 @@ class ReaderThread (
         if (!allocedBuffer) // compact on a new buffer is bad
           readBuffer.compact
       }
-
-      logger.error(s"broke from read $src")
-
     }
   }
 }
