@@ -101,8 +101,8 @@ object TPCCNewOrder extends Logging {
             logger.error(s"aborting")
 
             logger.error(s"returning")
-
-            return Future { new TPCCNewOrderResponse(false) }
+            p.success(new TPCCNewOrderResponse(false))
+            return
           }
 
           val I_PRICE = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_PRICE_COL)).asInstanceOf[Double]
