@@ -1,16 +1,8 @@
 package edu.berkeley.velox.util
 
 import scala.concurrent.ExecutionContext
+import java.util.concurrent.Executors
 
 object NonThreadedExecutionContext {
-  implicit lazy val context: ExecutionContext = new NonThreadedExecutionContext
-}
-
-class NonThreadedExecutionContext extends ExecutionContext {
-
-  override
-  def execute(r: Runnable):Unit = r.run()
-
-  override
-  def reportFailure(tx: Throwable) = tx.printStackTrace()
+  implicit lazy val context: ExecutionContext = ExecutionContext.fromExecutor(Executors.newFixedThreadPool(32))
 }

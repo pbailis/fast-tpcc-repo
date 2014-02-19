@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
+import edu.berkeley.velox.util.NonThreadedExecutionContext
 
 class SocketBuffer(
   channel: SocketChannel,
@@ -100,14 +101,11 @@ class SocketBuffer(
         val wrote = channel.write(buf)
         pool.lastSent = System.currentTimeMillis
 
-        logger.error(s"$forced sent: ${this} (buf $buf) writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
-
         // reset write position
         buf.clear
         buf.position(4)
         writePos.set(4)
       } else {
-        logger.error(s"$forced no send required: ${buf} writepos was ${writePos.get} ${channel.socket.getRemoteSocketAddress}")
       }
     } catch {
       case e: Exception => {
@@ -203,9 +201,7 @@ class Receiver (
 
   def run() {
     while(bytes.remaining != 0) {
-      logger.error(s"receiving remote message from $src bytes is $bytes")
       messageService.receiveRemoteMessage(src,bytes)
-      logger.error(s"received remote message from $src bytes is $bytes")
     }
   }
 
@@ -233,8 +229,6 @@ class ReaderThread (
 
         if (readBuffer.remaining == len) { // perfect read
 
-          logger.error(s"perfect read $len byte message from $src")
-
           executor.submit(new Receiver(readBuffer,src,messageService))
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
@@ -252,8 +246,6 @@ class ReaderThread (
             msgBuf.put(readBuffer)
             readBuffer.limit(oldLim)
             msgBuf.flip
-
-            logger.error(s"read $len byte message from $src")
 
             executor.submit(new Receiver(msgBuf,src,messageService))
             if (readBuffer.remaining >= 4)
@@ -312,7 +304,7 @@ class ArrayNetworkService(
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
+  val executor = NonThreadedExecutionContext.context//Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
