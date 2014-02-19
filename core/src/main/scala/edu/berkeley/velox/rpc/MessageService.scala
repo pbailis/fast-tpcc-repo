@@ -101,6 +101,9 @@ abstract class MessageService extends Logging {
     if (dst == serviceID) {
       requestMap.remove(requestId) success response
     } else {
+
+      logger.error(s"sending response to request ID $requestId to $dst")
+
       networkService.send(dst, serializeMessage(requestId, response, isRequest=false))
     }
   }
@@ -152,7 +155,7 @@ abstract class MessageService extends Logging {
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
 
-    logger.error(s"Got message $msg from $src request ID $requestId")
+    logger.error(s"Got message ${msg.getClass} from $src request ID $requestId")
 
     if(isRequest) {
       recvRequest_(src, requestId, msg)
