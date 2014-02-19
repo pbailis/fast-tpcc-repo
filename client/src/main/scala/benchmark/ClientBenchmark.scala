@@ -119,7 +119,7 @@ object ClientBenchmark {
       new Thread(new Runnable {
         val rand = new Random
         override def run() = {
-          while (opsSent.get < numops) {
+          while (opsSent.getAndIncrement < numops) {
             val request = singleNewOrder(client, chance_remote)
             request.future onComplete {
               case Success(value) => {
