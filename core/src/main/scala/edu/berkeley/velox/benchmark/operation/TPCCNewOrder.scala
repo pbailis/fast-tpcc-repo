@@ -101,6 +101,9 @@ object TPCCNewOrder extends Logging {
             logger.error(s"aborting")
 
             p success new TPCCNewOrderResponse(false)
+
+            logger.error(s"returning")
+
             return p.future
           }
 

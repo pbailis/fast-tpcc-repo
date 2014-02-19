@@ -105,6 +105,8 @@ abstract class MessageService extends Logging {
       logger.error(s"sending response to request ID $requestId to $dst")
 
       networkService.send(dst, serializeMessage(requestId, response, isRequest=false))
+
+      logger.error(s"sent response to request ID $requestId to $dst")
     }
   }
 
@@ -146,7 +148,11 @@ abstract class MessageService extends Logging {
     val h = handlers.get(key)
     assert(h != null)
     h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-      case Success(response) => sendResponse(src, requestId, response)
+      case Success(response) => {
+        sendResponse(src, requestId, response)
+        logger.error("done sending response!")
+
+      }
       case Failure(t) => logger.error(s"Error receiving message $t")
     }
   }
