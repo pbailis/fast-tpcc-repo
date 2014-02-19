@@ -83,6 +83,9 @@ object TPCCNewOrder extends Logging {
 
     readFuture onComplete {
       case Success(_) => {
+        logger.error(s"SUCCESS readfuture!")
+
+
         var totalAmount: Double = 0
         var newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
 
@@ -91,7 +94,12 @@ object TPCCNewOrder extends Logging {
           val OL_QUANTITY: Int = OL_QUANTITIES.get(ol_cnt)
           val S_W_ID: Int = OL_SUPPLY_W_IDs.get(ol_cnt)
 
+          logger.error(s"ol_cnt $ol_cnt!")
+
+
           if (readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_NAME_COL)) == null) {
+            logger.error(s"aborting")
+
             p success new TPCCNewOrderResponse(false)
             return p.future
           }
@@ -133,6 +141,8 @@ object TPCCNewOrder extends Logging {
         // TODO! Deferred
         //writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, new DeferredCounter(TPCCConstants.getDistrictNextOID(W_ID, D_ID), 1)))
         writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, 1))
+
+        logger.error(s"writefuture executing!")
 
         val writeFuture = writeTxn.executeWrite
 

@@ -147,6 +147,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
            r => results.putAll(r.values)
          }
 
+         logger.error(s"post SUCCESS getFuture!")
+
          p success this
        }
        case Failure(t) => {
