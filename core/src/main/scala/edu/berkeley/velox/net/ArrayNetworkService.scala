@@ -185,7 +185,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     val buf = currentBuffer
     buf.needsend = true
     buf.rwlock.writeLock.lock()
-    if (buf == currentBuffer && buf.needsend && buf.buf.position > 4) {
+    if (buf == currentBuffer && buf.needsend && buf.writePos.get > 4) {
       swap(null)
       buf.send(true)
       buf.needsend = false
