@@ -100,11 +100,9 @@ object TPCCNewOrder extends Logging {
           if (readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_NAME_COL)) == null) {
             logger.error(s"aborting")
 
-            p success new TPCCNewOrderResponse(false)
-
             logger.error(s"returning")
 
-            return p.future
+            return Future { new TPCCNewOrderResponse(false) }
           }
 
           val I_PRICE = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_PRICE_COL)).asInstanceOf[Double]
