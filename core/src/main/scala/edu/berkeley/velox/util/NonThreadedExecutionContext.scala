@@ -1,9 +1,10 @@
 package edu.berkeley.velox.util
 
 import scala.concurrent.ExecutionContext
+import java.util.concurrent.Executors
 
 object NonThreadedExecutionContext {
-  implicit lazy val context: ExecutionContext = new NonThreadedExecutionContext
+  implicit lazy val context: ExecutionContext = ExecutionContext.fromExecutorService(Executors.newFixedThreadPool(16))
 }
 
 class NonThreadedExecutionContext extends ExecutionContext {
