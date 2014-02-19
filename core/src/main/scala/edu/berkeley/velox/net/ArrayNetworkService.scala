@@ -63,7 +63,7 @@ class SocketBuffer(
         rwlock.readLock.unlock
         rwlock.writeLock.lock
         // recheck in case someone else got it
-        if (needsend) {
+        if (pool.currentBuffer == this && needsend) {
           val r = pool.swap(bytes)
           send
           needsend = false
