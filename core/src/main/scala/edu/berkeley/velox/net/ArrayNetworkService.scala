@@ -102,7 +102,7 @@ class SocketBuffer(
         val wrote = channel.write(buf)
         pool.lastSent = System.currentTimeMillis
 
-        logger.error(s"$forced sent: ${buf} writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
+        logger.error(s"$forced sent: ${this} (buf $buf) writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
 
         // reset write position
         buf.clear
