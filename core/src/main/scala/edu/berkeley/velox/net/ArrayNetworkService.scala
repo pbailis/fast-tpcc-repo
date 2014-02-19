@@ -51,7 +51,6 @@ class SocketBuffer(
       if (writeOffset + len <= buf.limit) {
         logger.error(s"not sending buffer! $this ${channel.socket().getRemoteSocketAddress}")
 
-
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
@@ -68,7 +67,7 @@ class SocketBuffer(
         // recheck in case someone else got it
         if (pool.currentBuffer == this && needsend) {
           val r = pool.swap(bytes)
-          send
+          send(false)
           needsend = false
           rwlock.writeLock.unlock
           pool.returnBuffer(this)
@@ -89,7 +88,7 @@ class SocketBuffer(
     * The write lock MUST be held before calling this method
     *
     */
-  def send() {
+  def send(forced: Boolean) {
     try {
       if (writePos.get > 4) {
         buf.position(0)
@@ -103,10 +102,14 @@ class SocketBuffer(
         val wrote = channel.write(buf)
         pool.lastSent = System.currentTimeMillis
 
+        logger.error(s"$forced sent: writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
+
         // reset write position
         buf.clear
         buf.position(4)
         writePos.set(4)
+      } else {
+        logger.error(s"$forced no send required: writepos was ${writePos.get} ${channel.socket.getRemoteSocketAddress}")
       }
     } catch {
       case e: Exception => {
@@ -183,10 +186,8 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     buf.needsend = true
     buf.rwlock.writeLock.lock()
     if (buf == currentBuffer && buf.needsend) {
-      logger.error(s"forceSend $buf ${channel.socket().getRemoteSocketAddress}")
-
       swap(null)
-      buf.send
+      buf.send(true)
       buf.needsend = false
       returnBuffer(buf)
     }
