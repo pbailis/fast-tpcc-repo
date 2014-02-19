@@ -198,14 +198,16 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
 
 }
 
-class Receiver(
+class Receiver (
   bytes: ByteBuffer,
   src: NetworkDestinationHandle,
-  messageService: MessageService) extends Runnable {
+  messageService: MessageService) extends Runnable with Logging {
 
   def run() {
     while(bytes.remaining != 0) {
+      logger.error(s"receiving remote message from $src bytes is $bytes")
       messageService.receiveRemoteMessage(src,bytes)
+      logger.error(s"received remote message from $src bytes is $bytes")
     }
   }
 
