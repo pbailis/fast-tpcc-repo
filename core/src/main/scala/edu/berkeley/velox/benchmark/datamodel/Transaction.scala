@@ -14,9 +14,10 @@ import scala.concurrent.{Promise, Future}
 import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import edu.berkeley.velox.conf.VeloxConfig
+import com.typesafe.scalalogging.slf4j.Logging
 
 
-class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage: StorageEngine, val messageService: InternalRPCService) {
+class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage: StorageEngine, val messageService: InternalRPCService) extends Logging {
   def table(tableName: Int): Table = {
     return new Table(tableName, this)
   }
@@ -140,6 +141,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
      getFuture onComplete {
        case Success(responses) => {
+         logger.error(s"SUCCESS getFuture!")
+
          responses foreach {
            r => results.putAll(r.values)
          }
