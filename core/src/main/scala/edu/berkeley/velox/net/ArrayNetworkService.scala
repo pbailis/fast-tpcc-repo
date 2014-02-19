@@ -49,7 +49,7 @@ class SocketBuffer(
     val writeOffset = writePos.getAndAdd(len)
     val ret =
       if (writeOffset + len <= buf.limit) {
-        logger.error(s"not sending buffer! $this ${channel.socket().getRemoteSocketAddress}")
+        logger.error(s"not sending buffer! $this writeOffset is ${writeOffset} ${channel.socket().getRemoteSocketAddress}")
 
         val dup = buf.duplicate
         dup.position(writeOffset)
@@ -102,14 +102,14 @@ class SocketBuffer(
         val wrote = channel.write(buf)
         pool.lastSent = System.currentTimeMillis
 
-        logger.error(s"$forced sent: writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
+        logger.error(s"$forced sent: ${buf} writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
 
         // reset write position
         buf.clear
         buf.position(4)
         writePos.set(4)
       } else {
-        logger.error(s"$forced no send required: writepos was ${writePos.get} ${channel.socket.getRemoteSocketAddress}")
+        logger.error(s"$forced no send required: ${buf} writepos was ${writePos.get} ${channel.socket.getRemoteSocketAddress}")
       }
     } catch {
       case e: Exception => {
