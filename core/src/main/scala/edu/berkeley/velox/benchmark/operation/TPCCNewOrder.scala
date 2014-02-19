@@ -82,11 +82,13 @@ object TPCCNewOrder extends Logging {
     val readFuture = readTxn.executeRead
 
     readFuture onComplete {
-      case Success(_) => {
+      case Success(t) => {
         logger.error(s"SUCCESS readfuture!")
 
         var totalAmount: Double = 0
         var newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
+
+        var aborted = false
 
         for (ol_cnt <- 0 until OL_CNT) {
           val OL_I_ID: Int = OL_I_IDs.get(ol_cnt)
@@ -100,69 +102,75 @@ object TPCCNewOrder extends Logging {
             logger.error(s"aborting")
 
             logger.error(s"returning")
-            p.success(new TPCCNewOrderResponse(false))
-            return
+            val ret = new TPCCNewOrderResponse(false)
 
-          }
+            p.success(ret)
+            aborted = true
+            break
+          } else {
 
-          val I_PRICE = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_PRICE_COL)).asInstanceOf[Double]
-          val I_DATA = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_DATA_COL)).asInstanceOf[String]
-          val I_NAME = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_NAME_COL)).asInstanceOf[String]
-          val S_DATA = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_DATA_COL)).asInstanceOf[String]
-          var currentStock = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_QUANTITY_COL)).asInstanceOf[Integer]
+            val I_PRICE = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_PRICE_COL)).asInstanceOf[Double]
+            val I_DATA = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_DATA_COL)).asInstanceOf[String]
+            val I_NAME = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_NAME_COL)).asInstanceOf[String]
+            val S_DATA = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_DATA_COL)).asInstanceOf[String]
+            var currentStock = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_QUANTITY_COL)).asInstanceOf[Integer]
 
-          var brandGeneric: String = "B"
-          if (I_DATA.contains("ORIGINAL") && S_DATA.contains("ORIGINAL")) {
-            brandGeneric = "G"
-          }
-          val S_DIST_XX: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.formatSDistXX(D_ID))).asInstanceOf[String]
-          val OL_AMOUNT: Double = OL_QUANTITY * I_PRICE
-          totalAmount += OL_AMOUNT
+            var brandGeneric: String = "B"
+            if (I_DATA.contains("ORIGINAL") && S_DATA.contains("ORIGINAL")) {
+              brandGeneric = "G"
+            }
+            val S_DIST_XX: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.formatSDistXX(D_ID))).asInstanceOf[String]
+            val OL_AMOUNT: Double = OL_QUANTITY * I_PRICE
+            totalAmount += OL_AMOUNT
 
-          newOrderLines.add(new TPCCNewOrderLineResult(S_W_ID, OL_I_ID, I_NAME, OL_QUANTITY, currentStock, brandGeneric, I_PRICE, OL_AMOUNT))
+            newOrderLines.add(new TPCCNewOrderLineResult(S_W_ID, OL_I_ID, I_NAME, OL_QUANTITY, currentStock, brandGeneric, I_PRICE, OL_AMOUNT))
 
-          writeTxn.table(TPCCConstants.ORDER_LINE_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.OL_QUANTITY_COL, OL_QUANTITY).column(TPCCConstants.OL_AMOUNT_COL, OL_AMOUNT).column(TPCCConstants.OL_I_ID_COL, OL_I_ID).column(TPCCConstants.OL_SUPPLY_W_ID_COL, S_W_ID).column(TPCCConstants.OL_DELIVERY_D_COL, null).column(TPCCConstants.OL_NUMBER_COL, ol_cnt).column(TPCCConstants.OL_DIST_INFO_COL, S_DIST_XX))
-          if (currentStock > OL_QUANTITY + 10) {
-            currentStock -= OL_QUANTITY
-          }
-          else {
-            currentStock = (currentStock - OL_QUANTITY + 91)
-          }
+            writeTxn.table(TPCCConstants.ORDER_LINE_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.OL_QUANTITY_COL, OL_QUANTITY).column(TPCCConstants.OL_AMOUNT_COL, OL_AMOUNT).column(TPCCConstants.OL_I_ID_COL, OL_I_ID).column(TPCCConstants.OL_SUPPLY_W_ID_COL, S_W_ID).column(TPCCConstants.OL_DELIVERY_D_COL, null).column(TPCCConstants.OL_NUMBER_COL, ol_cnt).column(TPCCConstants.OL_DIST_INFO_COL, S_DIST_XX))
+            if (currentStock > OL_QUANTITY + 10) {
+              currentStock -= OL_QUANTITY
+            }
+            else {
+              currentStock = (currentStock - OL_QUANTITY + 91)
+            }
 
-          writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_QUANTITY_COL, currentStock))
-          if (W_ID == S_W_ID) {
-            val currentOrderCount = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_ORDER_CNT)).asInstanceOf[Integer]
-            writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_ORDER_CNT, currentOrderCount + 1))
-          }
-          else {
-            val currentRemoteCount: Int = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_REMOTE_CNT)).asInstanceOf[Integer]
-            writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount + 1))
+            writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_QUANTITY_COL, currentStock))
+            if (W_ID == S_W_ID) {
+              val currentOrderCount = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_ORDER_CNT)).asInstanceOf[Integer]
+              writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_ORDER_CNT, currentOrderCount + 1))
+            }
+            else {
+              val currentRemoteCount: Int = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.STOCK_TABLE, S_W_ID, OL_I_ID, TPCCConstants.S_REMOTE_CNT)).asInstanceOf[Integer]
+              writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount + 1))
+            }
           }
         }
-        // TODO! Deferred
-        //writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, new DeferredCounter(TPCCConstants.getDistrictNextOID(W_ID, D_ID), 1)))
-        writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, 1))
 
-        logger.error(s"writefuture executing!")
+        if(!aborted) {
+          // TODO! Deferred
+          //writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, new DeferredCounter(TPCCConstants.getDistrictNextOID(W_ID, D_ID), 1)))
+          writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, 1))
 
-        val writeFuture = writeTxn.executeWrite
+          logger.error(s"writefuture executing!")
 
-        writeFuture onComplete {
-          case Success(_) => {
+          val writeFuture = writeTxn.executeWrite
 
-            val O_ID = -1
-            //TODO! (writeTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ORDER_TABLE, W_ID, D_ID, shadow_O_ID, TPCCConstants.O_ID)).asInstanceOf[DeferredResult]).getValue.asInstanceOf[Integer]
-            val C_DISCOUNT = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_DISCOUNT_COL)).asInstanceOf[Double]
-            val W_TAX = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.WAREHOUSE_TABLE, W_ID, TPCCConstants.W_TAX_COL)).asInstanceOf[Double]
-            val D_TAX = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID, TPCCConstants.D_TAX_COL)).asInstanceOf[Double]
-            totalAmount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX)
+          writeFuture onComplete {
+            case Success(_) => {
 
-            val C_LAST: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_LAST_COL)).asInstanceOf[String]
-            val C_CREDIT: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_CREDIT_COL)).asInstanceOf[String]
+              val O_ID = -1
+              //TODO! (writeTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ORDER_TABLE, W_ID, D_ID, shadow_O_ID, TPCCConstants.O_ID)).asInstanceOf[DeferredResult]).getValue.asInstanceOf[Integer]
+              val C_DISCOUNT = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_DISCOUNT_COL)).asInstanceOf[Double]
+              val W_TAX = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.WAREHOUSE_TABLE, W_ID, TPCCConstants.W_TAX_COL)).asInstanceOf[Double]
+              val D_TAX = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID, TPCCConstants.D_TAX_COL)).asInstanceOf[Double]
+              totalAmount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX)
 
-            p success new TPCCNewOrderResponse(W_ID, D_ID, C_ID, O_ID, OL_CNT, C_LAST, C_CREDIT, C_DISCOUNT, W_TAX, D_TAX, O_ENTRY_D, totalAmount, newOrderLines)
+              val C_LAST: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_LAST_COL)).asInstanceOf[String]
+              val C_CREDIT: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_CREDIT_COL)).asInstanceOf[String]
+
+              p success new TPCCNewOrderResponse(W_ID, D_ID, C_ID, O_ID, OL_CNT, C_LAST, C_CREDIT, C_DISCOUNT, W_TAX, D_TAX, O_ENTRY_D, totalAmount, newOrderLines)
+            }
+            case Failure(t) => p.failure(t)
           }
-          case Failure(t) => p.failure(t)
         }
       }
       case Failure(t) => p.failure(t)
