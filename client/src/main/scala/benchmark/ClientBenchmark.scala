@@ -131,8 +131,6 @@ object ClientBenchmark {
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }
-
-            opsSent.incrementAndGet
           }
         }
         println("Thread is done sending")
