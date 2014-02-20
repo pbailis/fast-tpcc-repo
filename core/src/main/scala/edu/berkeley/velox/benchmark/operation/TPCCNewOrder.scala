@@ -156,6 +156,8 @@ object TPCCNewOrder extends Logging {
           writeFuture onComplete {
             case Success(_) => {
 
+              logger.error(s"writefuture completed!")
+
               val O_ID = -1
               //TODO! (writeTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ORDER_TABLE, W_ID, D_ID, shadow_O_ID, TPCCConstants.O_ID)).asInstanceOf[DeferredResult]).getValue.asInstanceOf[Integer]
               val C_DISCOUNT = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_DISCOUNT_COL)).asInstanceOf[Double]
