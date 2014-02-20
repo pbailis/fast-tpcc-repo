@@ -5,6 +5,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import java.util.concurrent.atomic.AtomicInteger
 
 object Timestamp {
+  val NO_TIMESTAMP = -1L
+
   val threadID = new AtomicInteger
 
   val timestampThreadLocal = new ThreadLocal[Timestamp]() {
@@ -21,7 +23,6 @@ object Timestamp {
 }
 
 class Timestamp(val threadID: Int) {
-  val NO_TIMESTAMP = -1L
   @volatile var latestMillis = -1L
   @volatile var sequenceNo = 0;
 
