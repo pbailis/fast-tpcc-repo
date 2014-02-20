@@ -88,8 +88,14 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
             case destination => messageService.send(destination, new CommitPutAllRequest(txId))
           })
 
+          logger.error("prepareFuture completed!")
+
           commitFuture onComplete {
-            case Success(responses) => p success this
+            case Success(responses) => {
+              logger.error("commitFuture completed!")
+
+              p success this
+            }
             case Failure(t) => p failure t
           }
         }
