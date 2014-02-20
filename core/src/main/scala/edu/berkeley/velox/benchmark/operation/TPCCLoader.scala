@@ -1,7 +1,7 @@
 package edu.berkeley.velox.benchmark.operation
 
 import edu.berkeley.velox.benchmark.util.RandomGenerator
-import edu.berkeley.velox.benchmark.TPCCConstants
+import edu.berkeley.velox.benchmark.{TPCCItemKey, TPCCConstants}
 import edu.berkeley.velox.benchmark.datamodel.Transaction
 import edu.berkeley.kaiju.storedproc.datamodel.Row
 import edu.berkeley.velox.storage.StorageEngine
@@ -161,5 +161,7 @@ object TPCCLoader extends Logging {
       loadTxn.executeWriteNonRAMP(storage)
       logger.info("...executed.")
     }
+
+    logger.error(s"GET ITEM IS ${storage.get(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, 10000, TPCCConstants.I_NAME_COL)).value}")
   }
 }
