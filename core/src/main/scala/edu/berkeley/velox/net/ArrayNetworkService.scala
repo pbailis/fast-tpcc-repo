@@ -100,14 +100,10 @@ class SocketBuffer(
         val wrote = channel.write(buf)
         pool.lastSent = System.currentTimeMillis
 
-        logger.error(s"$forced sent: ${this} (buf $buf) writepos was ${writePos.get} wrote $wrote bytes to ${channel.socket.getRemoteSocketAddress}")
-
         // reset write position
         buf.clear
         buf.position(4)
         writePos.set(4)
-      } else {
-        logger.error(s"$forced no send required: ${buf} writepos was ${writePos.get} ${channel.socket.getRemoteSocketAddress}")
       }
     } catch {
       case e: Exception => {
@@ -203,9 +199,7 @@ class Receiver (
 
   def run() {
     while(bytes.remaining != 0) {
-      logger.error(s"receiving remote message from $src bytes is $bytes")
       messageService.receiveRemoteMessage(src,bytes)
-      logger.error(s"received remote message from $src bytes is $bytes")
     }
   }
 

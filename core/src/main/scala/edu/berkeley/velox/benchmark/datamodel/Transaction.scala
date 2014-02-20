@@ -136,13 +136,9 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
      getFuture onComplete {
        case Success(responses) => {
-         logger.error(s"SUCCESS getFuture!")
-
          responses foreach {
            r => results.putAll(r.values)
          }
-
-         logger.error(s"post SUCCESS getFuture!")
 
          p success this
        }
