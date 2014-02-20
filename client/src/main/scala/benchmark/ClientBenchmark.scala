@@ -102,7 +102,7 @@ object ClientBenchmark {
       System.exit(0)
     }
 
-    var finished = false
+    @volatile var finished = false
     val requestSem = new Semaphore(numops)
 
     println(s"Starting $parallelism threads!")
@@ -126,7 +126,6 @@ object ClientBenchmark {
             }
           }
         }
-        println("Thread is done sending")
       }).start
     }
 
