@@ -90,6 +90,8 @@ abstract class MessageService extends Logging {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
+    logger.error(s"sending request $msg to any")
+
     requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
     networkService.sendAny(serializeMessage(reqId, msg, isRequest=true))
     p.future
