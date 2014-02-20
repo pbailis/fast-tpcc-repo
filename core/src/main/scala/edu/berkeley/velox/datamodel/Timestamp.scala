@@ -29,19 +29,17 @@ class Timestamp(val threadID: Int) {
     var chosenTime = System.currentTimeMillis()
     var chosenSeqNo = 0;
 
-     synchronized {
-         if (latestMillis < chosenTime) {
-             latestMillis = chosenTime;
-             sequenceNo = 0;
-             chosenSeqNo = 0;
-         } else if (latestMillis == chosenTime) {
-             sequenceNo += 1
-             chosenSeqNo = sequenceNo;
-         } else {
-             chosenTime = latestMillis;
-             sequenceNo += 1
-             chosenSeqNo = sequenceNo;
-         }
+     if (latestMillis < chosenTime) {
+         latestMillis = chosenTime;
+         sequenceNo = 0;
+         chosenSeqNo = 0;
+     } else if (latestMillis == chosenTime) {
+         sequenceNo += 1
+         chosenSeqNo = sequenceNo;
+     } else {
+         chosenTime = latestMillis;
+         sequenceNo += 1
+         chosenSeqNo = sequenceNo;
      }
 
      return (chosenTime << 21) | (chosenSeqNo << 17) | (VeloxConfig.partitionId << 5) | threadID ;  }
