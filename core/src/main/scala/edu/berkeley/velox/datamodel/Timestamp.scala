@@ -2,8 +2,25 @@ package edu.berkeley.velox.datamodel
 
 import edu.berkeley.velox.conf.VeloxConfig
 import com.typesafe.scalalogging.slf4j.Logging
+import java.util.concurrent.atomic.AtomicInteger
 
-object Timestamp extends Logging {
+object Timestamp {
+  val threadID = new AtomicInteger
+
+  val timestampThreadLocal = new ThreadLocal[Timestamp]() {
+    override protected def initialValue(): Timestamp = {
+      val tid = threadID.incrementAndGet()
+      assert(tid < 32)
+      new Timestamp(tid)
+    }
+  }
+
+  def assignNewTimestamp(): Long = {
+    timestampThreadLocal.get().assignNewTimestamp()
+  }
+}
+
+class Timestamp(val threadID: Int) {
   val NO_TIMESTAMP = -1L
   @volatile var latestMillis = -1L
   @volatile var sequenceNo = 0;
@@ -12,6 +29,7 @@ object Timestamp extends Logging {
     var chosenTime = System.currentTimeMillis()
     var chosenSeqNo = 0;
 
+     synchronized {
          if (latestMillis < chosenTime) {
              latestMillis = chosenTime;
              sequenceNo = 0;
@@ -23,7 +41,8 @@ object Timestamp extends Logging {
              chosenTime = latestMillis;
              sequenceNo += 1
              chosenSeqNo = sequenceNo;
+         }
      }
 
-     return (chosenTime << 26) | (chosenSeqNo << 12) | (VeloxConfig.partitionId);  }
+     return (chosenTime << 21) | (chosenSeqNo << 17) | (VeloxConfig.partitionId << 5) | threadID ;  }
 }
