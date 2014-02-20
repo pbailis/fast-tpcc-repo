@@ -119,8 +119,6 @@ if __name__ == "__main__":
                                   help='Run JVM with hprof cpu profiling. [default: %(default)s]')
     common_benchmark.add_argument('--profile_depth', dest='profile_depth', default=2, type=int,
                                   help='Stack depth to trace when running profiling. [default: %(default)s]')
-    common_benchmark.add_argument('--usefutures', action='store_true',
-                                  help='Have THE CRANKSHAW use futures instead of blocking for reply. [default: %(default)s]')
     common_benchmark.add_argument('--network_service', dest='network_service',
                                   default='array', type=str, choices=['array', 'nio'],
                                   help="Which network service to use. [default: %(default)s]")
@@ -130,14 +128,33 @@ if __name__ == "__main__":
     common_benchmark.add_argument('--sweep_time', dest='sweep_time',
                                   default=500, type=int,
                                   help='Time (in ms) the ArrayNetworkService send sweep thread should wait between sweeps. [default: %(default)s]')
+    common_benchmark.add_argument('--parallelism', dest='parallelism',
+                                  default=64, type=int,
+                                  help='Number of threads per benchmark client. [default: %(default)s]')
+    common_benchmark.add_argument('--read_pct', dest='read_pct',
+                                  default=0.5, type=float,
+                                  help='Percentage of workload operations which are reads. [default: %(default)s]')
+    common_benchmark.add_argument('--max_time', dest='max_time',
+                                  default=60, type=int,
+                                  help='Maximum execution time (in seconds) of the benchmark. [default: %(default)s]')
+    common_benchmark.add_argument('--ops', dest='ops',
+                                  default=100000, type=int,
+                                  help='Number of operations to perform in the benchmark. [default: %(default)s]')
     # common benchmark options for ec2 (includes benchmark base)
     common_benchmark_ec2 = argparse.ArgumentParser(add_help=False, parents=[common_benchmark])
     common_benchmark_ec2.add_argument('--output', dest='output_dir', default="./output", type=str,
                                       help='output directory for runs. [default: %(default)s]')
     # common crankshaw options
     common_client_bench = argparse.ArgumentParser(add_help=False)
+    common_client_bench.add_argument('--usefutures', action='store_true',
+                                     help='Have THE CRANKSHAW use futures instead of blocking for reply. [default: %(default)s]')
     common_client_bench.add_argument('--latency', action='store_true',
                                      help='Compute average latency when running THE CRANKSHAW. [default: %(default)s]')
+    # common ycsb options
+    common_ycsb_bench = argparse.ArgumentParser(add_help=False)
+    common_ycsb_bench.add_argument('--skip_rebuild', action='store_true',
+                                   help='Skip rebuilding ycsb before running the benchmark. [default: %(default)s]')
+
 
     ##################################
     ###### sub-command options #######
@@ -193,11 +210,11 @@ if __name__ == "__main__":
     parser_client_bench_local.set_defaults(func=command_client_bench_local)
 
     parser_ycsb_bench = subparsers.add_parser('ycsb_bench', help='Run YCSB on EC2',
-                                              parents=[common_cluster_ec2, common_benchmark_ec2])
+                                              parents=[common_cluster_ec2, common_benchmark_ec2, common_ycsb_bench])
     parser_ycsb_bench.set_defaults(func=command_ycsb_bench)
 
     parser_ycsb_bench_local = subparsers.add_parser('ycsb_bench_local', help='Run YCSB locally',
-                                                    parents=[common_benchmark])
+                                                    parents=[common_benchmark, common_ycsb_bench])
     parser_ycsb_bench_local.set_defaults(func=command_ycsb_bench_local)
 
     # parse the args, and execute the sub-command
