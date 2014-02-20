@@ -22,7 +22,6 @@ object ClientBenchmark {
 
 
   def main(args: Array[String]) {
-    val numOps = new AtomicInteger()
     val numAborts = new AtomicInteger()
     val numMs = new AtomicLong()
 
@@ -146,7 +145,7 @@ object ClientBenchmark {
           while(opsDone.get() < numops) {
             Thread.sleep(status_time*1000)
             val curTime = (System.nanoTime-ostart).toDouble/nanospersec
-            val curThru = (numAborts.get()+numOps.get()).toDouble/curTime
+            val curThru = (opsDone.get()).toDouble/curTime
             println(s"STATUS @ ${curTime}s: $curThru ops/sec")
           }
         }
@@ -160,11 +159,11 @@ object ClientBenchmark {
     val gstop = System.nanoTime
     val gtime = (gstop - ostart) / nanospersec
 
-    val nOps = numOps.get()
-    val latency = numMs.get()/numOps.get().toDouble
+    val nOps = opsDone.get()
+    val latency = numMs.get()/opsDone.get().toDouble
 
     val pthruput = nOps.toDouble / gtime.toDouble
-    println(s"In $gtime seconds and with $parallelism threads, completed $numOps, $numAborts aborts \nTOTAL THROUGHPUT: $pthruput ops/sec (avg latency ${latency} ms)")
+    println(s"In $gtime seconds and with $parallelism threads, completed $opsDone, $numAborts aborts \nTOTAL THROUGHPUT: $pthruput ops/sec (avg latency ${latency} ms)")
     System.exit(0)
   }
 
