@@ -99,7 +99,7 @@ object TPCCNewOrder extends Logging {
 
 
           if (readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_NAME_COL)) == null) {
-            logger.error(s"aborting; $OL_I_ID")
+            logger.error(s"aborting; $OL_I_ID ${readTxn.results}")
 
             aborted = true
           } else {
