@@ -127,7 +127,6 @@ object ClientBenchmark {
                  numAborts.incrementAndGet()
                 }
                 opDone()
-                println(s"finished ${opsDone}")
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }

@@ -226,9 +226,6 @@ class ReaderThread (
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
-
-          logger.error(s"perfect read $len byte message from $src")
-
           executor.submit(new Receiver(readBuffer,src,messageService))
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
@@ -246,9 +243,6 @@ class ReaderThread (
             msgBuf.put(readBuffer)
             readBuffer.limit(oldLim)
             msgBuf.flip
-
-            logger.error(s"read $len byte message from $src")
-
             executor.submit(new Receiver(msgBuf,src,messageService))
             if (readBuffer.remaining >= 4)
               len = readBuffer.getInt
