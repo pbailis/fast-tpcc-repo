@@ -133,11 +133,13 @@ object ClientBenchmark {
     if(status_time > 0) {
       new Thread(new Runnable {
         override def run() {
-          while(opsDone.get() < numops) {
+          while(!finished) {
             Thread.sleep(status_time*1000)
             val curTime = (System.nanoTime-ostart).toDouble/nanospersec
             val curThru = (opsDone.get()).toDouble/curTime
-            println(s"STATUS @ ${curTime}s: $curThru ops/sec")
+            val latency = numMs.get()/opsDone.get().toDouble
+
+            println(s"STATUS @ ${curTime}s: $curThru ops/sec (lat: $latency ms)")
           }
         }
       }).start
