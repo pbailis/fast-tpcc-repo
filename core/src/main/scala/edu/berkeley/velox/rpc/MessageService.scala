@@ -151,12 +151,18 @@ abstract class MessageService extends Logging {
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
+
+    logger.error(s"got request $msg from $src")
+
     if(isRequest) {
       recvRequest_(src, requestId, msg)
     } else {
       // receive the response message
       requestMap.remove(requestId) success msg
     }
+
+    logger.error(s"handled request $msg from $src")
+
   }
 
   def sendLocalRequest(requestId: RequestId, msg: Any) {
