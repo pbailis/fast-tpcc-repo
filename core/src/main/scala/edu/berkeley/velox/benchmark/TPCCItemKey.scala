@@ -33,19 +33,14 @@ class TPCCItemKey extends ItemKey {
   override def equals(other: Any): Boolean = {
     other match {
       case k: TPCCItemKey => {
-        Arrays.equals(columns, k.columns)
+        table_id == k.table_id && Arrays.equals(columns, k.columns)
       }
       case _ => false
     }
   }
 
   override def hashCode: Int = {
-    var hash: Int = 23
-    hash = hash * 31 + table_id
-    for (column <- columns) {
-      hash = hash * 31 + column
-    }
-    return hash
+    table_id + Arrays.hashCode(columns)
   }
 
   override def toString: String = {
