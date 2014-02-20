@@ -14,6 +14,7 @@ import scala.concurrent.duration.Duration
 import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderRequest, TPCCNewOrderResponse}
 import edu.berkeley.velox.benchmark.util.RandomGenerator
 import java.util._
+import java.util.concurrent.Semaphore
 
 
 object ClientBenchmark {
@@ -76,17 +77,7 @@ object ClientBenchmark {
       } text ("Which network service to use [nio/array]")
     }
 
-    val opsSent = new AtomicInteger(0)
     val opsDone = new AtomicInteger(0)
-
-    def opDone() {
-      val o = opsDone.incrementAndGet
-      if (o == numops) {
-        opsDone.synchronized {
-          opsDone.notify
-        }
-      }
-    }
 
     parser.parse(args)
 
@@ -111,6 +102,8 @@ object ClientBenchmark {
       System.exit(0)
     }
 
+    var finished = false
+    val requestSem = new Semaphore(numops)
 
     println(s"Starting $parallelism threads!")
 
@@ -118,7 +111,8 @@ object ClientBenchmark {
       new Thread(new Runnable {
         val rand = new Random
         override def run() = {
-          while (opsSent.getAndIncrement < numops) {
+          while (!finished) {
+            requestSem.acquireUninterruptibly()
             val request = singleNewOrder(client, chance_remote)
             request.future onComplete {
               case Success(value) => {
@@ -126,7 +120,7 @@ object ClientBenchmark {
                 if(!value.committed) {
                  numAborts.incrementAndGet()
                 }
-                opDone()
+                val o = opsDone.incrementAndGet
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }
@@ -149,9 +143,8 @@ object ClientBenchmark {
       }).start
     }
 
-    opsDone.synchronized {
-      opsDone.wait(waitTimeSeconds * 1000)
-    }
+    opsDone.wait(waitTimeSeconds * 1000)
+    finished = true
 
     val gstop = System.nanoTime
     val gtime = (gstop - ostart) / nanospersec
