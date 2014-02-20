@@ -120,7 +120,8 @@ object ClientBenchmark {
                 if(!value.committed) {
                  numAborts.incrementAndGet()
                 }
-                val o = opsDone.incrementAndGet
+                opsDone.incrementAndGet
+                requestSem.release
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }
@@ -142,7 +143,7 @@ object ClientBenchmark {
       }).start
     }
 
-    opsDone.wait(waitTimeSeconds * 1000)
+    Thread.sleep(waitTimeSeconds * 1000)
     finished = true
 
     val gstop = System.nanoTime
