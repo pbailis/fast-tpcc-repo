@@ -4,7 +4,6 @@ import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderLineResult, TPCCNewOr
 import edu.berkeley.velox.benchmark.datamodel.Transaction
 import edu.berkeley.velox.datamodel.Timestamp
 
-import scala.util.control.Breaks._
 import edu.berkeley.velox.benchmark.{TPCCItemKey, TPCCConstants}
 import edu.berkeley.kaiju.storedproc.datamodel.Row
 import java.util
@@ -89,8 +88,9 @@ object TPCCNewOrder extends Logging {
         var newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
 
         var aborted = false
+        var ol_cnt = 0
 
-        for (ol_cnt <- 0 until OL_CNT) {
+        while (ol_cnt < OL_CNT && !aborted) {
           val OL_I_ID: Int = OL_I_IDs.get(ol_cnt)
           val OL_QUANTITY: Int = OL_QUANTITIES.get(ol_cnt)
           val S_W_ID: Int = OL_SUPPLY_W_IDs.get(ol_cnt)
@@ -101,12 +101,7 @@ object TPCCNewOrder extends Logging {
           if (readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_NAME_COL)) == null) {
             logger.error(s"aborting")
 
-            logger.error(s"returning")
-            val ret = new TPCCNewOrderResponse(false)
-
-            p.success(ret)
             aborted = true
-            break
           } else {
 
             val I_PRICE = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, OL_I_ID, TPCCConstants.I_PRICE_COL)).asInstanceOf[Double]
@@ -143,9 +138,13 @@ object TPCCNewOrder extends Logging {
               writeTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(S_W_ID, OL_I_ID).column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount + 1))
             }
           }
+          ol_cnt += 1
         }
 
-        if(!aborted) {
+        if (aborted) {
+          logger.error("Aborted so calling p.success")
+          p.success(new TPCCNewOrderResponse(false))
+        } else {
           // TODO! Deferred
           //writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, new DeferredCounter(TPCCConstants.getDistrictNextOID(W_ID, D_ID), 1)))
           writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, 1))
@@ -178,4 +177,3 @@ object TPCCNewOrder extends Logging {
     p.future
   }
 }
-

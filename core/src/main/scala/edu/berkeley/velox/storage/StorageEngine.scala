@@ -8,7 +8,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel.{ItemKey, DataItem}
-import scala.util.control.Breaks._
 import scala.collection.JavaConversions._
 import java.util
 
@@ -150,10 +149,13 @@ class StorageEngine extends Logging {
   private def markForGC(key: ItemKey, timestamp: Long) {
     if (true) return
     val stamp = new KeyTimestampPair(key, timestamp, System.currentTimeMillis+gcTimeMs)
-    while (true) {
+
+    var done = false
+
+    while (!done) {
       try {
         candidatesForGarbageCollection.put(stamp)
-        break
+        done = true
       }
       catch {
         case e: InterruptedException => {
