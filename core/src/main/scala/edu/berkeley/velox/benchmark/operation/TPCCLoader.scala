@@ -158,10 +158,8 @@ object TPCCLoader extends Logging {
       }
 
       logger.info("Executing...")
-      loadTxn.executeWriteNonRAMP(storage)
+      loadTxn.executeWrite
       logger.info("...executed.")
     }
-
-    logger.error(s"GET ITEM IS ${storage.get(TPCCItemKey.key(TPCCConstants.ITEM_TABLE, 10000, TPCCConstants.I_NAME_COL)).value}")
   }
 }

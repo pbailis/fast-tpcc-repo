@@ -40,11 +40,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     return this
   }
 
-  def executeWriteNonRAMP(engine: StorageEngine) {
-    engine.putAll(toPutRemote)
-    toPutRemote.clear()
-  }
-
   def executeRead(engine: StorageEngine) {
     results.clear()
     results = engine.getAll(toGetRemote)
