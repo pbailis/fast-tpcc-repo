@@ -165,9 +165,9 @@ class StorageEngine extends Logging {
     }
   }
 
-  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem]
-  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, Long]
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]]
+  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem](4096, .75f, 64)
+  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, Long](4096, .75f, 64)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](4096, .75f, 64)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
