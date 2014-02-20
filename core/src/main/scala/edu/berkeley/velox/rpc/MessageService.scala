@@ -77,6 +77,9 @@ abstract class MessageService extends Logging {
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
 
+    logger.error(s"sending request $msg to $dst")
+
+
     requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
