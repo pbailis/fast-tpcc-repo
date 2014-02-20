@@ -11,7 +11,7 @@ import java.net.InetSocketAddress
 class ClientRPCService(val frontendServerAddresses: Iterable[InetSocketAddress]) extends MessageService {
   val name = "client"
 
-  networkService = VeloxConfig.getNetworkService()
+  networkService = VeloxConfig.getNetworkService(name)
   networkService.setMessageService(this)
   
   override def initialize() {

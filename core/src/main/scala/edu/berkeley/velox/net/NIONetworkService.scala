@@ -11,7 +11,8 @@ import scala.util.Random
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.rpc.MessageService
 
-class NIONetworkService(val performIDHandshake: Boolean = false,
+class NIONetworkService(val name: String,
+                        val performIDHandshake: Boolean = false,
                         val tcpNoDelay: Boolean = true,
                         val serverID: Integer = -1) extends NetworkService with Logging {
 

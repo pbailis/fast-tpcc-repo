@@ -11,7 +11,7 @@ class FrontendRPCService extends MessageService {
   val name = "frontend"
   serviceID = VeloxConfig.partitionId
 
-  networkService = VeloxConfig.getNetworkService()
+  networkService = VeloxConfig.getNetworkService(name)
   networkService.setMessageService(this)
   
   override def initialize() {

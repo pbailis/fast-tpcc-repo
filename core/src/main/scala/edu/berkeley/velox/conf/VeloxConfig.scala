@@ -58,11 +58,11 @@ object VeloxConfig {
       }  text("Comma-separated list of hostname:port pairs for frontend servers in cluster")
     }
 
-  def getNetworkService(performIDHandshake: Boolean = false, tcpNoDelay: Boolean = true, serverID: Integer = -1): NetworkService = {
+  def getNetworkService(name: String, performIDHandshake: Boolean = false, tcpNoDelay: Boolean = true, serverID: Integer = -1): NetworkService = {
     println("Getting network service")
     networkService match {
-      case "array" => new ArrayNetworkService(performIDHandshake,tcpNoDelay,serverID)
-      case "nio" => new NIONetworkService(performIDHandshake,tcpNoDelay,serverID)
+      case "array" => new ArrayNetworkService(name, performIDHandshake, tcpNoDelay, serverID)
+      case "nio" => new NIONetworkService(name, performIDHandshake, tcpNoDelay, serverID)
       case _ => throw new Exception(s"Invalid network service type $networkService")
     }
   }
