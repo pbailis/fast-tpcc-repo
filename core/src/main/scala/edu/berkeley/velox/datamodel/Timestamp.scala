@@ -12,7 +12,6 @@ object Timestamp extends Logging {
     var chosenTime = System.currentTimeMillis()
     var chosenSeqNo = 0;
 
-     synchronized {
          if (latestMillis < chosenTime) {
              latestMillis = chosenTime;
              sequenceNo = 0;
@@ -24,7 +23,6 @@ object Timestamp extends Logging {
              chosenTime = latestMillis;
              sequenceNo += 1
              chosenSeqNo = sequenceNo;
-         }
      }
 
      return (chosenTime << 26) | (chosenSeqNo << 12) | (VeloxConfig.partitionId);  }
