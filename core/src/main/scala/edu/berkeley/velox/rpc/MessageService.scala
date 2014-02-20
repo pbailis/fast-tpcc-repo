@@ -117,7 +117,7 @@ abstract class MessageService extends Logging {
   N bytes: serialized message
  */
   def serializeMessage(requestId: RequestId, msg: Any, isRequest: Boolean): ByteBuffer = {
-    val buffer = ByteBuffer.allocate(4096)
+    val buffer = ByteBuffer.allocate(16384)
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
     buffer.putLong(header)
