@@ -118,6 +118,10 @@ class StorageEngine extends Logging {
     while (true) {
       val table = latestGoodForKey.get(key.table)
 
+      if(table == null) {
+        latestGoodForKey.put(key.table, new ConcurrentHashMap[PrimaryKey, Row](10000000, .25f, 36))
+      }
+
       val oldGood = table.get(key)
 
       if (oldGood == null) {
@@ -182,7 +186,7 @@ class StorageEngine extends Logging {
     var table = dataItems.get(key.table)
 
     if(table == null)
-      table = dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row]())
+      table = dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row](1000000, .25f, 36))
 
     table.put(new KeyTimestampPair(key, value.timestamp), value)
   }
@@ -208,9 +212,9 @@ class StorageEngine extends Logging {
 
   def numKeys: Int = { dataItems.size }
 
-  private[storage] var dataItems = new ConcurrentHashMap[Int, ConcurrentHashMap[KeyTimestampPair, Row]](10000000, .15f, 36)
-  private var latestGoodForKey = new ConcurrentHashMap[Int, ConcurrentHashMap[PrimaryKey, Row]](10000000, .15f, 36)
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](10000000, .15f, 36)
+  private[storage] var dataItems = new ConcurrentHashMap[Int, ConcurrentHashMap[KeyTimestampPair, Row]](100, .25f, 36)
+  private var latestGoodForKey = new ConcurrentHashMap[Int, ConcurrentHashMap[PrimaryKey, Row]](100, .25f, 36)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](100, .25f, 36)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
