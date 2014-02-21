@@ -90,6 +90,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       }
 
       toPutRemote.clear()
+    } else {
+      p.success(this)
     }
 
     p.future
