@@ -116,10 +116,11 @@ class StorageEngine extends Logging {
 
   private def put_good(key: PrimaryKey, good: Row): Boolean = {
     while (true) {
-      val table = latestGoodForKey.get(key.table)
+      var table = latestGoodForKey.get(key.table)
 
       if(table == null) {
         latestGoodForKey.put(key.table, new ConcurrentHashMap[PrimaryKey, Row](10000000, .25f, 36))
+        table = latestGoodForKey.get(key.table)
       }
 
       val oldGood = table.get(key)
@@ -185,8 +186,10 @@ class StorageEngine extends Logging {
   private def addItem(key: PrimaryKey, value: Row) {
     var table = dataItems.get(key.table)
 
-    if(table == null)
-      table = dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row](1000000, .25f, 36))
+    if(table == null) {
+      dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row](1000000, .25f, 36))
+      table = dataItems.get(key.table)
+    }
 
     table.put(new KeyTimestampPair(key, value.timestamp), value)
   }
