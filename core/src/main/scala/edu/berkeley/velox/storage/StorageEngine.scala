@@ -119,7 +119,7 @@ class StorageEngine extends Logging {
       var table = latestGoodForKey.get(key.table)
 
       if(table == null) {
-        latestGoodForKey.put(key.table, new ConcurrentHashMap[PrimaryKey, Row](10000000, .25f, 36))
+        latestGoodForKey.put(key.table, new ConcurrentHashMap[PrimaryKey, Row](10000, .25f, 16))
         table = latestGoodForKey.get(key.table)
       }
 
@@ -187,7 +187,7 @@ class StorageEngine extends Logging {
     var table = dataItems.get(key.table)
 
     if(table == null) {
-      dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row](1000000, .25f, 36))
+      dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row](10000, .25f, 16))
       table = dataItems.get(key.table)
     }
 
