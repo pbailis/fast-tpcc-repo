@@ -142,17 +142,34 @@ object TPCCNewOrder extends Logging {
           writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, 1))
           val writeFuture = writeTxn.executeWrite
 
+          logger.error("EXECUTING WRITE")
+
           writeFuture onComplete {
             case Success(_) => {
               val O_ID = -1
+
+              logger.error("WRITE 1")
+
+
               //TODO! (writeTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.ORDER_TABLE, W_ID, D_ID, shadow_O_ID, TPCCConstants.O_ID)).asInstanceOf[DeferredResult]).getValue.asInstanceOf[Integer]
               val C_DISCOUNT = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_DISCOUNT_COL)).asInstanceOf[Double]
+
+              logger.error("WRITE 2")
+
+
               val W_TAX = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.WAREHOUSE_TABLE, W_ID, TPCCConstants.W_TAX_COL)).asInstanceOf[Double]
+
+              logger.error("WRITE 3")
+
+
               val D_TAX = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID, TPCCConstants.D_TAX_COL)).asInstanceOf[Double]
               totalAmount *= (1 - C_DISCOUNT) * (1 + W_TAX + D_TAX)
 
               val C_LAST: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_LAST_COL)).asInstanceOf[String]
               val C_CREDIT: String = readTxn.getQueryResult(TPCCItemKey.key(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID, TPCCConstants.C_CREDIT_COL)).asInstanceOf[String]
+
+              logger.error("WRITE 4")
+
 
               p success new TPCCNewOrderResponse(W_ID, D_ID, C_ID, O_ID, OL_CNT, C_LAST, C_CREDIT, C_DISCOUNT, W_TAX, D_TAX, O_ENTRY_D, totalAmount, newOrderLines)
             }

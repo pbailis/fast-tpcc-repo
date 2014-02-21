@@ -170,7 +170,7 @@ class StorageEngine extends Logging {
     }
   }
 
-  def numKeys { latestGoodForKey.size }
+  def numKeys: Int = { latestGoodForKey.size }
 
   private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem](1000000, .9f, 48)
   private var latestGoodForKey = new ConcurrentHashMap[ItemKey, DataItem](1000000, .9f, 48)
