@@ -63,7 +63,7 @@ class StorageEngine extends Logging {
   }
 
   private def getLatestItemForKey(key: ItemKey): DataItem = {
-    val ret = getItemByVersion(key, latestGoodForKey.get(key))
+    val ret = latestGoodForKey.get(key)
 
     if(ret == null) {
       return DataItem.NULL
@@ -84,26 +84,26 @@ class StorageEngine extends Logging {
 
   def put(key: ItemKey, value: DataItem) {
     addItem(key, value)
-    put_good(key, value.timestamp)
+    put_good(key, value)
   }
 
-  private def put_good(key: ItemKey, timestamp: Long): Boolean = {
+  private def put_good(key: ItemKey, good: DataItem): Boolean = {
     while (true) {
       val oldGood = latestGoodForKey.get(key)
 
-      if (oldGood == 0) {
-        if (latestGoodForKey.putIfAbsent(key, timestamp) == 0) {
+      if (oldGood == null) {
+        if (latestGoodForKey.putIfAbsent(key, good) == 0) {
           return true
         }
       }
-      else if (oldGood < timestamp) {
-        if (latestGoodForKey.replace(key, oldGood, timestamp)) {
-          markForGC(key, oldGood)
+      else if (oldGood.timestamp < good.timestamp) {
+        if (latestGoodForKey.replace(key, oldGood, good)) {
+          markForGC(key, oldGood.timestamp)
           return true
         }
       }
       else {
-        markForGC(key, timestamp)
+        markForGC(key, good.timestamp)
         return false
       }
     }
@@ -137,7 +137,7 @@ class StorageEngine extends Logging {
 
     for (pair: KeyTimestampPair <- toUpdate) {
       val goodItem: DataItem = getItemByVersion(pair.key, pair.timestamp)
-      put_good(pair.key, pair.timestamp)
+      put_good(pair.key, goodItem)
     }
 
     stampToPending.remove(timestamp)
@@ -168,7 +168,7 @@ class StorageEngine extends Logging {
   }
 
   private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem](4096, .9f, 32)
-  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, Long](4096, .9f, 32)
+  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, DataItem](4096, .9f, 32)
   private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](4096, .9f, 32)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
