@@ -202,11 +202,12 @@ class Receiver(
 }
 
 class ReaderThread(
+  name: String,
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") {
+  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") {
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
@@ -277,26 +278,27 @@ class SendSweeper(
   }
 }
 
-class ArrayNetworkThreadFactory extends ThreadFactory {
+class ArrayNetworkThreadFactory(val name: String) extends ThreadFactory {
 
   val defaultFactory = Executors.defaultThreadFactory
-  var threadIdx = 0
+  var threadIdx = new AtomicInteger(0)
 
   override
   def newThread(r: Runnable):Thread = {
     val t = defaultFactory.newThread(r)
-    t.setName(s"ArrayNetworkServiceThread-$threadIdx")
-    threadIdx+=1
+    val tid = threadIdx.getAndIncrement()
+    t.setName(s"ArrayNetworkServiceThread-$name-$tid")
     t
   }
 }
 
 class ArrayNetworkService(
+  val name: String,
   val performIDHandshake: Boolean = false,
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
+  val executor = Executors.newFixedThreadPool(16, new ArrayNetworkThreadFactory(name))
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
@@ -310,7 +312,7 @@ class ArrayNetworkService(
   }
 
   def start() {
-    new Thread(new SendSweeper(connections,executor)).start
+    new Thread(new SendSweeper(connections,executor), s"Sweeper-${name}").start
   }
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
@@ -355,7 +357,7 @@ class ArrayNetworkService(
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
-      new ReaderThread(channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
+      new ReaderThread(name, channel, executor, partitionId, messageService, channel.getRemoteAddress.toString).start
       connectionSemaphore.release
     }
   }
@@ -365,7 +367,7 @@ class ArrayNetworkService(
     logger.info("Listening on: "+port)
     serverChannel.socket.bind(new InetSocketAddress(port))
 
-    new Thread {
+    val connectionListener = new Thread {
       override def run() {
         // Grab references to memebers in the parent class
         val connections = ArrayNetworkService.this.connections
@@ -389,7 +391,9 @@ class ArrayNetworkService(
           _registerConnection(connectionId, clientChannel)
         }
       }
-    }.start()
+    }
+    connectionListener.setName(s"ConnectionListener-${name}")
+    connectionListener.start()
   }
 
   override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {

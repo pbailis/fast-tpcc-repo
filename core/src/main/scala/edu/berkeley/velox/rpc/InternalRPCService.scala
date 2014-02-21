@@ -11,7 +11,7 @@ class InternalRPCService extends MessageService {
   val name = "internal"
   serviceID = VeloxConfig.partitionId
 
-  networkService = VeloxConfig.getNetworkService(true,
+  networkService = VeloxConfig.getNetworkService(name, true,
     tcpNoDelay = VeloxConfig.tcpNoDelay,
     serverID = VeloxConfig.partitionId)
   networkService.setMessageService(this)
