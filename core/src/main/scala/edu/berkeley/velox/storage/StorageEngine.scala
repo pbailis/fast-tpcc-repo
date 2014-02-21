@@ -187,9 +187,9 @@ class StorageEngine extends Logging {
 
   def numKeys: Int = { dataItems.size }
 
-  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, Row](10000000, .15f, 36)
-  private var latestGoodForKey = new ConcurrentHashMap[PrimaryKey, Row](10000000, .15f, 36)
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](10000000, .15f, 36)
+  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, Row](10000000, .1f, 36)
+  private var latestGoodForKey = new ConcurrentHashMap[PrimaryKey, Row](10000000, .1f, 36)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](10000000, .1f, 36)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
