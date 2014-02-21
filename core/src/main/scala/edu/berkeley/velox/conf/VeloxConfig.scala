@@ -16,9 +16,17 @@ object VeloxConfig {
   var numBuffersPerRing = 32
   var partitionList: Array[NetworkDestinationHandle] = null
 
-  var bufferSize = 16384*8
-  var networkService = "array"
-  var sweepTime = 500
+  var bufferSize =
+    if (sys.env.contains("VELOX_BUFFER_SIZE"))
+      Integer.parseInt(sys.env("VELOX_BUFFER_SIZE"))
+    else
+      16384*8
+  var networkService = sys.env.getOrElse("VELOX_NETWORK_SERVICE","array")
+  var sweepTime =
+    if (sys.env.contains("VELOX_SWEEP_TIME"))
+      Integer.parseInt(sys.env("VELOX_SWEEP_TIME"))
+    else
+      500
 
   def initialize(cmdLine: Array[String]): Boolean = {
     val ret = parser.parse(cmdLine)
