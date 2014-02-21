@@ -92,7 +92,7 @@ class StorageEngine extends Logging {
       val oldGood = latestGoodForKey.get(key)
 
       if (oldGood == null) {
-        if (latestGoodForKey.putIfAbsent(key, good) == 0) {
+        if (latestGoodForKey.putIfAbsent(key, good) == null) {
           return true
         }
       }
