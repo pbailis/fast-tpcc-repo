@@ -25,9 +25,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
   def put(key: PrimaryKey, value: Row): Transaction = {
     value.timestamp = txId
-
-    logger.error(s"KEY $key masterP ${partitioner.getMasterPartition(key)} partition ${VeloxConfig.partitionId} ")
-
     if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
       toPutLocal.put(key, value)
     else

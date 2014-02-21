@@ -17,7 +17,6 @@ class TPCCPartitioner extends Partitioner with Logging {
     if (ikey.table == TPCCConstants.ITEM_TABLE) {
        return partitions(VeloxConfig.partitionId)
     } else {
-      logger.error(s"ikey $ikey ${ikey.keyColumns(0) - 1} ${partitions}")
       return partitions((ikey.keyColumns(0) - 1) % partitions.size)
     }
   }
