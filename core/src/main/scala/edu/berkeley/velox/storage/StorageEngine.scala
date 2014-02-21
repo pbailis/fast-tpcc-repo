@@ -46,15 +46,19 @@ class StorageEngine extends Logging {
     while(it.hasNext) {
       val pk_pair = it.next()
 
-      val latestVal = latestGoodForKey.get(pk_pair.getKey)
+      val table = latestGoodForKey.get(pk_pair.getKey.table)
 
-      if(latestVal != null) {
-        val c_it = pk_pair.getValue.columns.entrySet.iterator()
-        while(c_it.hasNext) {
-          val col = c_it.next().getKey
-          val v = latestVal.readColumn(col)
-          if(v != null) {
-            pk_pair.getValue.column(col, v)
+      if(table != null) {
+        val latestVal = table.get(pk_pair.getKey)
+
+        if(latestVal != null) {
+          val c_it = pk_pair.getValue.columns.entrySet.iterator()
+          while(c_it.hasNext) {
+            val col = c_it.next().getKey
+            val v = latestVal.readColumn(col)
+            if(v != null) {
+              pk_pair.getValue.column(col, v)
+            }
           }
         }
       }
@@ -74,7 +78,12 @@ class StorageEngine extends Logging {
   }
 
   private def getLatestItemForKey(key: PrimaryKey): Row = {
-    val ret = latestGoodForKey.get(key)
+    val table = dataItems.get(key.table)
+
+    if(table == null)
+      return null
+
+    val ret = table.get(key)
 
     if(ret == null) {
       return Row.NULL
@@ -84,7 +93,12 @@ class StorageEngine extends Logging {
   }
 
   private def getItemByVersion(key: PrimaryKey, timestamp: Long): Row = {
-    return dataItems.get(new KeyTimestampPair(key, timestamp))
+    val table = dataItems.get(key.table)
+
+    if(table == null)
+      return null
+
+    return table.get(new KeyTimestampPair(key, timestamp))
   }
 
   def putAll(pairs: Map[PrimaryKey, Row]) {
@@ -102,15 +116,17 @@ class StorageEngine extends Logging {
 
   private def put_good(key: PrimaryKey, good: Row): Boolean = {
     while (true) {
-      val oldGood = latestGoodForKey.get(key)
+      val table = latestGoodForKey.get(key.table)
+
+      val oldGood = table.get(key)
 
       if (oldGood == null) {
-        if (latestGoodForKey.putIfAbsent(key, good) == null) {
+        if (table.putIfAbsent(key, good) == null) {
           return true
         }
       }
       else if (oldGood.timestamp < good.timestamp) {
-        if (latestGoodForKey.replace(key, oldGood, good)) {
+        if (table.replace(key, oldGood, good)) {
           markForGC(key, oldGood.timestamp)
           return true
         }
@@ -163,7 +179,12 @@ class StorageEngine extends Logging {
   }
 
   private def addItem(key: PrimaryKey, value: Row) {
-    dataItems.put(new KeyTimestampPair(key, value.timestamp), value)
+    var table = dataItems.get(key.table)
+
+    if(table == null)
+      table = dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row]())
+
+    table.put(new KeyTimestampPair(key, value.timestamp), value)
   }
 
   private def markForGC(key: PrimaryKey, timestamp: Long) {
@@ -187,9 +208,9 @@ class StorageEngine extends Logging {
 
   def numKeys: Int = { dataItems.size }
 
-  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, Row](10000000, .1f, 36)
-  private var latestGoodForKey = new ConcurrentHashMap[PrimaryKey, Row](10000000, .1f, 36)
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](10000000, .1f, 36)
+  private[storage] var dataItems = new ConcurrentHashMap[Int, ConcurrentHashMap[KeyTimestampPair, Row]](10000000, .15f, 36)
+  private var latestGoodForKey = new ConcurrentHashMap[Int, ConcurrentHashMap[PrimaryKey, Row]](10000000, .15f, 36)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](10000000, .15f, 36)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
