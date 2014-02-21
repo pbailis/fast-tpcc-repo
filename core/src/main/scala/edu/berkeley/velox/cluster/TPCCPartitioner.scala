@@ -1,9 +1,9 @@
 package edu.berkeley.velox.cluster
 
-import edu.berkeley.velox.datamodel.ItemKey
 import edu.berkeley.velox.NetworkDestinationHandle
 import edu.berkeley.velox.benchmark.{TPCCConstants, TPCCItemKey}
 import edu.berkeley.velox.conf.VeloxConfig
+import edu.berkeley.velox.datamodel.PrimaryKey
 
 /**
  * Created by pbailis on 2/14/14.
@@ -12,13 +12,11 @@ import edu.berkeley.velox.conf.VeloxConfig
 class TPCCPartitioner extends Partitioner {
   val partitions = VeloxConfig.partitionList
 
-  override def getMasterPartition(ikey: ItemKey): NetworkDestinationHandle = {
-    val key = ikey.asInstanceOf[TPCCItemKey]
-
-    if (key.table == TPCCConstants.ITEM_TABLE) {
+  override def getMasterPartition(ikey: PrimaryKey): NetworkDestinationHandle = {
+    if (ikey.table == TPCCConstants.ITEM_TABLE) {
        return partitions(VeloxConfig.partitionId)
     } else {
-      return partitions((key.w_id - 1) % partitions.size)
+      return partitions((ikey.keyColumns(0) - 1) % partitions.size)
     }
   }
 }

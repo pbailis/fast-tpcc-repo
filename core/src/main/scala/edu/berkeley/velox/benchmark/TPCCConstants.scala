@@ -1,12 +1,14 @@
 package edu.berkeley.velox.benchmark
 
+import edu.berkeley.velox.datamodel.PrimaryKey
+
 object TPCCConstants {
   def formatSDistXX(d_id: Int): Int = {
     return S_DIST_XX_FMT + d_id - 1
   }
 
-  def getDistrictNextOID(w_id: Int, d_id: Int): TPCCItemKey = {
-    return new TPCCItemKey(DISTRICT_TABLE, w_id, d_id, D_NEXT_O_ID)
+  def getDistrictNextOID(w_id: Int, d_id: Int): PrimaryKey = {
+    return PrimaryKey.pkey(DISTRICT_TABLE, w_id, d_id, D_NEXT_O_ID)
   }
 
   final val W_NAME_COL: Int = 1
@@ -71,7 +73,7 @@ object TPCCConstants {
   final val OL_AMOUNT_COL: Int = 60
   private final val S_DIST_XX_FMT: Int = 61
   final val WAREHOUSE_TABLE: Int = 62
-  final val STOCK_TABLE: Int = 63
+  final val STOCK_TABLE_IMMUTABLE: Int = 63
   final val DISTRICT_TABLE: Int = 64
   final val CUSTOMER_TABLE: Int = 65
   final val HISTORY_TABLE: Int = 66
@@ -81,6 +83,9 @@ object TPCCConstants {
   final val ORDER_LINE_TABLE: Int = 70
   var PLACE_HOLDER_COLUMN: Int = 71
   var PLACE_HOLDER_VALUE: Int = 72
+  final val STOCK_TABLE_MUTABLE: Int = 73
+
+
 }
 
 

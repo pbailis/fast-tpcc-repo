@@ -1,6 +1,6 @@
 package edu.berkeley.velox.benchmark.datamodel
 
-import edu.berkeley.velox.datamodel.{DataItem, ItemKey}
+import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
 import edu.berkeley.velox.storage.StorageEngine
 import edu.berkeley.velox.cluster.TPCCPartitioner
@@ -15,6 +15,7 @@ import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import edu.berkeley.velox.conf.VeloxConfig
 import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.benchmark.TPCCConstants
 
 
 class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage: StorageEngine, val messageService: InternalRPCService) extends Logging {
@@ -22,20 +23,22 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     return new Table(tableName, this)
   }
 
-  def put(key: ItemKey, value: AnyRef): Transaction = {
+  def put(key: PrimaryKey, value: Row): Transaction = {
+    value.timestamp = txId
+
     if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
-      toPutLocal.put(key, new DataItem(txId, value))
+      toPutLocal.put(key, value)
     else
-      toPutRemote.put(key, new DataItem(txId, value))
+      toPutRemote.put(key, value)
 
     return this
   }
 
-  def get(key: ItemKey): Transaction = {
+  def get(key: PrimaryKey, columns: Row): Transaction = {
     if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
-      toGetLocal.add(key)
+      toGetLocal.put(key, columns)
     else
-      toGetRemote.add(key)
+      toGetRemote.put(key, columns)
 
     return this
   }
@@ -54,7 +57,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
     if(!toPutRemote.isEmpty) {
 
-      val allKeys = new util.ArrayList[ItemKey](toPutRemote.size)
+      val allKeys = new util.ArrayList[PrimaryKey](toPutRemote.size)
 
       for(p <- toPutRemote.keySet.asScala) {
         allKeys.add(p)
@@ -66,10 +69,10 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
       val writesByPartition = new util.HashMap[NetworkDestinationHandle, PreparePutAllRequest]
 
-      for(pair: java.util.Map.Entry[ItemKey, DataItem] <- toPutRemote.entrySet.asScala) {
+      for(pair: java.util.Map.Entry[PrimaryKey, Row] <- toPutRemote.entrySet.asScala) {
         val partition = partitioner.getMasterPartition(pair.getKey)
         if(!writesByPartition.containsKey(partition)) {
-          writesByPartition.put(partition, new PreparePutAllRequest(new util.HashMap[ItemKey, DataItem]))
+          writesByPartition.put(partition, new PreparePutAllRequest(new util.HashMap[PrimaryKey, Row]))
         }
 
         writesByPartition.get(partition).values.put(pair.getKey, pair.getValue)
@@ -120,12 +123,12 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
       toGetRemote.asScala.foreach(
         k => {
-          val partition = partitioner.getMasterPartition(k)
+          val partition = partitioner.getMasterPartition(k._1)
           if(!readsByPartition.containsKey(partition)) {
-            readsByPartition.put(partition, new GetAllRequest(new util.ArrayList[ItemKey]))
+            readsByPartition.put(partition, new GetAllRequest(new util.HashMap[PrimaryKey, Row]))
           }
 
-          readsByPartition.get(partition).keys.add(k)
+          readsByPartition.get(partition).keys.put(k._1, k._2)
         }
       )
 
@@ -160,19 +163,19 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
      p.future
    }
 
-  def getQueryResult(itemKey: ItemKey): Any = {
-    return results.get(itemKey).value
+  def getQueryResult(itemKey: PrimaryKey, column: Int): Any = {
+    return results.get(itemKey).readColumn(column)
   }
 
-  def getRawResult(itemKey: ItemKey): DataItem = {
+  def getRawResult(itemKey: PrimaryKey): Row = {
     return results.get(itemKey)
   }
 
-  private var toPutLocal = new util.HashMap[ItemKey, DataItem]
-  private var toGetLocal = new util.ArrayList[ItemKey]
+  private var toPutLocal = new util.HashMap[PrimaryKey, Row]
+  private var toGetLocal = new util.HashMap[PrimaryKey, Row]
 
-  private var toPutRemote = new util.HashMap[ItemKey, DataItem]
-  private var toGetRemote = new util.ArrayList[ItemKey]
-  var results = new util.HashMap[ItemKey, DataItem]
+  private var toPutRemote = new util.HashMap[PrimaryKey, Row]
+  private var toGetRemote = new util.HashMap[PrimaryKey, Row]
+  var results = new util.HashMap[PrimaryKey, Row]
 }
 

@@ -141,11 +141,17 @@ abstract class MessageService extends Logging {
     assert(handlers.containsKey(key))
     val h = handlers.get(key)
     assert(h != null)
-    h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-      case Success(response) => {
-        sendResponse(src, requestId, response)
+    try {
+      h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
+        case Success(response) => {
+          sendResponse(src, requestId, response)
+        }
+        case Failure(t) => logger.error(s"Error receiving message $t")
       }
-      case Failure(t) => logger.error(s"Error receiving message $t")
+    }  catch {
+      case e: Exception => {
+        logger.error("Handler exception", e)
+      }
     }
   }
 

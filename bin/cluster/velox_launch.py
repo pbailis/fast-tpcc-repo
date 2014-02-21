@@ -137,7 +137,7 @@ if __name__ == "__main__":
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=8, timeout=300, ops=10000, chance_remote=0,
+                               parallelism=8, timeout=300, ops=10000, chance_remote=0.01,
                                )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
@@ -149,7 +149,7 @@ if __name__ == "__main__":
         assign_hosts(region, cluster)
         start_servers(cluster, args.network_service)
         sleep(5)
-        run_ycsb(cluster, threads=64, pct_reads=.01, valuesize=1, recordcount=10000, time=60)
+        run_ycsb(cluster, threads=64, pct_reads=.01, valuesize=1, recordcount=30000, time=60)
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("YCSB has completed!")
