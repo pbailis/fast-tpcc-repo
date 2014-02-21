@@ -1,19 +1,18 @@
 package edu.berkeley.velox.benchmark
 
 import edu.berkeley.velox.conf.VeloxConfig
-import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.datamodel.Key
 import edu.berkeley.velox.datamodel.Value
-import scala.concurrent.Future
 import scala.util.Random
 import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
-
-import scala.util.{Success, Failure}
-import scala.collection.JavaConversions._
 // this causes our futures to not thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+
+import scala.util.{Success, Failure}
+import java.util.UUID
+
 
 object ClientBenchmark {
 
@@ -101,6 +100,12 @@ object ClientBenchmark {
     val ostart = System.nanoTime
 
     val client = new VeloxConnection(clusterAddresses)
+    val DB = "client-benchmark-db" + UUID.randomUUID().toString
+    val TABLE = "table1"
+    client.createDatabase(DB)
+    println("database successfully added")
+    client.addTable(TABLE, DB)
+    println("table successfully added")
 
     println(s"Starting $parallelism threads!")
 
@@ -111,7 +116,7 @@ object ClientBenchmark {
           override def run() = {
             while (opsSent.get < numops) {
               if (rand.nextDouble() < pctReads) {
-                val f = client.getValueFuture(Key(rand.nextInt(keyrange)))
+                val f = client.getValueFuture(TABLE, DB, Key(rand.nextInt(keyrange)))
                 val startTime =
                   if (computeLatency) System.nanoTime
                   else 0
@@ -125,7 +130,7 @@ object ClientBenchmark {
                   case Failure(t) => println("An error has occured: " + t.getMessage)
                 }
               } else {
-                val f = client.putValueFuture(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
+                val f = client.putValueFuture(TABLE, DB, Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
                 val startTime =
                   if (computeLatency) System.nanoTime
                   else 0
@@ -152,10 +157,10 @@ object ClientBenchmark {
           override def run() = {
             while (true) {
               if (rand.nextDouble() < pctReads) {
-                client.getValue(Key(rand.nextInt(keyrange)))
+                client.getValue(TABLE, DB, Key(rand.nextInt(keyrange)))
                 numGets.incrementAndGet()
               } else {
-                client.putValue(Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
+                client.putValue(TABLE, DB, Key(rand.nextInt(keyrange)), Value(rand.alphanumeric.take(10).toList.mkString))
                 numPuts.incrementAndGet()
               }
 

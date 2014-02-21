@@ -66,7 +66,10 @@ object VeloxBuild extends Build {
       "com.twitter" % "chill_2.10" % "0.3.5",
       "com.twitter" % "chill-bijection_2.10" % "0.3.5",
       "com.codahale.metrics" % "metrics-core" % "3.0.1",
-      "org.scalatest" %% "scalatest" % "2.0" % "test"
+      "org.scalatest" %% "scalatest" % "2.0" % "test",
+      "org.apache.curator" % "curator-framework" % "2.3.0",
+      "org.apache.curator" % "curator-recipes" % "2.3.0",
+      "org.apache.curator" % "curator-test" % "2.3.0"
     )
   )
 

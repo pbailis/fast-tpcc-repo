@@ -52,7 +52,7 @@ def command_client_bench(args):
     runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
     pprint("Running THE CRANKSHAW")
     assign_hosts(cluster)
-    start_servers(cluster, **kwargs)
+    start_servers_with_zk(cluster, **kwargs)
     sleep(5)
     run_velox_client_bench(cluster, **kwargs)
     stop_velox_processes()
@@ -89,6 +89,13 @@ def command_ycsb_bench_local(args):
     run_ycsb_local(**kwargs)
     kill_velox_local()
     pprint("YCSB has completed!")
+
+def command_deploy_zookeeper(args):
+    cluster = get_cluster(args)
+    pprint("Deploying Zookeeper")
+    assign_hosts(cluster)
+    install_zookeeper_cluster(cluster, args.zk_config)
+    start_zookeeper_cluster(cluster)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Setup velox on EC2')
@@ -140,6 +147,10 @@ if __name__ == "__main__":
     common_benchmark.add_argument('--ops', dest='ops',
                                   default=100000, type=int,
                                   help='Number of operations to perform in the benchmark. [default: %(default)s]')
+
+    common_benchmark.add_argument('--heap_size_gb', dest='heap_size',
+                                  default=230, type=int,
+                                  help='Size (in GB) to make the JVM heap. [default: %(default)s]')
     # common benchmark options for ec2 (includes benchmark base)
     common_benchmark_ec2 = argparse.ArgumentParser(add_help=False, parents=[common_benchmark])
     common_benchmark_ec2.add_argument('--output', dest='output_dir', default="./output", type=str,
@@ -190,13 +201,21 @@ if __name__ == "__main__":
                         help='Branch to rebuild. [default: %(default)s]')
     parser_rebuild.add_argument('--git_remote', dest="git_remote", default="git@github.com:amplab/velox.git",
                         help='Upstream git url. [default: %(default)s]')
-    parser_rebuild.add_argument('--deploy_key', dest="deploy_key", default=None,
+    parser_rebuild.add_argument('--deploy_key', dest="deploy_key", default="velox",
                         help='Local path to upstream deploy key. [default: %(default)s]')
 
     # install_ykit
     parser_install_ykit = subparsers.add_parser('install_ykit', help='Install yourkit',
                                                 parents=[common_cluster_ec2])
     parser_install_ykit.set_defaults(func=command_install_ykit)
+
+    # deploy zookeeper
+    parser_deploy_zk = subparsers.add_parser('deploy_zookeeper', help='Deploy zookeeper to all backend servers',
+                                             parents=[common_cluster_ec2])
+    parser_deploy_zk.set_defaults(func=command_deploy_zookeeper)
+    parser_deploy_zk.add_argument('--zk_config', dest='zk_config', default="conf/zk_cluster.cfg.template", type=str,
+                                  help="Path to Zookeeper config file.")
+                                              
 
     ##################################
     ####### benchmark commands #######
