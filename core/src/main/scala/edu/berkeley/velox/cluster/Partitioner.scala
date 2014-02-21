@@ -1,8 +1,8 @@
 package edu.berkeley.velox.cluster
 
 import edu.berkeley.velox.NetworkDestinationHandle
-import edu.berkeley.velox.datamodel.ItemKey
+import edu.berkeley.velox.datamodel.PrimaryKey
 
 trait Partitioner {
-  def getMasterPartition(key: ItemKey): NetworkDestinationHandle
+  def getMasterPartition(key: PrimaryKey): NetworkDestinationHandle
 }

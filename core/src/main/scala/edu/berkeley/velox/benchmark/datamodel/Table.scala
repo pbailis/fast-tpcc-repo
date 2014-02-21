@@ -1,11 +1,9 @@
 package edu.berkeley.velox.benchmark.datamodel
 
-import java.util.Arrays
-import edu.berkeley.kaiju.storedproc.datamodel.Row
-import edu.berkeley.velox.benchmark.TPCCItemKey
-import scala.collection.JavaConversions._
+import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
+import com.typesafe.scalalogging.slf4j.Logging
 
-class Table {
+class Table extends Logging {
   def this(tableName: Int, parentTxn: Transaction) {
     this()
     this.tableName = tableName
@@ -16,23 +14,15 @@ class Table {
     return tableName
   }
 
-  def put(row: Row): Table = {
-    for (column <- row.getColumns) {
-      val totalNumberColumns: Int = row.numColumns
-      val allColumns: Array[Int] = Arrays.copyOf(row.getKeys, totalNumberColumns)
-      allColumns(totalNumberColumns - 1) = column
-      parentTxn.put(new TPCCItemKey(tableName, allColumns), row.getValue(column))
-    }
+  def put(pkey: PrimaryKey, row: Row): Table = {
+    pkey.table = tableName
+    parentTxn.put(pkey, row)
     return this
   }
 
-  def get(row: Row): Table = {
-    for (column <- row.getColumns) {
-      val totalNumberColumns: Int = row.numColumns
-      val allColumns: Array[Int] = Arrays.copyOf(row.getKeys, totalNumberColumns)
-      allColumns(totalNumberColumns - 1) = column
-      parentTxn.get(new TPCCItemKey(tableName, allColumns))
-    }
+  def get(pkey: PrimaryKey, row: Row): Table = {
+    pkey.table = tableName
+    parentTxn.get(pkey, row)
     return this
   }
 

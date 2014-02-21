@@ -3,10 +3,8 @@ package edu.berkeley.velox.benchmark.operation
 import edu.berkeley.velox.benchmark.util.RandomGenerator
 import edu.berkeley.velox.benchmark.{TPCCItemKey, TPCCConstants}
 import edu.berkeley.velox.benchmark.datamodel.Transaction
-import edu.berkeley.kaiju.storedproc.datamodel.Row
 import edu.berkeley.velox.storage.StorageEngine
-import edu.berkeley.velox.datamodel.Timestamp
-import scala.collection.JavaConverters._
+import edu.berkeley.velox.datamodel.{Row, PrimaryKey, Timestamp}
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.cluster.TPCCPartitioner
 import edu.berkeley.velox.rpc.InternalRPCService
@@ -44,12 +42,11 @@ object TPCCLoader extends Logging {
     logger.info(s"Creating items...")
 
     for (i_id <- 1 to 100000) {
-      val row = Row.pkey(i_id).column(TPCCConstants.I_IM_ID_COL, generator.number(0, 10000))
+     itemTable.put(PrimaryKey.pkey(i_id),
+        Row.column(TPCCConstants.I_IM_ID_COL, generator.number(0, 10000))
         .column(TPCCConstants.I_NAME_COL, generator.astring(14, 24))
         .column(TPCCConstants.I_PRICE_COL, generator.fixedPoint(2, 1, 100))
-        .column(TPCCConstants.I_DATA_COL, generateDataString)
-
-      itemTable.put(row)
+        .column(TPCCConstants.I_DATA_COL, generateDataString))
     }
 
     logger.info(s"...created!")
@@ -57,8 +54,8 @@ object TPCCLoader extends Logging {
     generator = new RandomGenerator
 
     logger.info(s"Creating warehouse ID $w_id")
-    loadTxn.table(TPCCConstants.WAREHOUSE_TABLE).put(Row.pkey(w_id)
-      .column(TPCCConstants.W_NAME_COL, generator.astring(6, 10))
+    loadTxn.table(TPCCConstants.WAREHOUSE_TABLE).put(PrimaryKey.pkey(w_id),
+      Row.column(TPCCConstants.W_NAME_COL, generator.astring(6, 10))
       .column(TPCCConstants.W_STREET_1_COL, generator.astring(6, 10))
       .column(TPCCConstants.W_STREET_2_COL, generator.astring(6, 10))
       .column(TPCCConstants.W_CITY_COL, generator.astring(10, 20))
@@ -69,9 +66,8 @@ object TPCCLoader extends Logging {
 
     logger.info(s"Creating stock for warehouses...")
     for (s_i_id <- 1 to 100000) {
-      loadTxn.table(TPCCConstants.STOCK_TABLE).put(Row.pkey(w_id, s_i_id)
-        .column(TPCCConstants.S_QUANTITY_COL, generator.number(10, 100))
-        .column(TPCCConstants.formatSDistXX(0), generator.astring(24, 24))
+      loadTxn.table(TPCCConstants.STOCK_TABLE_IMMUTABLE).put(PrimaryKey.pkey(w_id, s_i_id),
+        Row.column(TPCCConstants.formatSDistXX(0), generator.astring(24, 24))
         .column(TPCCConstants.formatSDistXX(1), generator.astring(24, 24))
         .column(TPCCConstants.formatSDistXX(2), generator.astring(24, 24))
         .column(TPCCConstants.formatSDistXX(3), generator.astring(24, 24))
@@ -83,17 +79,19 @@ object TPCCLoader extends Logging {
         .column(TPCCConstants.formatSDistXX(9), generator.astring(24, 24))
         .column(TPCCConstants.formatSDistXX(10), generator.astring(24, 24))
         .column(TPCCConstants.S_YTD_COL, 0)
-        .column(TPCCConstants.S_ORDER_CNT, 0)
-        .column(TPCCConstants.S_REMOTE_CNT, 0)
         .column(TPCCConstants.S_DATA_COL, generateDataString))
+      loadTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).put(PrimaryKey.pkey(w_id, s_i_id),
+        Row.column(TPCCConstants.S_QUANTITY_COL, generator.number(10, 100))
+          .column(TPCCConstants.S_ORDER_CNT, 0)
+          .column(TPCCConstants.S_REMOTE_CNT, 0))
     }
     logger.info(s"....created stock for warehouses!")
 
 
     for (d_id <- 1 to 10) {
       logger.info(s"Creating district ID $d_id (warehouse: $w_id)")
-      loadTxn.table(TPCCConstants.DISTRICT_TABLE).put(Row.pkey(w_id, d_id)
-        .column(TPCCConstants.D_NAME_COL, generator.astring(6, 10))
+      loadTxn.table(TPCCConstants.DISTRICT_TABLE).put(PrimaryKey.pkey(w_id, d_id),
+        Row.column(TPCCConstants.D_NAME_COL, generator.astring(6, 10))
         .column(TPCCConstants.D_STREET_1_COL, generator.astring(10, 20))
         .column(TPCCConstants.D_STREET_2_COL, generator.astring(10, 20))
         .column(TPCCConstants.D_CITY_COL, generator.astring(10, 20))
@@ -104,8 +102,8 @@ object TPCCLoader extends Logging {
         .column(TPCCConstants.D_NEXT_O_ID, 3001))
 
       for (c_id <- 1 to 3000) {
-        loadTxn.table(TPCCConstants.CUSTOMER_TABLE).put(Row.pkey(w_id, d_id, c_id)
-          .column(TPCCConstants.C_LAST_COL, generateLastName(c_id))
+        loadTxn.table(TPCCConstants.CUSTOMER_TABLE).put(PrimaryKey.pkey(w_id, d_id, c_id),
+          Row.column(TPCCConstants.C_LAST_COL, generateLastName(c_id))
           .column(TPCCConstants.C_MIDDLE_COL, "OE")
           .column(TPCCConstants.C_FIRST_COL, generator.astring(8, 16))
           .column(TPCCConstants.C_STREET_1_COL, generator.astring(6, 10))
@@ -122,8 +120,8 @@ object TPCCLoader extends Logging {
           .column(TPCCConstants.C_PAYMENT_CNT_COL, 1).column(TPCCConstants.C_DELIVERY_CNT_COL, 1)
           .column(TPCCConstants.C_DATA_COL, generator.astring(300, 500)))
 
-        loadTxn.table(TPCCConstants.HISTORY_TABLE).put(Row.pkey(w_id, d_id, c_id)
-          .column(TPCCConstants.H_DATE_COL, System.currentTimeMillis.toString)
+        loadTxn.table(TPCCConstants.HISTORY_TABLE).put(PrimaryKey.pkey(w_id, d_id, c_id),
+          Row.column(TPCCConstants.H_DATE_COL, System.currentTimeMillis.toString)
           .column(TPCCConstants.H_AMOUNT_COL, 10.0)
           .column(TPCCConstants.H_DATA_COL, generator.astring(12, 24)))
       }
@@ -135,8 +133,8 @@ object TPCCLoader extends Logging {
         val orderCount: Int = generator.number(5, 15)
         val deliveryTime = System.currentTimeMillis.toString
 
-        loadTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(w_id, d_id, o_id)
-          .column(TPCCConstants.O_ID, o_id)
+        loadTxn.table(TPCCConstants.ORDER_TABLE).put(PrimaryKey.pkey(w_id, d_id, o_id),
+          Row.column(TPCCConstants.O_ID, o_id)
           .column(TPCCConstants.O_C_ID_COL, c_id_shuffle(o_id - 1))
           .column(TPCCConstants.O_ENTRY_D, deliveryTime)
           .column(TPCCConstants.O_CARRIER_ID_COL, if (o_id < 2101) generator.number(1, 10) else -1)
@@ -145,15 +143,15 @@ object TPCCLoader extends Logging {
 
         for (ol_number <- 0 to orderCount) {
           loadTxn.table(TPCCConstants.ORDER_LINE_TABLE)
-            .put(Row.pkey(w_id, d_id, o_id, ol_number)
-            .column(TPCCConstants.OL_I_ID_COL, generator.number(1, 100000))
+            .put(PrimaryKey.pkey(w_id, d_id, o_id, ol_number),
+            Row.column(TPCCConstants.OL_I_ID_COL, generator.number(1, 100000))
             .column(TPCCConstants.OL_SUPPLY_W_ID_COL, w_id)
             .column(TPCCConstants.OL_DELIVERY_D_COL, if (o_id < 2101) deliveryTime else "")
             .column(TPCCConstants.OL_QUANTITY_COL, 5)
             .column(TPCCConstants.OL_AMOUNT_COL,
               if (o_id < 2101) 0.0 else generator.fixedPoint(2, .01, 9999.99))
             .column(TPCCConstants.OL_DIST_INFO_COL, generator.astring(24, 24)));
-          if (o_id > 2101) loadTxn.table(TPCCConstants.NEW_ORDER_TABLE).put(Row.pkey(w_id, d_id, o_id))
+          if (o_id > 2101) loadTxn.table(TPCCConstants.NEW_ORDER_TABLE).put(PrimaryKey.pkey(w_id, d_id, o_id), Row.column(-1))
         }
       }
 
