@@ -159,7 +159,7 @@ object TPCCLoader extends Logging {
 
       logger.info("Executing...")
       loadTxn.executeWrite
-      logger.info(s"...executed ${storage.numKeys()}.")
+      logger.info(s"...executed ${storage.numKeys}.")
     }
   }
 }
