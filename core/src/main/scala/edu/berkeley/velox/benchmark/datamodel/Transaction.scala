@@ -51,6 +51,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     val p = Promise[Transaction]
 
     storage.putAll(toPutLocal)
+    logger.error(s"put ${toPutLocal.size()}")
     toPutLocal.clear()
 
     if(!toPutRemote.isEmpty) {
