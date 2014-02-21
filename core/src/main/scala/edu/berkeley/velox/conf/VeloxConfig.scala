@@ -24,7 +24,7 @@ object VeloxConfig extends Logging {
   def initialize(cmdLine: Array[String]): Boolean = {
     val ret = parser.parse(cmdLine)
     if(internalServerAddresses != null) {
-      partitionList = internalServerAddresses.keys.toArray
+      partitionList = internalServerAddresses.keys.toArray.sorted
     }
     ret
   }
