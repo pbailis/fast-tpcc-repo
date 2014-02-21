@@ -438,18 +438,18 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism=64, pct_reads=.5, ops=100000, timeout=3000, usefutures=True, latency=False, **kwargs):
+def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, usefutures, latency, **kwargs):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
     if profile:
         pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % profile_depth
     else:
         pstr = ""
     system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
-        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, usefutures, latency))
+        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency))
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, pct_reads=.5, ops=100000, timeout=5, usefutures=True, latency=False, **kwargs):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, usefutures, latency, **kwargs):
     hprof = ""
 
     if profile:
@@ -459,10 +459,10 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
     cmd = ("pkill -9 java; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, pct_reads, ops, timeout, network_service, buffer_size, sweep_time, usefutures, latency)
+           parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency)
     run_cmd_in_velox("all-clients", cmd)
 
-def run_ycsb_local(num_servers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True, **kwargs):
+def run_ycsb_local(num_servers, parallelism, read_pct, ops, max_time, skip_rebuild, valuesize=1, recordcount=10000, request_distribution="zipfian", workload="workloads/workloada", **kwargs):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
 
     ycsb_cmd = (("cd external/ycsb; "
@@ -475,13 +475,13 @@ def run_ycsb_local(num_servers, workload="workloads/workloada", threads=64, read
                  "-p fieldlength=%d "
                  "-p fieldcount=1 "
                  "-p recordcount=%d "
-                 "-p operationcount=1000000 "
+                 "-p operationcount=%d "
                  "-p requestdistribution=%s "
                  "-p maxexecutiontime=%d "
                  "-p cluster=%s") %
-                (workload, threads, readprop, 1-readprop, valuesize, recordcount, request_distribution, time, clientConfigStr))
+                (workload, parallelism, read_pct, 1-read_pct, valuesize, recordcount, ops, request_distribution, max_time, clientConfigStr))
 
-    if dorebuild:
+    if not skip_rebuild:
         pprint("Rebuilding YCSB")
         system("cd external/ycsb; ./package-ycsb.sh")
         pprint("YCSB rebuilt!")
@@ -497,7 +497,7 @@ def run_ycsb_local(num_servers, workload="workloads/workloada", threads=64, read
     system(ycsb_cmd)
     pprint("YCSB complete!")
 
-def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True, **kwargs):
+def run_ycsb(cluster, parallelism, read_pct, ops, max_time, skip_rebuild, valuesize=1, recordcount=10000, request_distribution="zipfian", workload="workloads/workloada", **kwargs):
     ycsb_cmd = (("pkill -9 java;"
                  "cd /home/ubuntu/velox/external/ycsb; "
                  "bin/ycsb run velox "
@@ -509,13 +509,13 @@ def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, v
                  "-p fieldlength=%d "
                  "-p fieldcount=1 "
                  "-p recordcount=%d "
-                 "-p operationcount=1000000 "
+                 "-p operationcount=%d "
                  "-p requestdistribution=%s "
                  "-p maxexecutiontime=%d "
                  "-p cluster=%s > run_out.log 2> run_err.log") %
-                (workload, threads, readprop, 1-readprop, valuesize, recordcount, request_distribution, time, cluster.frontend_cluster_str))
+                (workload, parallelism, read_pct, 1-read_pct, valuesize, recordcount, ops, request_distribution, max_time, cluster.frontend_cluster_str))
 
-    if dorebuild:
+    if not skip_rebuild:
         pprint("Rebuilding YCSB")
         run_cmd("all-clients", "cd /home/ubuntu/velox/external/ycsb; ./package-ycsb.sh")
         pprint("YCSB rebuilt!")
