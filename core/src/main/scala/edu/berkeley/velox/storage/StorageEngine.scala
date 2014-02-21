@@ -63,11 +63,13 @@ class StorageEngine extends Logging {
   }
 
   private def getLatestItemForKey(key: ItemKey): DataItem = {
-    if (!latestGoodForKey.containsKey(key)) {
+    val ret = getItemByVersion(key, latestGoodForKey.get(key))
+
+    if(ret == null) {
       return DataItem.NULL
     }
 
-    return getItemByVersion(key, latestGoodForKey.get(key))
+    ret
   }
 
   private def getItemByVersion(key: ItemKey, timestamp: Long): DataItem = {
@@ -165,9 +167,9 @@ class StorageEngine extends Logging {
     }
   }
 
-  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem](4096, .75f, 64)
-  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, Long](4096, .75f, 64)
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](4096, .75f, 64)
+  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem](4096, .9f, 32)
+  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, Long](4096, .9f, 32)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](4096, .9f, 32)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
