@@ -4,7 +4,7 @@ import java.util.Collection
 import java.util.HashMap
 import java.util.List
 import java.util.Map
-import org.cliffc.high_scale_lib.NonBlockingHashMap
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel.{ItemKey, DataItem}
@@ -169,9 +169,9 @@ class StorageEngine extends Logging {
 
   def numKeys { dataItems.size }
 
-  private[storage] var dataItems = new NonBlockingHashMap[KeyTimestampPair, DataItem](1000000)
-  private var latestGoodForKey = new NonBlockingHashMap[ItemKey, DataItem](1000000)
-  private var stampToPending = new NonBlockingHashMap[Long, List[KeyTimestampPair]](1000000)
+  private[storage] var dataItems = new ConcurrentHashMap[KeyTimestampPair, DataItem](4096, .9f, 48)
+  private var latestGoodForKey = new ConcurrentHashMap[ItemKey, DataItem](4096, .9f, 48)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](4096, .9f, 48)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
