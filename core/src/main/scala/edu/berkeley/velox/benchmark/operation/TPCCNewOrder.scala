@@ -1,6 +1,6 @@
 package edu.berkeley.benchmark.tpcc
 
-import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderLineResult, TPCCNewOrderRequest, TPCCNewOrderResponse}
+import edu.berkeley.velox.benchmark.operation.{DeferredIncrement, TPCCNewOrderLineResult, TPCCNewOrderRequest, TPCCNewOrderResponse}
 import edu.berkeley.velox.benchmark.datamodel.Transaction
 import edu.berkeley.velox.datamodel.{Row, PrimaryKey, Timestamp}
 
@@ -11,7 +11,6 @@ import edu.berkeley.velox.rpc.InternalRPCService
 import scala.concurrent.{Promise, Future}
 import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
-import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.storage.StorageEngine
 
@@ -34,7 +33,14 @@ object TPCCNewOrder extends Logging {
     val OL_SUPPLY_W_IDs = request.OL_SUPPLY_W_IDs
     val OL_CNT = OL_I_IDs.size
 
-    var allLocal = OL_SUPPLY_W_IDs.asScala.filter(i => i != W_ID).isEmpty
+    var sit = OL_SUPPLY_W_IDs.iterator()
+    var allLocal = true
+    while(sit.hasNext && allLocal) {
+      if(sit.next() != W_ID) {
+        allLocal = false
+      }
+
+    }
 
     val O_ENTRY_D: String = System.currentTimeMillis.toString
 
@@ -56,7 +62,8 @@ object TPCCNewOrder extends Logging {
       .column(TPCCConstants.O_CARRIER_ID_COL, null)
       .column(TPCCConstants.O_ALL_LOCAL_COL, if (allLocal) 1 else 0))
 
-    for (ol_cnt <- 0 until OL_CNT) {
+    var ol_cnt = 0
+    while(ol_cnt < OL_CNT) {
       val OL_I_ID: Int = OL_I_IDs.get(ol_cnt)
       val S_W_ID: Int = OL_SUPPLY_W_IDs.get(ol_cnt)
 
@@ -70,6 +77,7 @@ object TPCCNewOrder extends Logging {
         .column(TPCCConstants.formatSDistXX(D_ID)))
 
       readTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID), Row.column(TPCCConstants.S_ORDER_CNT).column(TPCCConstants.S_REMOTE_CNT).column(TPCCConstants.S_QUANTITY_COL))
+      ol_cnt += 1
     }
 
     val readFuture = readTxn.executeRead
@@ -137,15 +145,13 @@ object TPCCNewOrder extends Logging {
         if (aborted) {
           p.success(new TPCCNewOrderResponse(false))
         } else {
-          // TODO! Deferred
-          //writeTxn.table(TPCCConstants.ORDER_TABLE).put(Row.pkey(W_ID, D_ID, shadow_O_ID).column(TPCCConstants.O_ID, new DeferredCounter(TPCCConstants.getDistrictNextOID(W_ID, D_ID), 1)))
           writeTxn.table(TPCCConstants.ORDER_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, shadow_O_ID), Row.column(TPCCConstants.O_ID, 1))
+          writeTxn.setDeferredIncrement(DeferredIncrement(PrimaryKey.pkey(W_ID, D_ID).table(TPCCConstants.DISTRICT_TABLE), TPCCConstants.D_NEXT_O_ID, PrimaryKey.pkey(W_ID, D_ID, shadow_O_ID).table(TPCCConstants.ORDER_LOOKUP_TABLE), TPCCConstants.O_ID))
           val writeFuture = writeTxn.executeWrite
 
           writeFuture onComplete {
             case Success(_) => {
-              val O_ID = -1
-              //TODO! (writeTxn.getQueryResult(PrimaryKey.pkey(TPCCConstants.ORDER_TABLE, W_ID, D_ID, shadow_O_ID, TPCCConstants.O_ID)).asInstanceOf[DeferredResult]).getValue.asInstanceOf[Integer]
+              val O_ID = writeTxn.deferredIncrementResponse
               val C_DISCOUNT = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID), TPCCConstants.C_DISCOUNT_COL).asInstanceOf[Double]
               val W_TAX = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.WAREHOUSE_TABLE, W_ID), TPCCConstants.W_TAX_COL).asInstanceOf[Double]
               val D_TAX = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID), TPCCConstants.D_TAX_COL).asInstanceOf[Double]

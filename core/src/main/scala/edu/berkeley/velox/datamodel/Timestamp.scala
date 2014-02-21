@@ -43,5 +43,5 @@ class Timestamp(val threadID: Int) {
          chosenSeqNo = sequenceNo;
      }
 
-     return (chosenTime << 22) | (chosenSeqNo << 18) | (VeloxConfig.partitionId << 6) | threadID ;  }
+     return (chosenTime << 32) | (chosenSeqNo << 18) | (VeloxConfig.partitionId << 6) | threadID ;  }
 }

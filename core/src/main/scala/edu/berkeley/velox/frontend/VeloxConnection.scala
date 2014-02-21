@@ -17,10 +17,12 @@ object VeloxConnection {
   }
 }
 
-class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logging {
+class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_parallelism: Int=1) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
   ms.initialize()
-  ms.connect(serverAddresses)
+
+  for(i <- 1 until connection_parallelism)
+    ms.connect(serverAddresses)
 
 
   def warehouseToServer(W_ID: Int) = {

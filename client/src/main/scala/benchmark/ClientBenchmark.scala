@@ -37,6 +37,7 @@ object ClientBenchmark {
     var warehouses_per_server = 1
     var load = false
     var run = false
+    var connection_parallelism = 1
 
     var frontendCluster = ""
 
@@ -58,6 +59,9 @@ object ClientBenchmark {
       } text ("Percentage read vs. write operations")
       opt[Int]("status_time") foreach {
         i => status_time = i
+      }
+      opt[Int]("connection_parallelism") foreach {
+        i => connection_parallelism = i
       }
       opt[Int]('b', "buffer_size") foreach {
         p => VeloxConfig.bufferSize = p
@@ -85,9 +89,7 @@ object ClientBenchmark {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
 
-    val ostart = System.nanoTime
-
-    val client = new VeloxConnection(clusterAddresses)
+    val client = new VeloxConnection(clusterAddresses, connection_parallelism)
 
     totalWarehouses = clusterAddresses.size*warehouses_per_server
 
@@ -103,7 +105,8 @@ object ClientBenchmark {
     }
 
     @volatile var finished = false
-    val requestSem = new Semaphore(numops)
+    val requestSem = new Semaphore(0)
+
 
     println(s"Starting $parallelism threads!")
 
@@ -120,6 +123,7 @@ object ClientBenchmark {
                 if(!value.committed) {
                  numAborts.incrementAndGet()
                 }
+
                 opsDone.incrementAndGet
                 requestSem.release
               }
@@ -133,9 +137,10 @@ object ClientBenchmark {
     if(status_time > 0) {
       new Thread(new Runnable {
         override def run() {
+          val tstart = System.nanoTime
           while(!finished) {
             Thread.sleep(status_time*1000)
-            val curTime = (System.nanoTime-ostart).toDouble/nanospersec
+            val curTime = (System.nanoTime-tstart).toDouble/nanospersec
             val curThru = (opsDone.get()).toDouble/curTime
             val latency = numMs.get()/opsDone.get().toDouble
 
@@ -144,6 +149,9 @@ object ClientBenchmark {
         }
       }).start
     }
+
+    requestSem.release(numops)
+    val ostart = System.nanoTime
 
     Thread.sleep(waitTimeSeconds * 1000)
     finished = true

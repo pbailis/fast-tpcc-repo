@@ -76,7 +76,7 @@ class VeloxServer extends Logging {
   class InternalCommitPutAllHandler extends MessageHandler[CommitPutAllResponse, CommitPutAllRequest] {
     def receive(src: NetworkDestinationHandle, msg: CommitPutAllRequest): Future[CommitPutAllResponse] = {
       future {
-        storageEngine.putGood(msg.timestamp)
+        storageEngine.putGood(msg.timestamp, msg.deferredIncrement)
         new CommitPutAllResponse
       }
     }

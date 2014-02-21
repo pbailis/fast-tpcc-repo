@@ -3,8 +3,9 @@ package edu.berkeley.velox.conf
 import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService,NIONetworkService}
 import java.net.InetSocketAddress
 import edu.berkeley.velox.NetworkDestinationHandle
+import com.typesafe.scalalogging.slf4j.Logging
 
-object VeloxConfig {
+object VeloxConfig extends Logging {
   var internalServerAddresses: Map[NetworkDestinationHandle, InetSocketAddress] = null
   var frontendServerAddresses: Map[NetworkDestinationHandle, InetSocketAddress] = null
 
@@ -23,7 +24,7 @@ object VeloxConfig {
   def initialize(cmdLine: Array[String]): Boolean = {
     val ret = parser.parse(cmdLine)
     if(internalServerAddresses != null) {
-      partitionList = internalServerAddresses.keys.toArray
+      partitionList = internalServerAddresses.keys.toArray.sorted
     }
     ret
   }
@@ -44,6 +45,7 @@ object VeloxConfig {
       c => internalServerAddresses = c.split(",").zipWithIndex.map {
         case (hostname, id) =>
           val addr = hostname.split(":")
+          logger.error(s"$id $hostname")
           (id.asInstanceOf[NetworkDestinationHandle], new InetSocketAddress(addr(0), addr(1).toInt))
       }.toMap
     }  text("Comma-separated list of hostname:port pairs for internal servers in cluster")

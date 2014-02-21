@@ -107,18 +107,20 @@ def run_cmd_in_velox(hosts, cmd, user='ubuntu'):
     run_cmd(hosts, "cd %s; %s" % (VELOX_BASE_DIR, cmd), user)
 
 class Cluster:
-    def __init__(self, regionName, clusterID, numServers, numClients):
+    def __init__(self, regionName, clusterID, numServers, numClients, serversPerMachine):
         self.regionName = regionName
         self.clusterID = clusterID
-        self.numServers = numServers
+        self.numServers = numServers*serversPerMachine
         self.servers = []
         self.numClients = numClients
         self.clients = []
+        self.serversPerMachine = serversPerMachine
 
     def allocateHosts(self, hosts):
         for host in hosts:
             if len(self.servers) < self.numServers:
-                self.servers.append(host)
+                for i in range(0, self.serversPerMachine):
+                    self.servers.append(host)
             elif len(self.clients) < self.numClients:
                 self.clients.append(host)
 
@@ -346,7 +348,7 @@ def stop_velox_processes():
     pprint('Termination command sent.')
 
 def install_ykit(cluster):
-    run_cmd("all-hosts", "wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
+    run_cmd("all-hosts", "rm yjp*; rm -rf yourkit*; wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
     run_cmd("all-hosts", "tar -xvf yjp-2013-build-13072-linux.tar.bz2")
     run_cmd("all-hosts", "mv yjp-2013-build-13072 yourkit")
     # master = cluster.clients[0].ip
@@ -372,14 +374,14 @@ def rebuild_servers(remote, branch, deploy_key=None):
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, **kwargs):
-    HEADER = "pkill -9 java; cd /home/ubuntu/velox/; rm *.log;"
+    HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 2; rm *.log;"
 
     pstr = ""
     if profile:
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1>server.log 2>&1 & "
+    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
@@ -394,7 +396,8 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
                         cluster.internal_cluster_str,
                         network_service,
                         buffer_size,
-                        sweep_time)
+                        sweep_time,
+                        sid)
 
         server = cluster.servers[sid]
         pprint("Starting velox server on [%s]" % server.ip)
@@ -443,7 +446,7 @@ def client_bench_local_single(numservers, network_service, buffer_size, sweep_ti
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5, connection_parallelism=1):
     hprof = ""
 
     if profile:
@@ -451,9 +454,9 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --run 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d --run 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time)
+           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism)
 
     load_cmd = cmd.replace("--run", "--load")
     run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd)
@@ -536,11 +539,9 @@ def fetch_logs(output_dir, runid, cluster):
     for server in cluster.servers:
         s_dir = log_dir+"/S"+server.ip
         mkdir(s_dir)
-        fetch_file_single_compressed(server.ip, VELOX_BASE_DIR+"/*.log", s_dir)
-        fetch_file_single_compressed(server.ip, VELOX_BASE_DIR+"/external/ycsb/*.log", s_dir)
+        fetch_file_single_compressed(server.ip, VELOX_BASE_DIR+"/*.log*", s_dir)
 
     for client in cluster.clients:
         c_dir = log_dir+"/C"+client.ip
         mkdir(c_dir)
         fetch_file_single_compressed(client.ip, VELOX_BASE_DIR+"/*.log", c_dir)
-        fetch_file_single_compressed(client.ip, VELOX_BASE_DIR+"/external/ycsb/*.log", c_dir)

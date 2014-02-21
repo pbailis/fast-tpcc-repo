@@ -70,9 +70,11 @@ if __name__ == "__main__":
                         default=16384*8, type=int,
                         help='Size (in bytes) to make the network buffer')
     parser.add_argument('--sweep_time', dest='sweep_time',
-                        default=500, type=int,
+                        default=200, type=int,
                         help='Time the ArrayNetworkService send sweep thread should wait between sweeps')
 
+    parser.add_argument('--servers_per_machine', dest='servers_per_machine',
+                        default=1, type=int)
     # jvm options
     parser.add_argument('--profile', action='store_true',
                         help='Run JVM with hprof cpu profiling')
@@ -95,7 +97,7 @@ if __name__ == "__main__":
     num_servers = args.num_servers
     num_clients = args.num_clients
 
-    cluster = Cluster(region, cluster_id, num_servers, num_clients)
+    cluster = Cluster(region, cluster_id, num_servers, num_clients, args.servers_per_machine)
 
     if args.launch:
         pprint("Launching velox clusters")
@@ -137,7 +139,7 @@ if __name__ == "__main__":
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=8, timeout=300, ops=10000, chance_remote=0.01,
+                               parallelism=16, timeout=60, ops=120000, chance_remote=0.01, connection_parallelism=1
                                )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)

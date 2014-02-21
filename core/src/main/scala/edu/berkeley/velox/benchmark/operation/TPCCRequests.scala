@@ -30,7 +30,7 @@ class TPCCNewOrderResponse(val W_ID: Int,
                            var committed: Boolean = true) {
 
   def this(commit: Boolean) {
-    this(-1, -1, -1, -1, -1, "", "", -1, -1, -1, "", -1, null, committed = false)
+    this(-1, -1, -1, -2, -1, "", "", -1, -1, -1, "", -1, null, committed = false)
     assert(!committed)
   }
 }

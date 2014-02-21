@@ -8,7 +8,9 @@ object TPCCConstants {
   }
 
   def getDistrictNextOID(w_id: Int, d_id: Int): PrimaryKey = {
-    return PrimaryKey.pkey(DISTRICT_TABLE, w_id, d_id, D_NEXT_O_ID)
+    val ret = PrimaryKey.pkey( w_id, d_id)
+    ret.table = DISTRICT_TABLE
+    return ret
   }
 
   final val W_NAME_COL: Int = 1
@@ -84,6 +86,7 @@ object TPCCConstants {
   var PLACE_HOLDER_COLUMN: Int = 71
   var PLACE_HOLDER_VALUE: Int = 72
   final val STOCK_TABLE_MUTABLE: Int = 73
+  final val ORDER_LOOKUP_TABLE: Int = 74
 
 
 }

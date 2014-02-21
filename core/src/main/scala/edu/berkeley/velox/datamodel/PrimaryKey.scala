@@ -45,6 +45,11 @@ class PrimaryKey {
    table+"-"+Arrays.toString(keyColumns)
   }
 
+  def table(table: Int): PrimaryKey = {
+    this.table = table
+    this
+  }
+
   var table: Int = -1
   var keyColumns: Array[Int] = null
 }
