@@ -50,7 +50,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
     val p = Promise[Transaction]
 
-    storage.putPending(toPutLocal)
+    storage.putAll(toPutLocal)
+    toPutLocal.clear()
 
     if(!toPutRemote.isEmpty) {
 
@@ -81,19 +82,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
       prepareFuture onComplete {
         case Success(responses) => {
-          storage.putGood(toPutLocal.values().iterator().next().timestamp)
-          toPutLocal.clear()
-
-          val commitFuture = Future.sequence(writesByPartition.keySet.asScala.map {
-            case destination => messageService.send(destination, new CommitPutAllRequest(txId))
-          })
-
-          commitFuture onComplete {
-            case Success(responses) => {
-              p success this
-            }
-            case Failure(t) => p failure t
-          }
+          p.success(this)
         }
         case Failure(t) => {
           p.failure(t)
@@ -101,10 +90,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       }
 
       toPutRemote.clear()
-    } else {
-      storage.putGood(toPutLocal.values().iterator().next().timestamp)
-      toPutLocal.clear()
-      p success this
     }
 
     p.future
