@@ -27,3 +27,6 @@ project/plugins/project/
 # Emacs/Ensime
 .ensime*
 *.iml
+
+external/zookeeper/*
+*.patch

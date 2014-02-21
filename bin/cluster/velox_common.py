@@ -4,10 +4,13 @@ from os import system
 import subprocess
 from time import sleep
 from boto import ec2
+from os.path import expanduser
 
 KEY_NAME = "velox"
 VELOX_INTERNAL_PORT_START = 8080
 VELOX_FRONTEND_PORT_START = 9000
+
+ZOOKEEPER_PORT = 2181
 
 VELOX_BASE_DIR="/home/ubuntu/velox"
 
@@ -56,6 +59,9 @@ def upload_file(hosts, local_path, remote_path, user="ubuntu"):
     script = local_path.split("/")[-1]
     system("pscp -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt /tmp/%s %s" % (user, hosts, script, remote_path))
 
+def upload_file_single(host, local, remote, user="ubuntu"):
+    system("scp -o StrictHostKeyChecking=no '%s' %s@%s:%s" % (local, user, host, remote))
+
 def run_script(hosts, script, user="ubuntu"):
     upload_file(hosts, script.split(" ")[0], "/tmp", user)
     run_cmd(hosts, "bash /tmp/%s" % (script.split("/")[-1]), user)
@@ -67,6 +73,9 @@ def fetch_file_single_compressed(host, remote, local, user="ubuntu"):
     print("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
     system("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
+
+def fetch_file_single_compressed_bg(host, remote, local, user="ubuntu"):
+    system("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s' &" % (user, host, remote, local))
 
 def get_host_ips(hosts):
     return open("hosts/%s.txt" % (hosts)).read().split('\n')[:-1]
@@ -373,37 +382,46 @@ def rebuild_servers(git_remote, branch, deploy_key=None, **kwargs):
                       "git checkout -b veloxbranch vremote/%s; "
                       "git reset --hard vremote/%s; "
                       "sbt/sbt assembly; "
-                      "cd external/ycsb; "
-                      "./package-ycsb.sh") % (git_remote, branch, branch))
+                      # "cd external/ycsb; "
+                      # "./package-ycsb.sh"
+                      ) % (git_remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (git_remote, branch))
 
-def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, **kwargs):
-    HEADER = "pkill -9 java; cd /home/ubuntu/velox/; rm *.log;"
+def start_servers_with_zk(cluster, heap_size, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, reset_zk=True, **kwargs):
+    HEADER = "cd /home/ubuntu/velox/; rm *.log;"
 
     pstr = ""
     if profile:
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
+    # kill any java processes
+    run_cmd("all-hosts", "pkill -9 java")
+    # this kills zookeeper as well so we have to restart it
+    # TODO: figure out a better way to shut down velox cluster
+    start_zookeeper_cluster(cluster, reset_zk)
 
-    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1>server.log 2>&1 & "
+    baseCmd = (HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --network_service %s --buffer_size %d --sweep_time %d "
+               "--ip_address %s --num_servers %d -z %s 1>server.log 2>&1 & ")
+    zk_servers = ",".join(["%s:%d" % (s.ip, ZOOKEEPER_PORT) for s in cluster.servers])
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
                         pstr,
-                        HEAP_SIZE_GB,
-                        HEAP_SIZE_GB,
+                        heap_size,
+                        heap_size,
                         VELOX_JAR_LOCATION,
                         VELOX_SERVER_CLASS,
                         VELOX_INTERNAL_PORT_START+sid,
                         VELOX_FRONTEND_PORT_START+sid,
-                        sid,
-                        cluster.internal_cluster_str,
                         network_service,
                         buffer_size,
-                        sweep_time)
+                        sweep_time,
+                        cluster.servers[sid].ip,
+                        cluster.numServers,
+                        zk_servers)
 
         server = cluster.servers[sid]
-        pprint("Starting velox server on [%s]" % server.ip)
+        pprint("Starting velox server with zookeeper on [%s]" % server.ip)
         start_cmd_disown_nobg(server.ip, serverCmd)
 
 def kill_velox_local():
@@ -449,7 +467,7 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, usefutures, latency, **kwargs):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, usefutures, latency, heap_size=HEAP_SIZE_GB, **kwargs):
     hprof = ""
 
     if profile:
@@ -458,7 +476,7 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
 
     cmd = ("pkill -9 java; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s 2>&1 | tee client.log") %\
-          (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
+          (hprof, heap_size, heap_size, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency)
     run_cmd_in_velox("all-clients", cmd)
 
@@ -546,3 +564,48 @@ def fetch_logs(cluster, runid, output_dir, **kwargs):
         mkdir(c_dir)
         fetch_file_single_compressed(client.ip, VELOX_BASE_DIR+"/*.log", c_dir)
         fetch_file_single_compressed(client.ip, VELOX_BASE_DIR+"/external/ycsb/*.log", c_dir)
+
+# deletes zookeeper data and log. Zookeeper comes back up with clean state.
+def start_zookeeper_cluster(cluster, reset=False):
+    if reset:
+        run_cmd("all-servers", "rm -rf /tmp/zookeeper/version-2; rm -rf /tmp/zookeeper_log/version-2")
+    run_cmd("all-servers", "/home/ubuntu/zookeeper-3.4.5/bin/zkServer.sh start")
+
+
+def install_zookeeper_cluster(cluster, conf, dl=True, delete=True):
+    # mirror = "http://www.webhostingjams.com/mirror/apache/zookeeper/current/zookeeper-3.4.5.tar.gz"
+    zk_src_path = "external/zookeeper/zookeeper-3.4.5.tar.gz"
+    system("cp %s conf/zoo.cfg" % conf)
+    with open("conf/zoo.cfg", 'a') as cfg:
+        for i in range(cluster.numServers):
+            cfg.write("server.%d=%s:2888:3888\n" % (i + 1, cluster.servers[i].ip))
+
+
+
+    if delete:
+        run_cmd("all-hosts", "/home/ubuntu/zookeeper-3.4.5/bin/zkServer.sh stop; "
+                "rm -rf /home/ubuntu/zookeeper-3.4.5; "
+                "rm -rf /tmp/zookeeper; "
+                "rm -rf /tmp/zookeeper_log; "
+                "rm /home/ubuntu/zookeeper-3.4.5.tar.gz; ")
+
+    if dl:
+        upload_file("all-servers", zk_src_path, "/home/ubuntu/")
+
+        # deploy_command = (("wget -P /home/ubuntu %s; "
+        deploy_command = ("sudo apt-get install -y openjdk-7-jdk; "
+                           # make sure that data and log directories exist or ZooKeeper won't start
+                          "mkdir -p /tmp/zookeeper; "
+                          "mkdir -p /tmp/zookeeper_log; "
+                          "tar zxvf ~/zookeeper-3.4.5.tar.gz;")
+        run_cmd("all-servers", deploy_command)
+
+    upload_file("all-servers", "conf/zoo.cfg", "/home/ubuntu/zookeeper-3.4.5/conf/")
+    # set zookeeper server id - has to be in datDir directory
+    for i in range(cluster.numServers):
+        run_cmd_single(cluster.servers[i].ip,
+                       "echo %d > /tmp/zookeeper/myid" % (i + 1))
+
+    system("rm conf/zoo.cfg")
+        
+
