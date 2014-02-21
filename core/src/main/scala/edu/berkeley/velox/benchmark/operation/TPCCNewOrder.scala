@@ -11,7 +11,6 @@ import edu.berkeley.velox.rpc.InternalRPCService
 import scala.concurrent.{Promise, Future}
 import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
-import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.storage.StorageEngine
 
@@ -34,7 +33,14 @@ object TPCCNewOrder extends Logging {
     val OL_SUPPLY_W_IDs = request.OL_SUPPLY_W_IDs
     val OL_CNT = OL_I_IDs.size
 
-    var allLocal = OL_SUPPLY_W_IDs.asScala.filter(i => i != W_ID).isEmpty
+    var sit = OL_SUPPLY_W_IDs.iterator()
+    var allLocal = true
+    while(sit.hasNext && allLocal) {
+      if(sit.next() != W_ID) {
+        allLocal = false
+      }
+
+    }
 
     val O_ENTRY_D: String = System.currentTimeMillis.toString
 
