@@ -167,9 +167,11 @@ class StorageEngine extends Logging {
     }
   }
 
-  private[storage] var dataItems = new NonBlockingHashMap[KeyTimestampPair, DataItem]
-  private var latestGoodForKey = new NonBlockingHashMap[ItemKey, DataItem]
-  private var stampToPending = new NonBlockingHashMap[Long, List[KeyTimestampPair]]
+  def numKeys { dataItems.size }
+
+  private[storage] var dataItems = new NonBlockingHashMap[KeyTimestampPair, DataItem](1000000)
+  private var latestGoodForKey = new NonBlockingHashMap[ItemKey, DataItem](1000000)
+  private var stampToPending = new NonBlockingHashMap[Long, List[KeyTimestampPair]](1000000)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
