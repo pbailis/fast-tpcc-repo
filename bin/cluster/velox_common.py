@@ -432,7 +432,7 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
 
     serverConfigStr = ",".join(["localhost:"+str(VELOX_INTERNAL_PORT_START+id) for id in range(0, num_servers)])
 
-    baseCmd = "java %s -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1> /tmp/server-%d.log 2>&1 &"
+    baseCmd = "java %s -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -p %d -f %d --network_service %s --buffer_size %d --ip_address %s --sweep_time %d -z localhost:%d --num_servers %d 1> /tmp/server-%d.log 2>&1 &"
 
 
     for sid in range(0, num_servers):
@@ -446,11 +446,12 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
          VELOX_SERVER_CLASS,
          VELOX_INTERNAL_PORT_START+sid,
          VELOX_FRONTEND_PORT_START+sid,
-         sid,
-         serverConfigStr,
          network_service,
          buffer_size,
+         "localhost",
          sweep_time,
+         ZOOKEEPER_PORT,
+         num_servers,
          sid)
         system(serverCmd)
 
@@ -464,6 +465,8 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
         pstr = ""
     system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
         pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency))
+    print("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
+           pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency))
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
@@ -572,6 +575,13 @@ def start_zookeeper_cluster(cluster, reset=False):
     run_cmd("all-servers", "/home/ubuntu/zookeeper-3.4.5/bin/zkServer.sh start")
 
 
+# deletes zookeeper data and log. Zookeeper comes back up with clean state.
+def start_zookeeper_cluster_local(reset=False):
+    if reset:
+        system("rm -rf /tmp/zookeeper/version-2; rm -rf /tmp/zookeeper_log/version-2")
+    system("/tmp/zookeeper-3.4.5/bin/zkServer.sh start")
+
+
 def install_zookeeper_cluster(cluster, conf, dl=True, delete=True):
     # mirror = "http://www.webhostingjams.com/mirror/apache/zookeeper/current/zookeeper-3.4.5.tar.gz"
     zk_src_path = "external/zookeeper/zookeeper-3.4.5.tar.gz"
@@ -608,4 +618,29 @@ def install_zookeeper_cluster(cluster, conf, dl=True, delete=True):
 
     system("rm conf/zoo.cfg")
         
+
+
+def install_zookeeper_cluster_local(conf, install=True, delete=True):
+    # mirror = "http://www.webhostingjams.com/mirror/apache/zookeeper/current/zookeeper-3.4.5.tar.gz"
+    zk_src_path = "external/zookeeper/zookeeper-3.4.5.tar.gz"
+    system("cp %s conf/zoo.cfg" % conf)
+
+    if delete:
+        system("/tmp/zookeeper-3.4.5/bin/zkServer.sh stop; "
+                "rm -rf /tmp/zookeeper-3.4.5; "
+                "rm -rf /tmp/zookeeper; "
+                "rm -rf /tmp/zookeeper_log; ")
+
+    if install:
+        # deploy_command = (("wget -P /home/ubuntu %s; "
+        deploy_command = (# make sure that data and log directories exist or ZooKeeper won't start
+                          "mkdir -p /tmp/zookeeper; "
+                          "mkdir -p /tmp/zookeeper_log; "
+                          "tar zxvf external/zookeeper/zookeeper-3.4.5.tar.gz -C /tmp 2> /dev/null")
+        system(deploy_command)
+
+    system("mv conf/zoo.cfg /tmp/zookeeper-3.4.5/conf/")
+    # set zookeeper server id - has to be in datDir directory
+    system("echo 1 > /tmp/zookeeper/myid")
+
 
