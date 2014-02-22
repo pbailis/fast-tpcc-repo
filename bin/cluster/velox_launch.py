@@ -61,6 +61,7 @@ def command_client_bench(args):
 
 def command_client_bench_local(args):
     kwargs = dict(vars(args))
+    command_deploy_zookeeper_local(args)
     pprint("Running THE CRANKSHAW locally! (1 client only)")
     start_servers_local(**kwargs)
     sleep(5)
@@ -96,6 +97,11 @@ def command_deploy_zookeeper(args):
     assign_hosts(cluster)
     install_zookeeper_cluster(cluster, args.zk_config)
     start_zookeeper_cluster(cluster)
+
+def command_deploy_zookeeper_local(args):
+    pprint("Deploying Zookeeper locally!")
+    install_zookeeper_cluster_local(args.zk_config)
+    start_zookeeper_cluster_local()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Setup velox on EC2')
@@ -159,6 +165,7 @@ if __name__ == "__main__":
     common_client_bench = argparse.ArgumentParser(add_help=False)
     common_client_bench.add_argument('--usefutures', action='store_true',
                                      help='Have THE CRANKSHAW use futures instead of blocking for reply. [default: %(default)s]')
+
     common_client_bench.add_argument('--latency', action='store_true',
                                      help='Compute average latency when running THE CRANKSHAW. [default: %(default)s]')
     # common ycsb options
@@ -212,9 +219,17 @@ if __name__ == "__main__":
     # deploy zookeeper
     parser_deploy_zk = subparsers.add_parser('deploy_zookeeper', help='Deploy zookeeper to all backend servers',
                                              parents=[common_cluster_ec2])
-    parser_deploy_zk.set_defaults(func=command_deploy_zookeeper)
     parser_deploy_zk.add_argument('--zk_config', dest='zk_config', default="conf/zk_cluster.cfg.template", type=str,
                                   help="Path to Zookeeper config file.")
+    parser_deploy_zk.set_defaults(func=command_deploy_zookeeper)
+
+
+    # deploy zookeeper locally
+    parser_deploy_zk_local = subparsers.add_parser('deploy_zookeeper_local', help='Deploy zookeeper to local tmp directory',
+                                             parents=[common_cluster_ec2])
+    parser_deploy_zk_local.add_argument('--zk_config', dest='zk_config', default="conf/zk_cluster.cfg.template", type=str,
+                                  help="Path to Zookeeper config file.")
+    parser_deploy_zk_local.set_defaults(func=command_deploy_zookeeper_local)
                                               
 
     ##################################
@@ -226,6 +241,8 @@ if __name__ == "__main__":
 
     parser_client_bench_local = subparsers.add_parser('client_bench_local', help='Run THE CRANKSHAW TEST locally',
                                                       parents=[common_benchmark, common_client_bench])
+    parser_client_bench_local.add_argument('--zk_config', dest='zk_config', default="conf/zk_cluster.cfg.template", type=str,
+                                  help="Path to Zookeeper config file.")
     parser_client_bench_local.set_defaults(func=command_client_bench_local)
 
     parser_ycsb_bench = subparsers.add_parser('ycsb_bench', help='Run YCSB on EC2',
