@@ -37,6 +37,7 @@ object ClientBenchmark {
     var warehouses_per_server = 1
     var load = false
     var run = false
+    var serializable = false
     var connection_parallelism = 1
 
     var frontendCluster = ""
@@ -75,6 +76,8 @@ object ClientBenchmark {
       }
       opt[Unit]("load") foreach { p => load = true }
       opt[Unit]("run") foreach { p => run = true }
+      opt[Unit]("serializable") foreach { p => serializable = true }
+
 
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
@@ -116,7 +119,7 @@ object ClientBenchmark {
         override def run() = {
           while (!finished) {
             requestSem.acquireUninterruptibly()
-            val request = singleNewOrder(client, chance_remote)
+            val request = singleNewOrder(client, chance_remote, serializable)
             request.future onComplete {
               case Success(value) => {
                 numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
@@ -167,7 +170,7 @@ object ClientBenchmark {
     System.exit(0)
   }
 
-  def singleNewOrder(conn: VeloxConnection, chance_remote: Double): OutstandingNewOrderRequest = {
+  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, serializable: Boolean = false): OutstandingNewOrderRequest = {
     val W_ID = generator.number(1, totalWarehouses)
     val D_ID: Int = generator.number(1, 10)
     val C_ID: Int = generator.NURand(1023, 1, 3000)
@@ -197,7 +200,7 @@ object ClientBenchmark {
       OL_QUANTITY_LIST.add(generator.number(1, 10))
     }
 
-    return new OutstandingNewOrderRequest(conn.newOrder(new TPCCNewOrderRequest(W_ID, D_ID, C_ID, OL_I_IDs, warehouseIDs, OL_QUANTITY_LIST)),
+    return new OutstandingNewOrderRequest(conn.newOrder(new TPCCNewOrderRequest(W_ID, D_ID, C_ID, OL_I_IDs, warehouseIDs, OL_QUANTITY_LIST, serializable)),
                                           System.currentTimeMillis())
   }
 

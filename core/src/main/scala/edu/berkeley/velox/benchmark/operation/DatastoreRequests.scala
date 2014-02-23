@@ -2,7 +2,7 @@ package edu.berkeley.velox.benchmark.operation
 
 import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
-import edu.berkeley.velox.rpc.Request
+import edu.berkeley.velox.rpc.{OneWayRequest, Request}
 
 case class PreparePutAllRequest(val values: util.HashMap[PrimaryKey, Row]) extends Request[PreparePutAllResponse]
 class PreparePutAllResponse
@@ -12,4 +12,15 @@ class CommitPutAllResponse(val incrementResponse: Int = -1)
 
 case class GetAllRequest(val keys: util.HashMap[PrimaryKey, Row]) extends Request[GetAllResponse]
 case class GetAllResponse(val values: util.HashMap[PrimaryKey, Row])
+
+case class SerializableGetAllRequest(val keys: util.HashMap[PrimaryKey, Row]) extends Request[SerializableGetAllResponse]
+case class SerializableGetAllResponse(val values: util.HashMap[PrimaryKey, Row])
+
+case class SerializablePutAllRequest(val values: util.HashMap[PrimaryKey, Row]) extends Request[SerializablePutAllResponse]
+class SerializablePutAllResponse
+
+case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends Request[SerializableUnlockResponse]
+class SerializableUnlockResponse
+
+
 

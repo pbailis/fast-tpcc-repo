@@ -11,6 +11,10 @@ import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import edu.berkeley.velox.storage.StorageEngine
 import edu.berkeley.velox.benchmark.operation._
 import edu.berkeley.benchmark.tpcc.TPCCNewOrder
+import edu.berkeley.velox.benchmark.datamodel.serializable.{SerializableRow, LockManager}
+import java.util
+import edu.berkeley.velox.datamodel.{Row, PrimaryKey}
+import edu.berkeley.velox.benchmark.operation.serializable.TPCCNewOrderSerializable
 
 
 // Every server has a single instance of this class. It handles data edu.berkeley.velox.storage
@@ -25,6 +29,7 @@ class VeloxServer extends Logging {
   val storageEngine = new StorageEngine
   storageEngine.initialize
   val partitioner = new TPCCPartitioner
+  val lockManager = new LockManager
 
   val internalServer = new InternalRPCService
   internalServer.initialize()
@@ -55,7 +60,10 @@ class VeloxServer extends Logging {
 
   class TPCCNewOrderRequestHandler extends MessageHandler[TPCCNewOrderResponse, TPCCNewOrderRequest] {
     def receive(src: NetworkDestinationHandle, msg: TPCCNewOrderRequest): Future[TPCCNewOrderResponse] = {
-      TPCCNewOrder.execute(msg, partitioner, internalServer, storageEngine)
+      if(!msg.serializable)
+        TPCCNewOrder.execute(msg, partitioner, internalServer, storageEngine)
+      else
+        TPCCNewOrderSerializable.execute(lockManager, msg, partitioner, internalServer, storageEngine)
     }
   }
 
@@ -88,6 +96,59 @@ class VeloxServer extends Logging {
       future { new GetAllResponse(storageEngine.getAll(msg.keys)) }
     }
   }
+
+  class InternalSerializableGetAllRequestHandler extends MessageHandler[SerializableGetAllResponse, SerializableGetAllRequest] {
+    def receive(src: NetworkDestinationHandle, msg: SerializableGetAllRequest) = {
+      future {
+        val ret = new util.HashMap[PrimaryKey, Row]
+        val get_it = msg.keys.entrySet().iterator()
+        while(get_it.hasNext) {
+          val toGet = get_it.next()
+          val toGetRow = toGet.getValue.asInstanceOf[SerializableRow]
+          if(toGetRow.forUpdate) {
+            lockManager.writeLock(toGet.getKey)
+          } else {
+            lockManager.readLock(toGet.getKey)
+          }
+
+          ret.put(toGet.getKey, storageEngine.get(toGet.getKey))
+        }
+
+        new SerializableGetAllResponse(ret)
+      }
+    }
+  }
+
+  class InternalSerializablePutAllRequestHandler extends MessageHandler[SerializablePutAllResponse, SerializablePutAllRequest] {
+     def receive(src: NetworkDestinationHandle, msg: SerializablePutAllRequest) = {
+       future {
+         val put_it = msg.values.entrySet().iterator()
+         while(put_it.hasNext) {
+           val toPut = put_it.next()
+           val toPutRow = toPut.getValue.asInstanceOf[SerializableRow]
+           if(toPutRow.needsLock) {
+             lockManager.writeLock(toPut.getKey)
+           }
+
+           storageEngine.put(toPut.getKey, toPut.getValue)
+         }
+
+         new SerializablePutAllResponse
+       }
+     }
+   }
+
+  class InternalSerializableUnlockRequestHandler extends MessageHandler[SerializableUnlockResponse, SerializableUnlockRequest] {
+      def receive(src: NetworkDestinationHandle, msg: SerializableUnlockRequest) = {
+        future {
+          val key_it = msg.keys.iterator()
+          while(key_it.hasNext) {
+            lockManager.unlock(key_it.next())
+          }
+          new SerializableUnlockResponse
+        }
+      }
+    }
 }
 
 object VeloxServer extends Logging {

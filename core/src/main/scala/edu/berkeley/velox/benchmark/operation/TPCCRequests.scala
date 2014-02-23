@@ -12,7 +12,8 @@ case class TPCCNewOrderRequest(val W_ID: Int,
                                val C_ID: Int,
                                val OL_I_IDs: util.ArrayList[Int],
                                val OL_SUPPLY_W_IDs: util.ArrayList[Int],
-                               val OL_QUANTITIES: util.ArrayList[Int]) extends Request[TPCCNewOrderResponse]
+                               val OL_QUANTITIES: util.ArrayList[Int],
+                               val serializable: Boolean = false) extends Request[TPCCNewOrderResponse]
 
 class TPCCNewOrderResponse(val W_ID: Int,
                            val D_ID: Int,
