@@ -191,11 +191,15 @@ class SocketBufferPool(channel: SocketChannel)  {
 class Receiver(
   bytes: ByteBuffer,
   src: NetworkDestinationHandle,
-  messageService: MessageService) extends Runnable {
+  messageService: MessageService) extends Runnable with Logging {
 
-  def run() {
+  def run() = try {
     while(bytes.remaining != 0) {
       messageService.receiveRemoteMessage(src,bytes)
+    }
+  } catch {
+    case t: Throwable => {
+      logger.error(s"Error receiving message: ${t.getMessage}",t)
     }
   }
 
@@ -263,19 +267,27 @@ class ReaderThread(
 
 class SendSweeper(
   connections: ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool],
-  executor: ExecutorService) extends Runnable {
+  executor: ExecutorService) extends Runnable with Logging {
 
   def run() {
     while(true) {
       Thread.sleep(VeloxConfig.sweepTime)
-      val cit = connections.keySet.iterator
-      while (cit.hasNext) {
-        val sp = connections.get(cit.next)
-        if (sp.needSend)
-          executor.submit(sp.forceRunner)
+
+      try {
+        val cit = connections.keySet.iterator
+        while (cit.hasNext) {
+          val sp = connections.get(cit.next)
+          if (sp.needSend)
+            executor.submit(sp.forceRunner)
+        }
       }
+      catch { // TODO: Should we stop the sweeper, or pause?
+        case t: Throwable => logger.error("Error send sweeping",t)
+      }
+
     }
   }
+
 }
 
 class ArrayNetworkThreadFactory(val name: String) extends ThreadFactory {
