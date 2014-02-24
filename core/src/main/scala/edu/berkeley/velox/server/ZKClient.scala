@@ -13,9 +13,12 @@ import org.apache.curator.framework.api.CuratorWatcher
 import org.apache.curator.utils.ZKPaths
 import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.datamodel.Catalog
 import edu.berkeley.velox.server.ZKClient._
 import edu.berkeley.velox.util.zk.DistributedCountdownLatch
+import edu.berkeley.velox.catalog.Catalog
+import edu.berkeley.velox.datamodel.{Schema, TableName, DatabaseName}
+import edu.berkeley.velox.util.KryoThreadLocal
+import java.nio.ByteBuffer
 
 
 /**
@@ -23,7 +26,7 @@ import edu.berkeley.velox.util.zk.DistributedCountdownLatch
  * and Recipes classes are threadsafe, and almost all of the mutable state is contained
  * in them. There should be one shared client per JVM.
  */
-class ZKClient(catalog: Catalog) extends Logging {
+class ZKClient(val catalog: Catalog) extends Logging {
 
   private var groupMembershipCache = null.asInstanceOf[PathChildrenCache]
   private var registered = false
@@ -147,7 +150,15 @@ class ZKClient(catalog: Catalog) extends Logging {
     }).toMap
   }
 
-  def addToSchema(dbName: String, tableName: Option[String]): Boolean = {
+  def createDatabase(dbName: DatabaseName): Boolean = {
+    addToSchema(dbName, null, null)
+  }
+
+  def createTable(dbName: DatabaseName, tableName: TableName, schema: Schema): Boolean = {
+    addToSchema(dbName, tableName, schema)
+  }
+
+  private def addToSchema(dbName: DatabaseName, tableName: TableName, schema: Schema): Boolean = {
     var ret = true
     try {
       // make sure only one schema change at a time because all schema changes use
@@ -159,20 +170,23 @@ class ZKClient(catalog: Catalog) extends Logging {
       // reset the counter
       schemaChangeBarrier.reset(VeloxConfig.expectedNumInternalServers)
 
-      val path = if (tableName.isDefined) {
-        makeTablePath(dbName, tableName.get)
+      if (tableName != null) {
+        client.create().forPath(makeTablePath(dbName, tableName), schemaToBytes(schema))
       } else {
-        makeDBPath(dbName)
+        client.create().forPath(makeDBPath(dbName))
       }
       // update catalog - triggers watchers who will actually add
       // DB to local schema when they detect the change
-      client.create().forPath(path)
+
       // wait until all servers have made change
       schemaChangeBarrier.awaitUntilZero()
     }
     catch {
       // TODO better error handling
-      case _ => ret = false
+      case e: Exception => {
+        logger.error("Error adding to schema", e)
+        ret = false
+      }
     } finally {
       schemaChangeLock.release()
     }
@@ -201,7 +215,7 @@ class ZKClient(catalog: Catalog) extends Logging {
       val diff = catalogDBs -- localDBs
       if (diff.size == 1) {
         val newDBName = diff.toList(0)
-        catalog.createDatabase(newDBName)
+        catalog._createDatabaseTrigger(newDBName)
         client.getChildren.usingWatcher(new TableWatcher(newDBName)).forPath(makeDBPath(newDBName))
       } else if (diff.size == 0) {
         // we already know about all the databases in the catalog.
@@ -230,7 +244,8 @@ class ZKClient(catalog: Catalog) extends Logging {
       val diff = catalogTables -- localTables
       if (diff.size == 1) {
         val newTableName = diff.toList(0)
-        catalog.createTable(newTableName, dbname)
+        val schemaBytes = client.getData.forPath(makeTablePath(dbname, newTableName))
+        catalog._createTableTrigger(dbname, newTableName, bytesToSchema(schemaBytes))
       } else if (diff.size == 0) {
         // we already know about all the tables in the catalog.
         logger.warn("Table watcher activated but all tables accounted for")
@@ -241,6 +256,14 @@ class ZKClient(catalog: Catalog) extends Logging {
       schemaChangeBarrier.decrement()
     }
   } // end TableWatcher
+
+  private def schemaToBytes(schema: Schema): Array[Byte] = {
+    KryoThreadLocal.kryoTL.get().serialize(schema).array()
+  }
+
+  private def bytesToSchema(bytes: Array[Byte]): Schema = {
+    KryoThreadLocal.kryoTL.get().deserialize(ByteBuffer.wrap(bytes)).asInstanceOf[Schema]
+  }
 
 } // end ZKClient
 

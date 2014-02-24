@@ -163,8 +163,6 @@ if __name__ == "__main__":
                                       help='output directory for runs. [default: %(default)s]')
     # common crankshaw options
     common_client_bench = argparse.ArgumentParser(add_help=False)
-    common_client_bench.add_argument('--usefutures', action='store_true',
-                                     help='Have THE CRANKSHAW use futures instead of blocking for reply. [default: %(default)s]')
 
     common_client_bench.add_argument('--latency', action='store_true',
                                      help='Compute average latency when running THE CRANKSHAW. [default: %(default)s]')

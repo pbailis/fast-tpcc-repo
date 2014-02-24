@@ -2,42 +2,92 @@ package edu.berkeley.velox.storage
 
 import java.util.concurrent.ConcurrentHashMap
 import edu.berkeley.velox._
-import edu.berkeley.velox.datamodel.{Value, Key}
+import edu.berkeley.velox.datamodel._
 import scala.collection.JavaConverters._
+import scala.collection.mutable.{ArrayBuffer, LinkedList}
+import edu.berkeley.velox.catalog.Catalog
+import com.typesafe.scalalogging.slf4j.Logging
 
-/**
- * Created by crankshaw on 2/6/14.
- * This is the beginning of a backend storage API.
- */
-class StorageManager {
+class StorageManager extends Logging {
 
-  // Correct but dumb implementations of tables.
+  var catalog: Catalog = null
+  var registered = false
+
+  def setCatalog(catalog: Catalog) {
+    this.catalog = catalog
+    registered = true
+  }
+
+  // Correct but dumb implementations of database and tables.
   // No attempt to be fast or efficient, no schema for now,
   // no error handling.
-  val tables = new ConcurrentHashMap[String, TableInstance]()
-  //val dbs = new ConcurrentHashMap[String, Boolean]()
+  val dbs = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, Table]]()
 
-  def addTable(name: String) {
-      tables.putIfAbsent(name, new TableInstance)
+  /**
+   * Create a new database. Nop if db already exists.
+   * @param name
+   */
+  def createDatabase(name: DatabaseName) {
+    dbs.putIfAbsent(name, new ConcurrentHashMap[TableName, Table]())
   }
 
-  def put(tableName: String, dbName: String, k: Key, v: Value): Value = {
-    tables.get(StorageManager.qualifyTableName(dbName, tableName)).put(k, v)
+  def createTable(dbName: DatabaseName, tableName: TableName) {
+    if (dbs.containsKey(dbName)) {
+      dbs.get(dbName).putIfAbsent(tableName, new Table)
+    } else {
+      throw new IllegalStateException(s"Table $tableName creation request, but parent database $dbName not found! $dbs")
+
+    }
   }
 
-  def get(tableName: String, dbName: String, k: Key): Value = {
-    tables.get(StorageManager.qualifyTableName(dbName, tableName)).get(k)
+  def checkTableExistence(dbName: DatabaseName, tableName: TableName): Boolean  = {
+    dbs.containsKey(dbName) && dbs.get(dbName).containsKey(tableName)
   }
 
-  def insert(tableName: String, dbName: String, k: Key, v: Value): Boolean = {
-    tables.get(StorageManager.qualifyTableName(dbName, tableName)).put(k, v) != null
+  def checkDBExistence(dbName: DatabaseName): Boolean = {
+    dbs.containsKey(dbName)
   }
 
+  def getDBNames = {
+    dbs.keySet().asScala
+  }
+
+  def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet) {
+    val table =  dbs.get(databaseName).get(tableName)
+    insertSet.getRows foreach {
+      r => table.insert(catalog.extractPrimaryKey(databaseName, tableName, r), r)
+    }
+  }
+
+  def query(databaseName: DatabaseName,
+            tableName: TableName,
+            query: Query) : ResultSet = {
+    val rows = new ArrayBuffer[Row]
+    val table = dbs.get(databaseName).get(tableName)
+
+    table.rows.values.asScala foreach {
+      row => query.predicate match {
+        case Some(p) => {
+          p match {
+            case eqp: EqualityPredicate => if(row.get(eqp.column) == eqp.value) rows += row.project(query.columns)
+          }
+        }
+        case None => rows :+ row.project(query.columns)
+      }
+    }
+
+    new ResultSet(rows)
+  }
 }
 
-object StorageManager {
-  def qualifyTableName(db: String, table: String): String = {
-    s"$db:$table"
+class Table {
+  val rows = new ConcurrentHashMap[PrimaryKey, Row]()
+
+  def get(key: Row) : Row = {
+    rows.get(key)
   }
 
+  def insert(key: PrimaryKey, row: Row) {
+    rows.put(key, row)
+  }
 }

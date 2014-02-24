@@ -453,24 +453,24 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
          ZOOKEEPER_PORT,
          num_servers,
          sid)
+        print serverCmd
         system(serverCmd)
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, usefutures, latency, **kwargs):
+def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, **kwargs):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
     if profile:
         pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % profile_depth
     else:
         pstr = ""
-    system("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
-        pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency))
-    print("java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s" % (
-           pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency))
-
+    runcmd = "java %s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --latency %s" % (
+            pstr, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, clientConfigStr, parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, latency)
+    print runcmd
+    system(runcmd)
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, usefutures, latency, heap_size=HEAP_SIZE_GB, **kwargs):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, heap_size=HEAP_SIZE_GB, **kwargs):
     hprof = ""
 
     if profile:
@@ -478,9 +478,9 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --usefutures %s --latency %s 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --pct_reads %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --latency %s 2>&1 | tee client.log") %\
           (hprof, heap_size, heap_size, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, usefutures, latency)
+           parallelism, read_pct, ops, max_time, network_service, buffer_size, sweep_time, latency)
     run_cmd_in_velox("all-clients", cmd)
 
 def run_ycsb_local(num_servers, parallelism, read_pct, ops, max_time, skip_rebuild, valuesize=1, recordcount=10000, request_distribution="zipfian", workload="workloads/workloada", **kwargs):

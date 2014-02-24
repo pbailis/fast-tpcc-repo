@@ -6,6 +6,7 @@ import edu.berkeley.velox.rpc.Request
 import java.util.concurrent.LinkedBlockingQueue
 import com.esotericsoftware.kryo.io.{ByteBufferOutputStream, ByteBufferInputStream, Input, Output,ByteBufferInput}
 import java.nio.ByteBuffer
+import java.io.ByteArrayOutputStream
 
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
@@ -71,4 +72,12 @@ class KryoSerializer(val kryo: Kryo) {
     kryo.readClassAndObject(in)
   }
 
+  def serialize(x: Any): ByteBuffer = {
+    val baos = new ByteArrayOutputStream
+    val out = new Output(baos)
+    kryo.writeClassAndObject(out, x)
+    out.flush()
+    baos.flush()
+    ByteBuffer.wrap(baos.toByteArray)
+  }
 }

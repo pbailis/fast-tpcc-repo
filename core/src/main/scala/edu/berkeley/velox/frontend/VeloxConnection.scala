@@ -1,13 +1,18 @@
 package edu.berkeley.velox.frontend
 
-import edu.berkeley.velox.rpc.{ClientRPCService, Request}
+import edu.berkeley.velox.rpc.ClientRPCService
 import scala.concurrent._
-import scala.concurrent.duration._
-import edu.berkeley.velox.server._
 import java.net.InetSocketAddress
 import collection.JavaConversions._
-import edu.berkeley.velox.datamodel.{Key, Value}
-
+import edu.berkeley.velox.frontend.api._
+import edu.berkeley.velox.datamodel._
+import edu.berkeley.velox.datamodel.api.operation._
+import edu.berkeley.velox.operations.database.request._
+import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.datamodel.DataModelConverters._
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import scala.util.Success
+import scala.util.Failure
 
 object VeloxConnection {
   def makeConnection(addresses: java.lang.Iterable[InetSocketAddress]): VeloxConnection = {
@@ -15,85 +20,77 @@ object VeloxConnection {
   }
 }
 
-class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) {
+class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
   ms.initialize()
-  ms.connect(serverAddresses)
 
-  def createDatabase(db: String): Boolean = {
-    val f = ms.sendAny(ClientAddDBRequest(db))
-    Await.result(f, Duration.Inf) match {
-      case r: Boolean => r
-      case _ => false
+  def database(name: DatabaseName) : Database = {
+    // TODO: check if exists?
+    new Database(this, name)
+  }
+
+  def createDatabase(name: DatabaseName) : Future[Database] = {
+    val df = Promise[Database]
+
+    ms.sendAny(new CreateDatabaseRequest(name)) onComplete {
+      case Success(value) => df success new Database(this, name)
+      case Failure(t) => {
+        logger.error("Error creating database", t)
+        df failure t
+      }
     }
+
+    df.future
   }
 
-  def addTable(tbl: String, db: String): Boolean = {
-    val f = ms.sendAny(ClientAddTableRequest(tbl, db))
-    Await.result(f, Duration.Inf) match {
-      case r: Boolean => r
-      case _ => false
+  def createTable(database: Database, tableName: TableName, schema: Schema) : Future[Table] = {
+    val df = Promise[Table]
+
+    ms.sendAny(new CreateTableRequest(database.name, tableName, schema)) onComplete {
+      case Success(value) => df success new Table(database, tableName)
+      case Failure(t) => {
+        logger.error("Error creating table", t)
+        df failure t
+      }
     }
+
+    df.future
   }
 
-  /**
-   * Puts a value into the datastore at the given key
-   * @param k The key to insert at
-   * @param newVal The value to insert
-   * @return The old value if the key previously existed, null otherwise.
-   */
-  def putValue(tbl: String, db: String, k: Key, newVal: Value): Value = {
-    val f = ms.sendAny(ClientPutRequest(tbl, db, k, newVal))
-    Await.result(f, Duration.Inf) match {
-      case v: Value => v
-      case _ => null
+  def select(names: ColumnLabel*) : QueryOperation = {
+    new QueryOperation(null, names)
+  }
+
+  def insert(values: (ColumnLabel, Value)*) : InsertionOperation = {
+    new InsertionOperation(null, values)
+  }
+
+  def execute(database: Database, table: Table, operation: Operation) : Future[ResultSet] = {
+    val resultSetPromise = Promise[ResultSet]
+
+    operation match {
+      case s: QueryOperation => {
+        ms.sendAny(new QueryRequest(database.name, table.name, new Query(s.columns, s.predicate))) onComplete {
+          // TODO: FIX
+          case Success(value) => resultSetPromise success null
+          case Failure(t) => {
+            logger.error("Error executing selection", t)
+            resultSetPromise failure t
+          }
+        }
+      }
+
+      case i: InsertionOperation => {
+        ms.sendAny(new InsertionRequest(database.name, table.name, i.insertSet)) onComplete {
+          case Success(value) => resultSetPromise success new ResultSet
+          case Failure(t) => {
+            logger.error("Error executing insertion", t)
+            resultSetPromise failure t
+          }
+        }
+      }
     }
-  }
 
-  /** Puts a value into the datastore at the given key
-    * returns a future immediatly instead of waiting
-    *
-    * @param k The key to insert at
-    * @param newVal Value to insert
-    * @return A Future[Value] which will contain the old value (if
-    *         it existed) upon completion
-    */
-  def putValueFuture(tbl: String, db: String, k: Key, newVal: Value): Future[Value] = {
-    ms.sendAny(ClientPutRequest(tbl, db, k, newVal))
-  }
-
-  /**
-   * Similar functionality to putValue but does not return the old value
-   * @param k the key to insert at
-   * @param v the value to insert
-   * @return True if the value was replaced, false otherwise.
-   */
-  def insertValue(tbl: String, db: String, k: Key, v: Value): Boolean = {
-    val f: Future[Boolean] = ms.sendAny(ClientInsertRequest(tbl, db, k, v))
-    Await.result(f, Duration.Inf)
-
-  }
-
-  /**
-   *
-   * @param k The key whose value to get
-   * @return the value if the key exists, otherwise null
-   */
-  def getValue(tbl: String, db: String, k: Key): Value = {
-    val f = ms.sendAny(ClientGetRequest(tbl, db, k))
-    Await.result(f, Duration.Inf) match {
-      case v: Value => v
-      case _ => null
-    }
-  }
-
-  /** Gets a key.  Returns a Future rather than waiting for completion
-   *
-   * @param k The key whose value to get
-   * @return A Future which upon completion will have the value if the key
-   * exists, otherwise null
-   */
-  def getValueFuture(tbl: String, db: String, k: Key): Future[Value] = {
-    ms.sendAny(ClientGetRequest(tbl, db, k))
+    resultSetPromise.future
   }
 }
