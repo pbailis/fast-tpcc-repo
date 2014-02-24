@@ -33,6 +33,10 @@ class ResultSet {
     position += 1
   }
 
+  def hasNext(): Boolean = {
+    position < rows.size-1
+  }
+
   def prev() {
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
