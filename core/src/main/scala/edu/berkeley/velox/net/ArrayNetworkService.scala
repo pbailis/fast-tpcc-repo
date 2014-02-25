@@ -129,6 +129,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
+  @volatile var sweeping = false
 
   // Create an runnable that calls forceSend so we
   // don't have to create a new object every time
@@ -137,7 +138,12 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def needSend(): Boolean = {
-    currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime
+    if(sweeping == false && currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
+      sweeping = true
+      return true
+    }
+
+    return false
   }
 
   def send(bytes: ByteBuffer) {
@@ -188,6 +194,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       lastSent = System.currentTimeMillis()
     }
     buf.rwlock.writeLock.unlock()
+    sweeping = false
   }
 
 }
@@ -197,12 +204,15 @@ class Receiver (
   src: NetworkDestinationHandle,
   messageService: MessageService) extends Runnable with Logging {
 
-  def run() {
-    while(bytes.remaining != 0) {
-      messageService.receiveRemoteMessage(src,bytes)
-    }
+  def run() = try {
+      while(bytes.remaining != 0) {
+        messageService.receiveRemoteMessage(src,bytes)
+      }
+   } catch {
+     case t: Throwable => {
+       logger.error(s"Error receiving message: ${t.getMessage}",t)
+     }
   }
-
 }
 
 class ReaderThread (

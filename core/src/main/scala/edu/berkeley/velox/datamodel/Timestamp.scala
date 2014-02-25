@@ -12,7 +12,6 @@ object Timestamp {
   val timestampThreadLocal = new ThreadLocal[Timestamp]() {
     override protected def initialValue(): Timestamp = {
       val tid = threadID.incrementAndGet()
-      assert(tid < 32)
       new Timestamp(tid)
     }
   }
@@ -43,5 +42,10 @@ class Timestamp(val threadID: Int) {
          chosenSeqNo = sequenceNo;
      }
 
-     return (chosenTime << 32) | (chosenSeqNo << 18) | (VeloxConfig.partitionId << 6) | threadID ;  }
+    if(!VeloxConfig.serializable) {
+     return (chosenTime << 32) | (chosenSeqNo << 18) | (VeloxConfig.partitionId << 6) | threadID
+    } else {
+      return (chosenTime << 36) | (chosenSeqNo << 28) | VeloxConfig.partitionId << 20 | threadID
+    }
+  }
 }

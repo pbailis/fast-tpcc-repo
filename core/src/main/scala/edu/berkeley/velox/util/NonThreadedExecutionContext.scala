@@ -14,7 +14,10 @@ class NonThreadedExecutionContext extends ExecutionContext with Logging {
     try {
       r.run()
     } catch {
-      case e: Exception => logger.error("Caught exception", e)
+      case e: Exception => {
+        logger.error("Caught exception", e)
+        reportFailure(e)
+      }
     }
   }
 

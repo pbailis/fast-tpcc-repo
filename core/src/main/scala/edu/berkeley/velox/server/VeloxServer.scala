@@ -15,6 +15,7 @@ import edu.berkeley.velox.benchmark.datamodel.serializable.{SerializableRow, Loc
 import java.util
 import edu.berkeley.velox.datamodel.{Row, PrimaryKey}
 import edu.berkeley.velox.benchmark.operation.serializable.TPCCNewOrderSerializable
+import java.util.Collections
 
 
 // Every server has a single instance of this class. It handles data edu.berkeley.velox.storage
@@ -37,6 +38,9 @@ class VeloxServer extends Logging {
   internalServer.registerHandler(new InternalGetAllHandler)
   internalServer.registerHandler(new InternalPreparePutAllHandler)
   internalServer.registerHandler(new InternalCommitPutAllHandler)
+  internalServer.registerHandler(new InternalSerializableGetAllRequestHandler)
+  internalServer.registerHandler(new InternalSerializablePutAllRequestHandler)
+  internalServer.registerHandler(new InternalSerializableUnlockRequestHandler)
 
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService
@@ -101,17 +105,19 @@ class VeloxServer extends Logging {
     def receive(src: NetworkDestinationHandle, msg: SerializableGetAllRequest) = {
       future {
         val ret = new util.HashMap[PrimaryKey, Row]
-        val get_it = msg.keys.entrySet().iterator()
+        val keys = new util.ArrayList[PrimaryKey](msg.keys.keySet())
+        Collections.sort(keys)
+        val get_it = keys.iterator()
         while(get_it.hasNext) {
           val toGet = get_it.next()
-          val toGetRow = toGet.getValue.asInstanceOf[SerializableRow]
+          val toGetRow = msg.keys.get(toGet).asInstanceOf[SerializableRow]
           if(toGetRow.forUpdate) {
-            lockManager.writeLock(toGet.getKey)
+            lockManager.writeLock(toGet, 8008)
           } else {
-            lockManager.readLock(toGet.getKey)
+            lockManager.readLock(toGet, 8008)
           }
 
-          ret.put(toGet.getKey, storageEngine.get(toGet.getKey))
+          ret.put(toGet, storageEngine.get(toGet))
         }
 
         new SerializableGetAllResponse(ret)
@@ -122,15 +128,18 @@ class VeloxServer extends Logging {
   class InternalSerializablePutAllRequestHandler extends MessageHandler[SerializablePutAllResponse, SerializablePutAllRequest] {
      def receive(src: NetworkDestinationHandle, msg: SerializablePutAllRequest) = {
        future {
-         val put_it = msg.values.entrySet().iterator()
+         val keys = new util.ArrayList[PrimaryKey](msg.values.keySet())
+         Collections.sort(keys)
+
+         val put_it = keys.iterator()
          while(put_it.hasNext) {
            val toPut = put_it.next()
-           val toPutRow = toPut.getValue.asInstanceOf[SerializableRow]
+           val toPutRow = msg.values.get(toPut).asInstanceOf[SerializableRow]
            if(toPutRow.needsLock) {
-             lockManager.writeLock(toPut.getKey)
+             lockManager.writeLock(toPut, 8008)
            }
 
-           storageEngine.put(toPut.getKey, toPut.getValue)
+           storageEngine.put(toPut, toPutRow)
          }
 
          new SerializablePutAllResponse

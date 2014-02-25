@@ -12,8 +12,8 @@ import scala.reflect.ClassTag
 import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.util.{VeloxKryoRegistrar,KryoThreadLocal}
+import edu.berkeley.velox.conf.VeloxConfig
 
-// this causes our futures to no thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
 class MessageWrapper(private val encRequestId: Long, val body: Any) {
@@ -40,14 +40,14 @@ abstract class MessageService extends Logging {
   val name: String
   var serviceID : Integer = -1
 
+  val serializable = VeloxConfig.serializable
+
+  val executor = if(serializable) Executors.newCachedThreadPool() else null
+
   /**
    * The collection of handlers for various message types
    */
   val handlers = new JHashMap[Int, MessageHandler[Any, Request[Any]]]()
-
-  // TODO: What to really do here
-  //val requestExecutor = Executors.newFixedThreadPool(16)
-  //val requestExecutor = Executors.newCachedThreadPool
 
   def initialize()
 
@@ -136,22 +136,29 @@ abstract class MessageService extends Logging {
   }
 
   // doesn't block, but does set up a handler that will deliver the message when it's ready
-  private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any): Unit = {
-    val key = msg.getClass().hashCode()
-    assert(handlers.containsKey(key))
-    val h = handlers.get(key)
-    assert(h != null)
-    try {
-      h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-        case Success(response) => {
-          sendResponse(src, requestId, response)
+  private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any, wrapped: Boolean = false): Unit = {
+    if(!serializable || wrapped) {
+      val key = msg.getClass().hashCode()
+      assert(handlers.containsKey(key))
+      val h = handlers.get(key)
+      assert(h != null)
+      try {
+        h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
+          case Success(response) => {
+            sendResponse(src, requestId, response)
+          }
+          case Failure(t) => logger.error(s"Error receiving message $t")
         }
-        case Failure(t) => logger.error(s"Error receiving message $t")
+      }  catch {
+        case e: Exception => {
+          logger.error("Handler exception", e)
+        }
       }
-    }  catch {
-      case e: Exception => {
-        logger.error("Handler exception", e)
-      }
+    } else {
+      executor.submit(new Runnable {
+        override def run() = { recvRequest_(src, requestId, msg, true) }
+      })
+
     }
   }
 

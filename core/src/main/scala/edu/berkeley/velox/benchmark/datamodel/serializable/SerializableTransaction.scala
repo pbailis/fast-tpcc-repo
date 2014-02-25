@@ -19,7 +19,8 @@ import edu.berkeley.velox.benchmark.operation.CommitPutAllRequest
 import edu.berkeley.velox.benchmark.operation.DeferredIncrement
 import edu.berkeley.velox.benchmark.datamodel.{Table, Transaction}
 import scala.concurrent.duration.Duration
-import java.util.Collections
+import java.util.{Comparator, Collections}
+import edu.berkeley.velox.benchmark.{TPCCItemKey, TPCCConstants}
 
 object SerializableTransaction {
   val FOR_UPDATE = true
@@ -37,173 +38,136 @@ class SerializableTransaction(lockTable: LockManager,
   }
 
   override def put(key: PrimaryKey, value: Row): SerializableTransaction = {
-    value.timestamp = txId
-    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId) {
-      toPutLocal.put(key, value)
-      //logger.error(s"$txId local put $key $value")
-    }
-    else {
-      toPutRemote.put(key, value)
-      //logger.error(s"$txId remote put $key $value")
+    writeKeys.add(key)
 
+    if(value.isInstanceOf[SerializableRow] && writeLocked.contains(key)) {
+      value.asInstanceOf[SerializableRow].needsLock = false
     }
+
+    value.timestamp = txId
+    var warehouse = -1
+    if(key.table != TPCCConstants.ITEM_TABLE) {
+      warehouse = key.keyColumns(0)
+    }
+
+    var keys = toPut.get(warehouse)
+    if(keys == null) {
+      keys = new util.HashMap[PrimaryKey, Row]
+      toPut.put(warehouse, keys)
+    }
+
+    toPut.get(warehouse).put(key, value)
 
     return this
   }
 
   override def get(key: PrimaryKey, columns: Row): SerializableTransaction = {
-    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId) {
-      ///logger.error(s"$txId local get $key $columns $toGetLocal")
-      val prev = toGetLocal.put(key, columns)
-      //if(prev != null) {
-      //  logger.error(s"whoa--just replaced key $key (value: ${prev.columns}; new value: ${columns.columns}")
-      //}
-      //logger.error(s"$txId local post-put get $key $columns $toGetLocal ${toGetLocal.size}")
+        var warehouse = -1
+    readKeys.add(key)
+
+    if(columns.isInstanceOf[SerializableRow] && columns.asInstanceOf[SerializableRow].forUpdate) {
+      writeLocked.add(key)
     }
-    else {
-      //logger.error(s"$txId remote get $key $columns")
-      toGetRemote.put(key, columns)
+
+
+    if(key.table != TPCCConstants.ITEM_TABLE) {
+      warehouse = key.keyColumns(0)
     }
+
+    var keys = toGet.get(warehouse)
+    if(keys == null) {
+      keys = new util.HashMap[PrimaryKey, Row]
+      toGet.put(warehouse, keys)
+    }
+
+    toGet.get(warehouse).put(key, columns)
 
     return this
   }
 
-  override def executeRead(engine: StorageEngine) {
-    results.clear()
-    results = engine.getAll(toGetRemote)
-    toGetRemote.clear()
-  }
 
-  override def executeWriteLocal {
-    storage.putAll(toPutLocal)
-    toPutLocal.clear()
-  }
 
   override def executeWrite = {
     val p = Promise[SerializableTransaction]
 
-    //logger.error(s"$txId is going to writelock ${toPutLocal.keySet}")
-    val tpl_it = toPutLocal.entrySet().iterator()
-    while(tpl_it.hasNext) {
-      val toPut = tpl_it.next()
+    val warehouses = new util.ArrayList[Int](toPut.keySet)
+    Collections.sort(warehouses, IntComparator)
 
-      if(!writeLocked.contains(toPut.getKey)) {
-        //logger.error(s"$txId is writelocking ${toPut.getKey}")
-        lockTable.writeLock(toPut.getKey)
-        //logger.error(s"$txId locked ${toPut.getKey}")
-
+    val wh_it = warehouses.iterator()
+  while(wh_it.hasNext) {
+      val warehouse = wh_it.next()
+      var partition = VeloxConfig.partitionId
+      if(warehouse != -1) {
+        partition = partitioner.getPartitionForWarehouse(warehouse)
       }
-      storage.put(toPut.getKey, toPut.getValue)
+
+      if(partition == VeloxConfig.partitionId) {
+        val keys = new util.ArrayList[PrimaryKey](toPut.get(warehouse).keySet())
+        Collections.sort(keys)
+        var key_it = keys.iterator()
+        while(key_it.hasNext) {
+          val lockKey = key_it.next()
+          if(!writeLocked.contains(lockKey)) {
+            lockTable.writeLock(lockKey,txId)
+          }
+        }
+        storage.putAll(toPut.get(warehouse))
+
+      } else {
+        val f = messageService.send(partition, new SerializablePutAllRequest(toPut.get(warehouse)))
+        Await.ready(f, Duration.Inf)
+      }
     }
 
-    if(!toPutRemote.isEmpty) {
-      val writesByPartition = new util.HashMap[NetworkDestinationHandle, SerializablePutAllRequest]
-
-      val tpr_entry_it = toPutRemote.entrySet().iterator()
-
-      while(tpr_entry_it.hasNext) {
-        val pair = tpr_entry_it.next
-        val partition = partitioner.getMasterPartition(pair.getKey)
-        if(!writesByPartition.containsKey(partition)) {
-          writesByPartition.put(partition, new SerializablePutAllRequest(new util.HashMap[PrimaryKey, Row]))
-        }
-
-        writesByPartition.get(partition).values.put(pair.getKey, pair.getValue)
-
-        if(writeLocked.contains(pair.getKey)) {
-          pair.getValue.asInstanceOf[SerializableRow].needsLock = false
-        }
-      }
-
-      val prepareFutures = new util.ArrayList[Future[Any]](writesByPartition.size())
-
-      val wbp_it = writesByPartition.entrySet().iterator()
-      while(wbp_it.hasNext) {
-        val wbp = wbp_it.next()
-        prepareFutures.add(messageService.send(wbp.getKey, wbp.getValue))
-      }
-
-      val prepareFuture = Future.sequence(prepareFutures.asScala)
-
-      prepareFuture onComplete {
-        case Success(responses) => {
-          p success this
-        }
-      case Failure(t) => p failure t
-        }
-    } else {
-      p success this
-    }
+    p success this
     p.future
   }
 
   override def executeRead = {
-
-    //logger.error(s"$txId is going to readlock ${toGetLocal.keySet}")
-
-
     val p = Promise[SerializableTransaction]
-    results.clear()
 
-    val tgl_it = toGetLocal.entrySet().iterator()
-    while(tgl_it.hasNext) {
-      val toGet = tgl_it.next()
-      val toGetRow = toGet.getValue.asInstanceOf[SerializableRow]
-      if(toGetRow.forUpdate) {
-        //logger.error(s"$txId is going to lock for update ${toGet.getKey}")
-        lockTable.writeLock(toGet.getKey)
-        writeLocked.add(toGet.getKey)
-        //logger.error(s"$txId locked for updated ${toGet.getKey}")
-      } else {
-        //logger.error(s"$txId is going to read lock ${toGet.getKey}")
+    val warehouses = new util.ArrayList[Int](toGet.keySet)
+    Collections.sort(warehouses, IntComparator)
 
-        lockTable.readLock(toGet.getKey)
+    val wh_it = warehouses.iterator()
+    while(wh_it.hasNext) {
+      val warehouse = wh_it.next()
+      var partition = VeloxConfig.partitionId
+      if(warehouse != -1) {
+        partition = partitioner.getPartitionForWarehouse(warehouse)
       }
-    }
 
-    results.putAll(storage.getAll(toGetLocal))
+      if(partition == VeloxConfig.partitionId) {
+        val partitionEntries = toGet.get(warehouse)
 
-    if(!toGetRemote.isEmpty) {
-     val readsByPartition = new util.HashMap[NetworkDestinationHandle, GetAllRequest]
+        //logger.error(s"$txId locking $partitionEntries")
 
-      val tgr_it = toGetRemote.entrySet().iterator()
-      while(tgr_it.hasNext) {
-        val entry = tgr_it.next()
-        val partition = partitioner.getMasterPartition(entry.getKey)
-        if(!readsByPartition.containsKey(partition)) {
-          readsByPartition.put(partition, new GetAllRequest(new util.HashMap[PrimaryKey, Row]))
+        val keys = new util.ArrayList[PrimaryKey](partitionEntries.keySet())
+        Collections.sort(keys)
+        val key_it = keys.iterator()
+        while(key_it.hasNext) {
+          val key = key_it.next()
+          val forUpdate = partitionEntries.get(key).asInstanceOf[SerializableRow].forUpdate
+          if(forUpdate) {
+            lockTable.writeLock(key, txId)
+          } else {
+            lockTable.readLock(key, txId)
+          }
         }
+        results.putAll(storage.getAll(toGet.get(warehouse)))
+      } else {
 
-        readsByPartition.get(partition).keys.put(entry.getKey, entry.getValue)
+        //logger.error(s"$txId locking ${toGet.get(warehouse)}")
+
+        val f = messageService.send(partition, new SerializableGetAllRequest(toGet.get(warehouse)))
+        Await.ready(f, Duration.Inf)
+        results.putAll(f.value.get.get.values)
       }
-
-      val getFutures = new util.ArrayList[Future[GetAllResponse]](readsByPartition.size())
-
-      val rbp_it = readsByPartition.entrySet().iterator()
-      while(rbp_it.hasNext) {
-        val rbp = rbp_it.next()
-        getFutures.add(messageService.send(rbp.getKey, rbp.getValue))
-      }
-
-     val getFuture = Future.sequence(getFutures.asScala)
-
-     getFuture onComplete {
-       case Success(responses) => {
-
-         val resp_it = responses.iterator
-         while(resp_it.hasNext) {
-           results.putAll(resp_it.next().values)
-         }
-
-         p success this
-       }
-       case Failure(t) => {
-         p.failure(t)
-       }
-     }
-    } else {
-      p success this
     }
+
+    //logger.error(s"$txId finished locking")
+
+    p success this
 
      p.future
    }
@@ -217,60 +181,65 @@ class SerializableTransaction(lockTable: LockManager,
   }
 
   private def cleanup(cleanupWrites: Boolean) {
-    val local_keys = new util.HashSet[PrimaryKey]
-    local_keys.addAll(toGetLocal.keySet())
+    var key_it = readKeys.iterator()
+    val partitionToUnlock = new util.HashMap[NetworkDestinationHandle, util.HashSet[PrimaryKey]]()
 
-    if(cleanupWrites)
-      local_keys.addAll(toPutLocal.keySet())
 
-    val local_it = local_keys.iterator()
+  while(key_it.hasNext) {
+    val key = key_it.next()
+    val partition = partitioner.getMasterPartition(key)
 
-    while(local_it.hasNext) {
-      lockTable.unlock(local_it.next())
+    var partitionSet = partitionToUnlock.get(partition)
+    if(partitionSet == null) {
+      partitionSet = new util.HashSet[PrimaryKey]()
+      partitionToUnlock.put(partition, partitionSet)
     }
 
-    if(!toPutRemote.isEmpty || !toGetRemote.isEmpty) {
-      val unlockByPartition = new util.HashMap[NetworkDestinationHandle, SerializableUnlockRequest]
+    partitionSet.add(key)
+  }
 
-      val tgr_it = toGetRemote.keySet().iterator()
-      while(tgr_it.hasNext) {
-        val entry = tgr_it.next()
-        val partition = partitioner.getMasterPartition(entry)
-        if(!unlockByPartition.containsKey(partition)) {
-          unlockByPartition.put(partition, new SerializableUnlockRequest(new util.HashSet[PrimaryKey]))
+    if(cleanupWrites) {
+
+      key_it = writeKeys.iterator()
+
+      while(key_it.hasNext) {
+        val key = key_it.next()
+        val partition = partitioner.getMasterPartition(key)
+
+        var partitionSet = partitionToUnlock.get(partition)
+        if(partitionSet == null) {
+          partitionSet = new util.HashSet[PrimaryKey]()
+          partitionToUnlock.put(partition, partitionSet)
         }
 
-        unlockByPartition.get(partition).keys.add(entry)
+        partitionSet.add(key)
       }
+    }
 
-      if(cleanupWrites) {
-        val tpr_it = toPutRemote.entrySet.iterator()
-        while(tpr_it.hasNext) {
-          val entry = tpr_it.next()
+  val unlockFutures = new util.ArrayList[Future[SerializableUnlockResponse]]()
 
-          if(entry.getValue.asInstanceOf[SerializableRow].needsLock) {
+    logger.error(s"txn $txId unlocking ${partitionToUnlock}")
 
-            val partition = partitioner.getMasterPartition(entry.getKey)
-            if(!unlockByPartition.containsKey(partition)) {
-              unlockByPartition.put(partition, new SerializableUnlockRequest(new util.HashSet[PrimaryKey]))
-            }
 
-            unlockByPartition.get(partition).keys.add(entry.getKey)
-          }
-        }
+  val dest_it = partitionToUnlock.keySet.iterator()
+  while(dest_it.hasNext) {
+    val dest = dest_it.next()
+
+
+    if(dest == VeloxConfig.partitionId) {
+      val key_it = partitionToUnlock.get(dest).iterator()
+      while(key_it.hasNext) {
+        val key = key_it.next()
+        lockTable.unlock(key)
       }
+    } else {
+      unlockFutures.add(messageService.send(dest, new SerializableUnlockRequest(partitionToUnlock.get(dest))))
+    }
+  }
 
-      val unlockFutures = new util.ArrayList[Future[SerializableUnlockResponse]](unlockByPartition.size())
-
-      val rbp_it = unlockByPartition.entrySet().iterator()
-      while(rbp_it.hasNext) {
-        val rbp = rbp_it.next()
-        unlockFutures.add(messageService.send(rbp.getKey, rbp.getValue))
-      }
-
-     val unlockFuture = Future.sequence(unlockFutures.asScala)
-     Await.ready(unlockFuture, Duration.Inf)
-
+    if(unlockFutures.size() > 0) {
+      val unlockFuture = Future.sequence(unlockFutures.asScala)
+      Await.ready(unlockFuture, Duration.Inf)
     }
 
   }
@@ -292,15 +261,20 @@ class SerializableTransaction(lockTable: LockManager,
     this
   }
 
+
   private var deferredIncrement: DeferredIncrement = null
 
 
   private var writeLocked = new util.HashSet[PrimaryKey]
 
-  private var toPutLocal = new util.TreeMap[PrimaryKey, Row]
-  private var toGetLocal = new util.TreeMap[PrimaryKey, Row]
-
-  private var toPutRemote = new util.TreeMap[PrimaryKey, Row]
-  private var toGetRemote = new util.TreeMap[PrimaryKey, Row]
+  private var toPut = new util.HashMap[Int, util.HashMap[PrimaryKey, Row]]
+  private var toGet = new util.HashMap[Int, util.HashMap[PrimaryKey, Row]]
+  private var writeKeys = new util.HashSet[PrimaryKey]
+  private var readKeys = new util.HashSet[PrimaryKey]
 }
 
+object IntComparator extends Comparator[Int] {
+  override def compare(a: Int, b: Int): Int = {
+    return a.compareTo(b)
+  }
+}

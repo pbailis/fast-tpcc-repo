@@ -20,4 +20,8 @@ class TPCCPartitioner extends Partitioner with Logging {
       return partitions((ikey.keyColumns(0) - 1) % partitions.size)
     }
   }
+
+  def getPartitionForWarehouse(warehouse: Int): NetworkDestinationHandle = {
+    partitions((warehouse - 1) % partitions.size)
+  }
 }

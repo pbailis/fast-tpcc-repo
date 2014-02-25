@@ -37,6 +37,8 @@ class LockManager extends Logging {
     val blockedReaders = new AtomicInteger
     val blockedWriters = new AtomicInteger
 
+    var holder: Long = -1
+
     val lockLock = new ReentrantLock
     var queuedRequests: Collection[LockRequest] = null
     @volatile var mode: LockType = READ_LOCK
@@ -59,7 +61,7 @@ class LockManager extends Logging {
          return !held || (mode == READ_LOCK && request.lockType == READ_LOCK);
      }
 
-    def acquire(wantType: LockType) {
+    def acquire(wantType: LockType, requestor: Long) {
       lockLock.lock()
       val request = new LockRequest(lockLock.newCondition, wantType)
 
@@ -79,6 +81,8 @@ class LockManager extends Logging {
           blockedReaders.incrementAndGet()
         }
 
+        //logger.error(s"txn $requestor $key want $wantType $blockedWriters $blockedReaders $numLockers $referenceCount holder is $holder")
+
         request.sleep
         queuedRequests.remove(request)
 
@@ -89,6 +93,13 @@ class LockManager extends Logging {
         }
       }
 
+      /*
+      if(blocked)
+        logger.error(s"txn $requestor $key continuing $wantType $blockedWriters $blockedReaders $referenceCount holder is $holder")
+        */
+
+
+      this.holder = requestor
       held = true
       numLockers.incrementAndGet()
 
@@ -102,24 +113,31 @@ class LockManager extends Logging {
     def release() {
       lockLock.lock()
 
+      assert(mode == READ_LOCK || numLockers.get() == 1)
 
       if(numLockers.decrementAndGet() == 0) {
         held = false
+        holder = -1
         wakeNextQueuedGroup
+      } else {
+        //logger.error(s"not unlocking key $key")
       }
 
       lockLock.unlock()
     }
 
     def wakeNextQueuedGroup {
-      var wokeReader = false
 
       if(queuedRequests == null || queuedRequests.size() == 0) {
+        assert(blockedReaders.get() == 0 && blockedWriters.get() == 0)
         return
       }
 
       val qr_it = queuedRequests.iterator
-      while(qr_it.hasNext) {
+
+      var wokeReader = false
+      var wokeWriter = false
+      while(qr_it.hasNext && !wokeWriter) {
         val qr = qr_it.next()
         if(qr.lockType == READ_LOCK) {
           qr.wake
@@ -127,7 +145,8 @@ class LockManager extends Logging {
         } else {
           if(!wokeReader) {
             qr.wake
-            return
+            //logger.error(s"woke writer for key key $key")
+            wokeWriter = true
           }
         }
       }
@@ -143,21 +162,21 @@ class LockManager extends Logging {
     tableLatches.get(Math.abs(key.hashCode() % numBins))
   }
 
-  def readLock(key: Any) {
+  def readLock(key: Any, requester:Long) {
     //logger.error(s"read locking key $key")
-    lock(key, READ_LOCK)
+    lock(key, READ_LOCK, requester)
     //logger.error(s"read locked key $key")
   }
 
-  def writeLock(key: Any) {
+  def writeLock(key: Any, requester: Long) {
     //logger.error(s"write locking key $key")
 
-    lock(key, WRITE_LOCK)
+    lock(key, WRITE_LOCK, requester)
     //logger.error(s"write locked key $key")
 
   }
 
-  def lock(key: Any, wantType: LockType) {
+  def lock(key: Any, wantType: LockType, requester: Long) {
     val latch = getLatchForKey(key)
     latch.lock()
     var lockState = lockTable.get(key)
@@ -167,12 +186,16 @@ class LockManager extends Logging {
     }
     lockState.markReference()
     latch.unlock()
-    lockState.acquire(wantType)
+    lockState.acquire(wantType, requester)
   }
 
   def unlock(key: Any) {
     //logger.error(s"unlocking key $key")
     val lockState = lockTable.get(key)
+
+    if(lockState == null) {
+      //logger.error(s"null unlock of key $key")
+    }
 
     lockState.release()
     lockState.unmarkReference()
