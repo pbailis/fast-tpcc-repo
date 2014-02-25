@@ -7,9 +7,12 @@ import edu.berkeley.velox.NetworkDestinationHandle
 import java.net.InetSocketAddress
 import org.apache.zookeeper.KeeperException.{NoNodeException, NodeExistsException}
 import org.apache.curator.framework.recipes.cache.PathChildrenCache
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheListener
+import org.apache.curator.framework.recipes.cache.PathChildrenCacheEvent
 import org.apache.curator.retry.ExponentialBackoffRetry
 import org.apache.curator.framework.recipes.locks.InterProcessMutex
 import org.apache.curator.framework.api.CuratorWatcher
+import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.utils.ZKPaths
 import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
@@ -30,6 +33,7 @@ class ZKClient(val catalog: Catalog) extends Logging {
 
   private var groupMembershipCache = null.asInstanceOf[PathChildrenCache]
   private var registered = false
+  @volatile private var serversInGroup = Map[NetworkDestinationHandle, InetSocketAddress]().empty
 
   private val client = CuratorFrameworkFactory.builder()
     .namespace(VELOX_NAMESPACE)
@@ -94,10 +98,29 @@ class ZKClient(val catalog: Catalog) extends Logging {
     getServerIdFromPath(servername)
   }
 
+  // Ask ZooKeeper for IDs and addresses of all registered servers in the cluster,
+  // and sets the local map.
+  private def _getCurrentServers() = {
+    serversInGroup = groupMembershipCache.getCurrentData.asScala.map(m => {
+      val id = getServerIdFromPath(m.getPath)
+      val addr = new String(m.getData).split(":")
+      // Avoid creating an InetSocketAddress frequently, because creating
+      // InetSocketAddress is expensive/blocking. (resolves DNS synchronously)
+      (id, new InetSocketAddress(addr(0), addr(1).toInt))
+    }).toMap
+    logger.info("updated servers cache: " + serversInGroup)
+  }
+
   private def initializeCache() = {
     groupMembershipCache = new PathChildrenCache(client, CLUSTER_GROUP_NODE, true)
+    groupMembershipCache.getListenable.addListener(new PathChildrenCacheListener() {
+      def childEvent(client: CuratorFramework, event: PathChildrenCacheEvent) {
+        _getCurrentServers()
+      }
+    })
     // populate cache at initalization time
     groupMembershipCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE)
+    _getCurrentServers()
   }
 
   def checkDBExistsZookeeper(db: String): Boolean = {
@@ -128,7 +151,7 @@ class ZKClient(val catalog: Catalog) extends Logging {
   }
 
   /**
-   * Ask ZooKeeper for IDs and addresses of all registered servers in the cluster.
+   * Returns the local map of servers in the cluster.
    * Must have registered with Zookeeper before calling this method.
    * @return map of (serverId, serverAddress) pairs corresponding to each server in cluster.
    *
@@ -141,13 +164,7 @@ class ZKClient(val catalog: Catalog) extends Logging {
     if (!registered) {
       throw new IllegalStateException("Must register with group first")
     }
-    groupMembershipCache.getCurrentData.asScala.map({m =>
-      val id = getServerIdFromPath(m.getPath)
-      val addr = new String(m.getData).split(":")
-//      logger.warn(new String(m.getData))
-//      logger.warn(addr.toString)
-      (id, new InetSocketAddress(addr(0), addr(1).toInt))
-    }).toMap
+    serversInGroup
   }
 
   def createDatabase(dbName: DatabaseName): Boolean = {
