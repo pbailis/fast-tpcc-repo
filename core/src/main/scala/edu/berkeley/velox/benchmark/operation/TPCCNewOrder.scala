@@ -113,8 +113,6 @@ object TPCCNewOrder extends Logging {
             val OL_AMOUNT: Double = OL_QUANTITY * I_PRICE
             totalAmount += OL_AMOUNT
 
-            newOrderLines.add(new TPCCNewOrderLineResult(S_W_ID, OL_I_ID, I_NAME, OL_QUANTITY, currentStock, brandGeneric, I_PRICE, OL_AMOUNT))
-
             writeTxn.table(TPCCConstants.ORDER_LINE_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, shadow_O_ID), Row.column(TPCCConstants.OL_QUANTITY_COL, OL_QUANTITY).column(TPCCConstants.OL_AMOUNT_COL, OL_AMOUNT).column(TPCCConstants.OL_I_ID_COL, OL_I_ID).column(TPCCConstants.OL_SUPPLY_W_ID_COL, S_W_ID).column(TPCCConstants.OL_DELIVERY_D_COL, null).column(TPCCConstants.OL_NUMBER_COL, ol_cnt).column(TPCCConstants.OL_DIST_INFO_COL, S_DIST_XX))
             if (currentStock > OL_QUANTITY + 10) {
               currentStock -= OL_QUANTITY
@@ -122,6 +120,8 @@ object TPCCNewOrder extends Logging {
             else {
               currentStock = (currentStock - OL_QUANTITY + 91)
             }
+
+            newOrderLines.add(new TPCCNewOrderLineResult(S_W_ID, OL_I_ID, I_NAME, OL_QUANTITY, currentStock, brandGeneric, I_PRICE, OL_AMOUNT))
 
             var currentOrderCount = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, S_W_ID, OL_I_ID), TPCCConstants.S_ORDER_CNT).asInstanceOf[Integer]
             var currentRemoteCount: Int = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, S_W_ID, OL_I_ID), TPCCConstants.S_REMOTE_CNT).asInstanceOf[Integer]

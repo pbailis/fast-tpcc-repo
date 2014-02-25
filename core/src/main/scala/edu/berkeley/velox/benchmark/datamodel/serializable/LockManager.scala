@@ -9,12 +9,18 @@ import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock
 import java.util
+import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.datamodel.PrimaryKey
 
-class LockManager {
+class LockManager extends Logging {
   var tableLatches: List[Lock] = new util.ArrayList[Lock]()
   var numBins: Int = 1000
 
-  class LockRequest(val condition: Condition) {
+  type LockType = Boolean
+  val WRITE_LOCK = true
+  val READ_LOCK = false
+
+  class LockRequest(val condition: Condition, val lockType: LockType) {
     def sleep {
       condition.await
     }
@@ -24,11 +30,16 @@ class LockManager {
     }
   }
 
-  class LockState {
+  class LockState(val key: Any) {
     @volatile var held: Boolean = false
     val referenceCount = new AtomicInteger
+    val numLockers = new AtomicInteger
+    val blockedReaders = new AtomicInteger
+    val blockedWriters = new AtomicInteger
+
     val lockLock = new ReentrantLock
     var queuedRequests: Collection[LockRequest] = null
+    @volatile var mode: LockType = READ_LOCK
 
     def markReference() {
       referenceCount.incrementAndGet()
@@ -42,29 +53,84 @@ class LockManager {
       referenceCount.get() == 0
     }
 
-    def acquire() {
+    def shouldGrantLock(request: LockRequest): Boolean = {
+         // If no queued requests or no conflicting queued requests, we can
+         // accept the request if it meshes with our R/W coexistence rules.
+         return !held || (mode == READ_LOCK && request.lockType == READ_LOCK);
+     }
+
+    def acquire(wantType: LockType) {
       lockLock.lock()
-      while (held) {
-        val request = new LockRequest(lockLock.newCondition())
+      val request = new LockRequest(lockLock.newCondition, wantType)
+
+      var blocked = false
+
+      while (!shouldGrantLock(request)) {
+        blocked = true
         if (queuedRequests == null) {
           queuedRequests = new util.ArrayList[LockRequest]
         }
         queuedRequests.add(request)
+
+
+        if(wantType == WRITE_LOCK) {
+          blockedWriters.incrementAndGet()
+        } else {
+          blockedReaders.incrementAndGet()
+        }
+
         request.sleep
         queuedRequests.remove(request)
+
+        if(wantType == WRITE_LOCK) {
+          blockedWriters.decrementAndGet()
+        } else {
+          blockedReaders.decrementAndGet()
+        }
       }
 
       held = true
+      numLockers.incrementAndGet()
+
+      mode = wantType
+
+      assert(numLockers.get() == 1 || mode == READ_LOCK)
+
       lockLock.unlock()
     }
 
     def release() {
       lockLock.lock()
-      held = false
-      if (queuedRequests != null && !queuedRequests.isEmpty) {
-        queuedRequests.iterator().next().wake
+
+
+      if(numLockers.decrementAndGet() == 0) {
+        held = false
+        wakeNextQueuedGroup
       }
+
       lockLock.unlock()
+    }
+
+    def wakeNextQueuedGroup {
+      var wokeReader = false
+
+      if(queuedRequests == null || queuedRequests.size() == 0) {
+        return
+      }
+
+      val qr_it = queuedRequests.iterator
+      while(qr_it.hasNext) {
+        val qr = qr_it.next()
+        if(qr.lockType == READ_LOCK) {
+          qr.wake
+          wokeReader = true
+        } else {
+          if(!wokeReader) {
+            qr.wake
+            return
+          }
+        }
+      }
     }
   }
 
@@ -78,36 +144,48 @@ class LockManager {
   }
 
   def readLock(key: Any) {
-    // PDB TODO: FINISH!
+    //logger.error(s"read locking key $key")
+    lock(key, READ_LOCK)
+    //logger.error(s"read locked key $key")
   }
 
   def writeLock(key: Any) {
-    // PDB TODO : FINISH!
+    //logger.error(s"write locking key $key")
+
+    lock(key, WRITE_LOCK)
+    //logger.error(s"write locked key $key")
+
   }
 
-  def lock(key: Any) {
+  def lock(key: Any, wantType: LockType) {
     val latch = getLatchForKey(key)
     latch.lock()
     var lockState = lockTable.get(key)
     if (lockState == null) {
-      lockState = new LockState
+      lockState = new LockState(key)
       lockTable.put(key, lockState)
     }
     lockState.markReference()
     latch.unlock()
-    lockState.acquire()
+    lockState.acquire(wantType)
   }
 
   def unlock(key: Any) {
+    //logger.error(s"unlocking key $key")
     val lockState = lockTable.get(key)
+
     lockState.release()
     lockState.unmarkReference()
     if (lockState.canRemove()) {
       getLatchForKey(key).lock()
       if (lockState.canRemove()) {
+        //logger.error(s"removing state for key $key")
+
         lockTable.remove(key, lockState)
       }
       getLatchForKey(key).unlock()
     }
+    //logger.error(s"unlocked key $key")
+
   }
 }

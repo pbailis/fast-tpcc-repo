@@ -13,7 +13,7 @@ import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.storage.StorageEngine
-import edu.berkeley.velox.benchmark.datamodel.serializable.{LockManager, SerializableRow, SerializableTransaction}
+import edu.berkeley.velox.benchmark.datamodel.serializable.{SerializableRowGenerator, LockManager, SerializableRow, SerializableTransaction}
 
 object TPCCNewOrderSerializable extends Logging {
   def execute(lockManager: LockManager,
@@ -21,6 +21,7 @@ object TPCCNewOrderSerializable extends Logging {
               partitioner: TPCCPartitioner,
               messageService: InternalRPCService,
               storage: StorageEngine): Future[TPCCNewOrderResponse] = {
+
 
     val p = Promise[TPCCNewOrderResponse]
 
@@ -44,32 +45,40 @@ object TPCCNewOrderSerializable extends Logging {
 
     val O_ENTRY_D: String = System.currentTimeMillis.toString
 
-    txn.table(TPCCConstants.WAREHOUSE_TABLE).get(PrimaryKey.pkey(W_ID), SerializableRow.fetchColumn(TPCCConstants.W_TAX_COL))
+    txn.table(TPCCConstants.WAREHOUSE_TABLE).get(PrimaryKey.pkey(W_ID), SerializableRowGenerator.fetchColumn(TPCCConstants.W_TAX_COL))
 
     txn.table(TPCCConstants.DISTRICT_TABLE).get(PrimaryKey.pkey(W_ID, D_ID),
-      SerializableRow.fetchColumn(TPCCConstants.D_TAX_COL).columnForUpdate(TPCCConstants.D_NEXT_O_ID))
+      SerializableRowGenerator.fetchColumn(TPCCConstants.D_TAX_COL).columnForUpdate(TPCCConstants.D_NEXT_O_ID))
 
     txn.table(TPCCConstants.CUSTOMER_TABLE).get(PrimaryKey.pkey(W_ID, D_ID, C_ID),
-      SerializableRow.fetchColumn(TPCCConstants.C_DISCOUNT_COL)
+      SerializableRowGenerator.fetchColumn(TPCCConstants.C_DISCOUNT_COL)
       .column(TPCCConstants.C_LAST_COL)
       .column(TPCCConstants.C_CREDIT_COL))
 
+
+
     var ol_cnt = 0
     while(ol_cnt < OL_CNT) {
+
       val OL_I_ID: Int = OL_I_IDs.get(ol_cnt)
+
       val S_W_ID: Int = OL_SUPPLY_W_IDs.get(ol_cnt)
 
-      txn.table(TPCCConstants.ITEM_TABLE).get(PrimaryKey.pkey(OL_I_ID),
-        SerializableRow.fetchColumn(TPCCConstants.I_PRICE_COL)
-        .column(TPCCConstants.I_NAME_COL)
-        .column(TPCCConstants.I_DATA_COL))
+      val t = txn.table(TPCCConstants.ITEM_TABLE).get(PrimaryKey.pkey(OL_I_ID),
+        SerializableRowGenerator.fetchColumn(TPCCConstants.I_PRICE_COL)
+      .column(TPCCConstants.I_NAME_COL).column(TPCCConstants.I_DATA_COL))
+
 
       txn.table(TPCCConstants.STOCK_TABLE_IMMUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID),
-        SerializableRow.fetchColumn(TPCCConstants.S_DATA_COL)
+        SerializableRowGenerator.fetchColumn(TPCCConstants.S_DATA_COL)
         .column(TPCCConstants.formatSDistXX(D_ID)))
 
+
       txn.table(TPCCConstants.STOCK_TABLE_MUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID),
-        SerializableRow.columnForUpdate(TPCCConstants.S_ORDER_CNT).column(TPCCConstants.S_REMOTE_CNT).column(TPCCConstants.S_QUANTITY_COL))
+        SerializableRowGenerator.columnForUpdate(TPCCConstants.S_ORDER_CNT)
+          .column(TPCCConstants.S_REMOTE_CNT)
+          .column(TPCCConstants.S_QUANTITY_COL))
+
       ol_cnt += 1
     }
 
@@ -78,7 +87,7 @@ object TPCCNewOrderSerializable extends Logging {
     readFuture onComplete {
       case Success(t) => {
         var totalAmount: Double = 0
-        var newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
+        val newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
 
         var aborted = false
         var ol_cnt = 0
@@ -96,9 +105,10 @@ object TPCCNewOrderSerializable extends Logging {
           } else {
 
             if(O_ID == -1) {
-              O_ID = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID), TPCCConstants.D_NEXT_O_ID).asInstanceOf[Integer]+1
-            }
+              O_ID = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID), TPCCConstants.D_NEXT_O_ID).asInstanceOf[Integer]
 
+              txn.table(TPCCConstants.DISTRICT_TABLE).put(PrimaryKey.pkey(W_ID, D_ID), SerializableRowGenerator.column(TPCCConstants.D_NEXT_O_ID, O_ID+1))
+            }
 
             val I_PRICE = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.ITEM_TABLE, OL_I_ID), TPCCConstants.I_PRICE_COL).asInstanceOf[Double]
             val I_DATA = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.ITEM_TABLE, OL_I_ID), TPCCConstants.I_DATA_COL).asInstanceOf[String]
@@ -114,9 +124,16 @@ object TPCCNewOrderSerializable extends Logging {
             val OL_AMOUNT: Double = OL_QUANTITY * I_PRICE
             totalAmount += OL_AMOUNT
 
-            newOrderLines.add(new TPCCNewOrderLineResult(S_W_ID, OL_I_ID, I_NAME, OL_QUANTITY, currentStock, brandGeneric, I_PRICE, OL_AMOUNT))
+            txn.table(TPCCConstants.ORDER_LINE_TABLE)
+              .put(PrimaryKey.pkey(W_ID, D_ID, O_ID),
+                SerializableRowGenerator.column(TPCCConstants.OL_QUANTITY_COL, OL_QUANTITY)
+                  .column(TPCCConstants.OL_AMOUNT_COL, OL_AMOUNT)
+                  .column(TPCCConstants.OL_I_ID_COL, OL_I_ID)
+                  .column(TPCCConstants.OL_SUPPLY_W_ID_COL, S_W_ID)
+                  .column(TPCCConstants.OL_DELIVERY_D_COL, null)
+                  .column(TPCCConstants.OL_NUMBER_COL, ol_cnt)
+                  .column(TPCCConstants.OL_DIST_INFO_COL, S_DIST_XX))
 
-            txn.table(TPCCConstants.ORDER_LINE_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, O_ID), SerializableRow.column(TPCCConstants.OL_QUANTITY_COL, OL_QUANTITY).column(TPCCConstants.OL_AMOUNT_COL, OL_AMOUNT).column(TPCCConstants.OL_I_ID_COL, OL_I_ID).column(TPCCConstants.OL_SUPPLY_W_ID_COL, S_W_ID).column(TPCCConstants.OL_DELIVERY_D_COL, null).column(TPCCConstants.OL_NUMBER_COL, ol_cnt).column(TPCCConstants.OL_DIST_INFO_COL, S_DIST_XX))
             if (currentStock > OL_QUANTITY + 10) {
               currentStock -= OL_QUANTITY
             }
@@ -127,6 +144,8 @@ object TPCCNewOrderSerializable extends Logging {
             var currentOrderCount = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, S_W_ID, OL_I_ID), TPCCConstants.S_ORDER_CNT).asInstanceOf[Integer]
             var currentRemoteCount: Int = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, S_W_ID, OL_I_ID), TPCCConstants.S_REMOTE_CNT).asInstanceOf[Integer]
 
+            newOrderLines.add(new TPCCNewOrderLineResult(S_W_ID, OL_I_ID, I_NAME, OL_QUANTITY, currentStock, brandGeneric, I_PRICE, OL_AMOUNT))
+
             if (W_ID == S_W_ID) {
               currentOrderCount += 1
             }
@@ -135,16 +154,19 @@ object TPCCNewOrderSerializable extends Logging {
             }
 
             txn.table(TPCCConstants.STOCK_TABLE_MUTABLE).put(PrimaryKey.pkey(S_W_ID, OL_I_ID),
-              SerializableRow.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
+              SerializableRowGenerator.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
               .column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount)
                 .column(TPCCConstants.S_QUANTITY_COL, currentStock))
 
           }
+
+
           ol_cnt += 1
         }
 
         if (aborted) {
-          txn.commit()
+          txn.abort()
+
           p.success(new TPCCNewOrderResponse(false))
         } else {
 
@@ -152,16 +174,16 @@ object TPCCNewOrderSerializable extends Logging {
             Row.NULL)
 
           txn.table(TPCCConstants.ORDER_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, O_ID, OL_CNT),
-            SerializableRow.column(TPCCConstants.O_C_ID_COL, C_ID).column(TPCCConstants.O_ENTRY_D, O_ENTRY_D)
+            SerializableRowGenerator.column(TPCCConstants.O_C_ID_COL, C_ID).column(TPCCConstants.O_ENTRY_D, O_ENTRY_D)
             .column(TPCCConstants.O_CARRIER_ID_COL, null)
             .column(TPCCConstants.O_ALL_LOCAL_COL, if (allLocal) 1 else 0))
 
-          txn.table(TPCCConstants.ORDER_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, O_ID), SerializableRow.column(TPCCConstants.O_ID, O_ID))
-          txn.setDeferredIncrement(DeferredIncrement(PrimaryKey.pkey(W_ID, D_ID).table(TPCCConstants.DISTRICT_TABLE), TPCCConstants.D_NEXT_O_ID, PrimaryKey.pkey(W_ID, D_ID, O_ID).table(TPCCConstants.ORDER_LOOKUP_TABLE), TPCCConstants.O_ID))
+          txn.table(TPCCConstants.ORDER_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, O_ID), SerializableRowGenerator.column(TPCCConstants.O_ID, O_ID))
           val writeFuture = txn.executeWrite
 
           writeFuture onComplete {
             case Success(_) => {
+
               val C_DISCOUNT = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID), TPCCConstants.C_DISCOUNT_COL).asInstanceOf[Double]
               val W_TAX = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.WAREHOUSE_TABLE, W_ID), TPCCConstants.W_TAX_COL).asInstanceOf[Double]
               val D_TAX = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.DISTRICT_TABLE, W_ID, D_ID), TPCCConstants.D_TAX_COL).asInstanceOf[Double]
@@ -185,6 +207,7 @@ object TPCCNewOrderSerializable extends Logging {
                     p.failure(t)
                   }
     }
+
     p.future
   }
 }

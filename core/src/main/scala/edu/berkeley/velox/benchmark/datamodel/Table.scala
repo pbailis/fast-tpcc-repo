@@ -22,6 +22,7 @@ class Table extends Logging {
 
   def get(pkey: PrimaryKey, row: Row): Table = {
     pkey.table = tableName
+
     parentTxn.get(pkey, row)
     return this
   }

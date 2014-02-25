@@ -143,7 +143,8 @@ class VeloxServer extends Logging {
         future {
           val key_it = msg.keys.iterator()
           while(key_it.hasNext) {
-            lockManager.unlock(key_it.next())
+            val key = key_it.next()
+            lockManager.unlock(key)
           }
           new SerializableUnlockResponse
         }

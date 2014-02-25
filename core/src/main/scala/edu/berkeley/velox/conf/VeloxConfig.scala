@@ -16,6 +16,7 @@ object VeloxConfig extends Logging {
   var tcpNoDelay: Boolean = true
   var numBuffersPerRing = 32
   var partitionList: Array[NetworkDestinationHandle] = null
+  var serializable = false
 
   var bufferSize = 16384*8
   var networkService = "array"
@@ -38,6 +39,8 @@ object VeloxConfig extends Logging {
     opt[Int]('b', "buffer_size") foreach { p => bufferSize = p } text("Size (in bytes) to make the network buffer")
     opt[Int]("sweep_time") foreach { p => sweepTime = p } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
+    opt[Boolean]("serializable") foreach { p => serializable = p }
+
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
 
     // 127.0.0.1:8080,127.0.0.1:8081

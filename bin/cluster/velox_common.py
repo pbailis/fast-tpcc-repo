@@ -373,7 +373,7 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "sbt/sbt assembly; ") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
-def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, **kwargs):
+def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, **kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 2; rm *.log;"
 
     pstr = ""
@@ -381,7 +381,7 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1>server.log-%d 2>&1 & "
+    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
@@ -397,6 +397,7 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
                         network_service,
                         buffer_size,
                         sweep_time,
+                        "--serializable true" if serializable else "",
                         sid)
 
         server = cluster.servers[sid]
@@ -446,7 +447,7 @@ def client_bench_local_single(numservers, network_service, buffer_size, sweep_ti
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5, connection_parallelism=1):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5, connection_parallelism=1, serializable = False):
     hprof = ""
 
     if profile:
@@ -454,11 +455,11 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d --run 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism)
+           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "")
 
-    load_cmd = cmd.replace("--run", "--load")
+    load_cmd = cmd.replace("--run", "--load").replace("--serializable", "")
     run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd)
 
     run_cmd_in_velox("all-clients", cmd)

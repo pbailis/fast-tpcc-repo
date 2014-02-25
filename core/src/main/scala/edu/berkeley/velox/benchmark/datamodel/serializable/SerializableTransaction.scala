@@ -12,14 +12,14 @@ import scala.concurrent.{Await, Promise, Future}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import edu.berkeley.velox.conf.VeloxConfig
 import scala.collection.JavaConverters._
-import scala.util.Failure
+import scala.util.{Random, Failure, Success}
 import edu.berkeley.velox.benchmark.operation.GetAllRequest
 import edu.berkeley.velox.benchmark.operation.PreparePutAllRequest
-import scala.util.Success
 import edu.berkeley.velox.benchmark.operation.CommitPutAllRequest
 import edu.berkeley.velox.benchmark.operation.DeferredIncrement
 import edu.berkeley.velox.benchmark.datamodel.{Table, Transaction}
 import scala.concurrent.duration.Duration
+import java.util.Collections
 
 object SerializableTransaction {
   val FOR_UPDATE = true
@@ -38,19 +38,32 @@ class SerializableTransaction(lockTable: LockManager,
 
   override def put(key: PrimaryKey, value: Row): SerializableTransaction = {
     value.timestamp = txId
-    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
+    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId) {
       toPutLocal.put(key, value)
-    else
+      //logger.error(s"$txId local put $key $value")
+    }
+    else {
       toPutRemote.put(key, value)
+      //logger.error(s"$txId remote put $key $value")
+
+    }
 
     return this
   }
 
   override def get(key: PrimaryKey, columns: Row): SerializableTransaction = {
-    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
-      toGetLocal.put(key, columns)
-    else
+    if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId) {
+      ///logger.error(s"$txId local get $key $columns $toGetLocal")
+      val prev = toGetLocal.put(key, columns)
+      //if(prev != null) {
+      //  logger.error(s"whoa--just replaced key $key (value: ${prev.columns}; new value: ${columns.columns}")
+      //}
+      //logger.error(s"$txId local post-put get $key $columns $toGetLocal ${toGetLocal.size}")
+    }
+    else {
+      //logger.error(s"$txId remote get $key $columns")
       toGetRemote.put(key, columns)
+    }
 
     return this
   }
@@ -67,15 +80,18 @@ class SerializableTransaction(lockTable: LockManager,
   }
 
   override def executeWrite = {
-
     val p = Promise[SerializableTransaction]
 
-
+    //logger.error(s"$txId is going to writelock ${toPutLocal.keySet}")
     val tpl_it = toPutLocal.entrySet().iterator()
     while(tpl_it.hasNext) {
       val toPut = tpl_it.next()
+
       if(!writeLocked.contains(toPut.getKey)) {
+        //logger.error(s"$txId is writelocking ${toPut.getKey}")
         lockTable.writeLock(toPut.getKey)
+        //logger.error(s"$txId locked ${toPut.getKey}")
+
       }
       storage.put(toPut.getKey, toPut.getValue)
     }
@@ -123,20 +139,29 @@ class SerializableTransaction(lockTable: LockManager,
 
   override def executeRead = {
 
+    //logger.error(s"$txId is going to readlock ${toGetLocal.keySet}")
+
+
     val p = Promise[SerializableTransaction]
     results.clear()
 
     val tgl_it = toGetLocal.entrySet().iterator()
     while(tgl_it.hasNext) {
       val toGet = tgl_it.next()
-      val toGetRow = toGet.asInstanceOf[SerializableRow]
+      val toGetRow = toGet.getValue.asInstanceOf[SerializableRow]
       if(toGetRow.forUpdate) {
+        //logger.error(s"$txId is going to lock for update ${toGet.getKey}")
         lockTable.writeLock(toGet.getKey)
         writeLocked.add(toGet.getKey)
+        //logger.error(s"$txId locked for updated ${toGet.getKey}")
       } else {
+        //logger.error(s"$txId is going to read lock ${toGet.getKey}")
+
         lockTable.readLock(toGet.getKey)
       }
     }
+
+    results.putAll(storage.getAll(toGetLocal))
 
     if(!toGetRemote.isEmpty) {
      val readsByPartition = new util.HashMap[NetworkDestinationHandle, GetAllRequest]
@@ -184,29 +209,27 @@ class SerializableTransaction(lockTable: LockManager,
    }
 
   def commit() {
-    cleanup()
+    cleanup(true)
   }
 
   def abort() {
-    cleanup()
+    cleanup(false)
   }
 
-  private def cleanup() {
-    val g_local_it = toPutLocal.keySet().iterator()
-    while(g_local_it.hasNext) {
-      val g_local = g_local_it.next()
+  private def cleanup(cleanupWrites: Boolean) {
+    val local_keys = new util.HashSet[PrimaryKey]
+    local_keys.addAll(toGetLocal.keySet())
 
-      if(!writeLocked.contains(g_local)) {
-        lockTable.unlock(g_local)
-      }
+    if(cleanupWrites)
+      local_keys.addAll(toPutLocal.keySet())
+
+    val local_it = local_keys.iterator()
+
+    while(local_it.hasNext) {
+      lockTable.unlock(local_it.next())
     }
 
-    val p_local_it = toPutLocal.keySet().iterator()
-    while(p_local_it.hasNext) {
-      lockTable.unlock(p_local_it.next())
-    }
-
-    if(!toPutRemote.isEmpty || !toPutRemote.isEmpty) {
+    if(!toPutRemote.isEmpty || !toGetRemote.isEmpty) {
       val unlockByPartition = new util.HashMap[NetworkDestinationHandle, SerializableUnlockRequest]
 
       val tgr_it = toGetRemote.keySet().iterator()
@@ -220,15 +243,21 @@ class SerializableTransaction(lockTable: LockManager,
         unlockByPartition.get(partition).keys.add(entry)
       }
 
-      val tpr_it = toGetRemote.keySet().iterator()
-      while(tpr_it.hasNext) {
-        val entry = tpr_it.next()
-        val partition = partitioner.getMasterPartition(entry)
-        if(!unlockByPartition.containsKey(partition)) {
-          unlockByPartition.put(partition, new SerializableUnlockRequest(new util.HashSet[PrimaryKey]))
-        }
+      if(cleanupWrites) {
+        val tpr_it = toPutRemote.entrySet.iterator()
+        while(tpr_it.hasNext) {
+          val entry = tpr_it.next()
 
-        unlockByPartition.get(partition).keys.add(entry)
+          if(entry.getValue.asInstanceOf[SerializableRow].needsLock) {
+
+            val partition = partitioner.getMasterPartition(entry.getKey)
+            if(!unlockByPartition.containsKey(partition)) {
+              unlockByPartition.put(partition, new SerializableUnlockRequest(new util.HashSet[PrimaryKey]))
+            }
+
+            unlockByPartition.get(partition).keys.add(entry.getKey)
+          }
+        }
       }
 
       val unlockFutures = new util.ArrayList[Future[SerializableUnlockResponse]](unlockByPartition.size())
@@ -240,15 +269,17 @@ class SerializableTransaction(lockTable: LockManager,
       }
 
      val unlockFuture = Future.sequence(unlockFutures.asScala)
-
      Await.ready(unlockFuture, Duration.Inf)
-  }
 
-
+    }
 
   }
 
   override def getQueryResult(itemKey: PrimaryKey, column: Int): Any = {
+    if(!results.containsKey(itemKey)) {
+      logger.error(s"$txId wanted $itemKey but only have $results")
+    }
+
     return results.get(itemKey).readColumn(column)
   }
 
@@ -266,10 +297,10 @@ class SerializableTransaction(lockTable: LockManager,
 
   private var writeLocked = new util.HashSet[PrimaryKey]
 
-  private var toPutLocal = new util.HashMap[PrimaryKey, Row]
-  private var toGetLocal = new util.HashMap[PrimaryKey, Row]
+  private var toPutLocal = new util.TreeMap[PrimaryKey, Row]
+  private var toGetLocal = new util.TreeMap[PrimaryKey, Row]
 
-  private var toPutRemote = new util.HashMap[PrimaryKey, Row]
-  private var toGetRemote = new util.HashMap[PrimaryKey, Row]
+  private var toPutRemote = new util.TreeMap[PrimaryKey, Row]
+  private var toGetRemote = new util.TreeMap[PrimaryKey, Row]
 }
 

@@ -2,25 +2,31 @@ package edu.berkeley.velox.benchmark.datamodel.serializable
 
 import java.util
 import edu.berkeley.velox.datamodel.Row
+import com.typesafe.scalalogging.slf4j.Logging
 
-object SerializableRow extends Row {
-  val NULL = new Row
+object SerializableRowGenerator {
+  val NULL = new SerializableRow
 
   def columnForUpdate(column: Int): SerializableRow = {
     val ret = new SerializableRow
-    ret.column(column)
-    ret.forUpdate = true
-    ret
+    ret.columnForUpdate(column)
+    return ret
   }
 
   def fetchColumn(column: Int): SerializableRow = {
     val ret = new SerializableRow
     ret.fetchColumn(column)
+    return ret
+  }
+
+  def column(column: Int, value: Any): SerializableRow = {
+    val ret = new SerializableRow
+    ret.column(column, value)
     ret
   }
 }
 
-class SerializableRow extends Row {
+class SerializableRow extends Row with Logging {
   var forUpdate = false
   var needsLock = true
 
@@ -30,7 +36,7 @@ class SerializableRow extends Row {
   }
 
   def fetchColumn(column: Int): SerializableRow = {
-    columns.put(column, null)
+    this.column(column)
     this
   }
 }

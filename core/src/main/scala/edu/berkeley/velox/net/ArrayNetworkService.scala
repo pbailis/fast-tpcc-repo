@@ -137,7 +137,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def needSend(): Boolean = {
-    (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime
+    currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime
   }
 
   def send(bytes: ByteBuffer) {
@@ -270,7 +270,8 @@ class SendSweeper(
 
   def run() {
     while(true) {
-      Thread.sleep(VeloxConfig.sweepTime)
+      if(VeloxConfig.sweepTime > 0)
+        Thread.sleep(VeloxConfig.sweepTime)
       val cit = connections.keySet.iterator
       while (cit.hasNext) {
         val sp = connections.get(cit.next)
@@ -300,7 +301,11 @@ class ArrayNetworkService(
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
+  val executor = if(!VeloxConfig.serializable) {
+    Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
+  } else {
+    Executors.newCachedThreadPool()
+  }
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)

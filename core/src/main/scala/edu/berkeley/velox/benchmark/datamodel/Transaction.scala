@@ -251,7 +251,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
   private var toPutRemote = new util.HashMap[PrimaryKey, Row]
   private var toGetRemote = new util.HashMap[PrimaryKey, Row]
-  var results = new util.HashMap[PrimaryKey, Row]
+  var results: util.Map[PrimaryKey, Row] = new util.HashMap[PrimaryKey, Row]
 
   def combineFuture[T](futures: util.ArrayList[Future[T]]): Future[util.Vector[T]] = {
     val p = Promise[util.Vector[T]]

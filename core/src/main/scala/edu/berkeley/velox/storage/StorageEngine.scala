@@ -60,7 +60,7 @@ class StorageEngine extends Logging {
     }, "Storage-GC-Thread").start
   }
 
-  def getAll(values: util.HashMap[PrimaryKey, Row]): util.HashMap[PrimaryKey, Row] = {
+  def getAll(values: util.Map[PrimaryKey, Row]): util.Map[PrimaryKey, Row] = {
     val it = values.entrySet.iterator()
     while(it.hasNext) {
       val pk_pair = it.next()
@@ -120,7 +120,7 @@ class StorageEngine extends Logging {
     return table.get(new KeyTimestampPair(key, timestamp))
   }
 
-  def putAll(pairs: Map[PrimaryKey, Row]) {
+  def putAll(pairs: util.Map[PrimaryKey, Row]) {
     val it = pairs.entrySet().iterator()
     while(it.hasNext) {
       val pair = it.next()
@@ -164,7 +164,7 @@ class StorageEngine extends Logging {
     return false
   }
 
-  def putPending(pairs: util.HashMap[PrimaryKey, Row]) {
+  def putPending(pairs: util.Map[PrimaryKey, Row]) {
     if (pairs.isEmpty) {
       logger.warn("put_pending of zero key value pairs?")
       return

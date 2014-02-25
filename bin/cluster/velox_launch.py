@@ -57,6 +57,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--client_bench', action='store_true',
                         help='Run THE CRANKSHAW TEST on EC2')
+
+    parser.add_argument('--serializable', action='store_true',
+                        help='serializable txns')
+
     parser.add_argument('--client_bench_local', action='store_true',
                         help='Run THE CRANKSHAW TEST locally')
     parser.add_argument('--usefutures', action='store_true',
@@ -135,26 +139,15 @@ if __name__ == "__main__":
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
         assign_hosts(region, cluster)
-        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth)
+        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=16, timeout=60, ops=120000, chance_remote=0.01, connection_parallelism=1
+                               parallelism=4, timeout=60, ops=100, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
                                )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")
-
-    if args.ycsb_bench:
-        runid = "YCSB-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
-        pprint("Running YCSB")
-        assign_hosts(region, cluster)
-        start_servers(cluster, args.network_service)
-        sleep(5)
-        run_ycsb(cluster, threads=64, pct_reads=.01, valuesize=1, recordcount=30000, time=60)
-        stop_velox_processes()
-        fetch_logs(args.output_dir, runid, cluster)
-        pprint("YCSB has completed!")
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")
@@ -166,11 +159,3 @@ if __name__ == "__main__":
                                   futures=args.usefutures,latency=args.latency)
         kill_velox_local()
         pprint("THE CRANKSHAW has completed!")
-
-    if args.ycsb_bench_local:
-        pprint("Running YCSB locally! (1 client only)")
-        start_servers_local(num_servers, args.network_service, args.profile, args.profile_depth)
-        sleep(5)
-        run_ycsb_local(num_servers, threads=64, readprop=.5, valuesize=1, recordcount=10000, time=60)
-        kill_velox_local()
-        pprint("YCSB has completed!")
