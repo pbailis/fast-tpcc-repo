@@ -169,13 +169,13 @@ class StorageEngine extends Logging {
       logger.warn("put_pending of zero key value pairs?")
       return
     }
-    val pendingPairs = new util.ArrayList[KeyTimestampPair](pairs.size)
+    val pendingPairs = new util.ArrayList[KeyRowPair](pairs.size)
 
     val it = pairs.entrySet().iterator()
     while(it.hasNext) {
       val pair = it.next()
       addItem(pair.getKey, pair.getValue)
-      pendingPairs.add(new KeyTimestampPair(pair.getKey, pair.getValue.timestamp))
+      pendingPairs.add(new KeyRowPair(pair.getKey, pair.getValue))
     }
 
     val timestamp: Long = pairs.values.iterator.next.timestamp
@@ -195,8 +195,7 @@ class StorageEngine extends Logging {
     val it = toUpdate.iterator()
     while(it.hasNext) {
       val pair = it.next()
-      val goodItem: Row = getItemByVersion(pair.key, pair.timestamp)
-      put_good(pair.key, goodItem)
+      put_good(pair.key, pair.row)
     }
 
     if(deferredIncrement != null) {
@@ -256,11 +255,23 @@ class StorageEngine extends Logging {
 
   private[storage] var dataItems = new ConcurrentHashMap[Int, ConcurrentHashMap[KeyTimestampPair, Row]](100, .25f, 36)
   private var latestGoodForKey = new ConcurrentHashMap[Int, ConcurrentHashMap[PrimaryKey, Row]](100, .25f, 36)
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](100, .25f, 36)
+  private var stampToPending = new ConcurrentHashMap[Long, List[KeyRowPair]](100, .25f, 36)
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
 
+case class KeyRowPair(val key: PrimaryKey, val row: Row) {
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case kts: KeyRowPair => key == kts.key && row == kts.row
+      case _ => false
+    }
+  }
+
+  override def hashCode: Int = {
+    return key.hashCode * row.hashCode()
+  }
+}
 
 case class KeyTimestampPair(val key: PrimaryKey, val timestamp: Long) {
   var expirationTime = -1L
