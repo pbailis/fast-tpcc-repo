@@ -34,7 +34,7 @@ class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val 
     val hc = key.hashCode
     val bin = bins(Math.abs(hc) % concurrency)
     bin.lock
-    val ret = bin.map.update(key, value)
+    val ret = bin.map.changeValue(key, value, {v => value})
     bin.unlock
     ret
   }
@@ -54,7 +54,7 @@ class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val 
     val existing = bin.map.getOrElse(key, none)
     var ret: V = none
     if(existing == none) {
-      bin.map.update(key, value)
+      bin.map.changeValue(key, value, {v => value})
       ret = value
     }
     bin.unlock
@@ -68,7 +68,7 @@ class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val 
     val existing = bin.map.getOrElse(key, none)
     var ret = false
     if(existing == oldValue) {
-      bin.map.update(key, value)
+      bin.map.changeValue(key, value, {v => value})
       ret = true
     }
     bin.unlock
