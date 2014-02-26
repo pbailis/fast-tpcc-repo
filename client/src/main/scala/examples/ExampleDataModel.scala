@@ -7,6 +7,8 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import edu.berkeley.velox.datamodel.DataModelConverters._
 
+import scala.language.postfixOps
+
 object ExampleDataModel {
   def main(args: Array[String]) {
     val conn = new VeloxConnection(Array(new InetSocketAddress("localhost", 1234)))
@@ -28,6 +30,6 @@ object ExampleDataModel {
     val nickTable = db.table("nick-table")
 
     val newTable = db.createTable("new-table",
-                                  Schema.pkey("id").columns("id" -> INTEGER_TYPE, "name" -> STRING_TYPE))
+                                  Schema.columns("id" PRIMARY() INT,"name" STRING))
   }
 }

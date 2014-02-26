@@ -17,6 +17,7 @@ import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import scala.util.{Success, Failure}
 import java.util.UUID
 
+import scala.language.postfixOps
 
 object ClientBenchmark {
 
@@ -111,7 +112,9 @@ object ClientBenchmark {
 
     val db = dbf.value.get.get
 
-    val tblf = db.createTable(TABLE_NAME, Schema.pkey(ID_COL).columns(ID_COL->INTEGER_TYPE, STR_COL->STRING_TYPE))
+    val tblf = db.createTable(TABLE_NAME,
+                              Schema.columns(ID_COL PRIMARY() INT,
+                                             STR_COL STRING))
     Await.ready(tblf, Duration.Inf)
     println("table successfully added")
 

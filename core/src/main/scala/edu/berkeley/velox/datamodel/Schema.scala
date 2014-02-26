@@ -1,13 +1,7 @@
 package edu.berkeley.velox.datamodel
 
 object Schema {
-  def pkey(pkey: PrimaryKeyDefinition): Schema = {
-    val ret = new Schema
-    ret.pkey(pkey)
-    ret
-  }
-
-  def columns(columns: (ColumnLabel , Value)*): Schema = {
+  def columns(columns: TypedColumn*): Schema = {
     val ret = new Schema
     ret.setColumns(columns)
     ret
@@ -15,27 +9,19 @@ object Schema {
 }
 
 class Schema {
-  var pkey: PrimaryKeyDefinition = null
-  var columns: Seq[(ColumnLabel, Value)] = null
+  var columns: Seq[TypedColumn] = null
 
-  def pkey(pkey: PrimaryKeyDefinition): Schema = {
-    this.pkey = pkey
-    this
-  }
-
-  def setColumns(columns: Seq[(ColumnLabel, Value)]): Schema = {
+  def setColumns(columns: Seq[TypedColumn]): Schema = {
     this.columns = columns
     this
   }
 
-  def columns(columns: (ColumnLabel, Value)*): Schema = {
+  def columns(columns: TypedColumn*): Schema = {
     this.columns = columns
     this
   }
 
   override def toString: String = {
-    s"(PrimaryKey: $pkey, Columns: $columns)"
+    s"(Columns: $columns)"
   }
 }
-
-case class PrimaryKeyDefinition(val value: Seq[ColumnLabel])

@@ -113,10 +113,10 @@ class Catalog(storage: StorageManager) extends Logging {
 
 
   def extractPrimaryKey(database: DatabaseName, table: TableName, row: Row): PrimaryKey  = {
-    val definition = schemas.get(database).get(table).pkey
-    val ret = new Array[Value](definition.value.size)
+    val definition = schemas.get(database).get(table).columns.filter(_.isPrimary)
+    val ret = new Array[Value](definition.size)
     var i = 0
-    definition.value.foreach (
+    definition.foreach (
       col => {
         assert(row.get(col) != null)
         ret(i) = row.get(col)
