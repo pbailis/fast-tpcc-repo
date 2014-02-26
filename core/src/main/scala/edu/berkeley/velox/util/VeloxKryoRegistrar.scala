@@ -6,6 +6,12 @@ import edu.berkeley.velox.rpc.Request
 import java.util.concurrent.LinkedBlockingQueue
 import com.esotericsoftware.kryo.io.{ByteBufferOutputStream, ByteBufferInputStream, Input, Output,ByteBufferInput}
 import java.nio.ByteBuffer
+import java.util
+import edu.berkeley.velox.benchmark.operation._
+import edu.berkeley.velox.benchmark.operation.PreparePutAllRequest
+import edu.berkeley.velox.benchmark.operation.CommitPutAllRequest
+import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
+import edu.berkeley.velox.benchmark.TPCCItemKey
 
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
@@ -46,6 +52,39 @@ object VeloxKryoRegistrar {
     // Disable reference tracking
     // @todo make this a conf option
     kryo.setReferences( false )
+    kryo.setRegistrationRequired(true)
+    kryo.register(classOf[GetAllRequest])
+    kryo.register(classOf[GetAllResponse])
+    kryo.register(classOf[Array[Int]])
+    kryo.register(classOf[Array[PrimaryKey]])
+    kryo.register(classOf[Array[Row]])
+
+
+    kryo.register(classOf[PreparePutAllRequest])
+    kryo.register(classOf[PreparePutAllResponse])
+    kryo.register(classOf[CommitPutAllRequest])
+    kryo.register(classOf[CommitPutAllResponse])
+    kryo.register(classOf[Row])
+    kryo.register(classOf[PrimaryKey])
+    kryo.register(classOf[util.HashMap[PrimaryKey, Row]])
+    kryo.register(classOf[util.HashSet[PrimaryKey]])
+    kryo.register(classOf[util.Map[PrimaryKey, Row]])
+    kryo.register(classOf[TPCCItemKey])
+    kryo.register(classOf[util.ArrayList[Int]])
+    kryo.register(classOf[DeferredIncrement])
+    kryo.register(classOf[TPCCNewOrderRequest])
+    kryo.register(classOf[TPCCNewOrderResponse])
+    kryo.register(classOf[TPCCNewOrderLineResult])
+    kryo.register(classOf[TPCCLoadRequest])
+    kryo.register(classOf[TPCCLoadResponse])
+
+    kryo.register(classOf[SerializableGetAllRequest])
+    kryo.register(classOf[SerializableGetAllResponse])
+    kryo.register(classOf[SerializablePutAllRequest])
+    kryo.register(classOf[SerializablePutAllResponse])
+    kryo.register(classOf[SerializableUnlockRequest])
+    kryo.register(classOf[SerializableUnlockResponse])
+
     // Register important base types
     kryo.register(classOf[Request[_]])
     // Register all of chills classes
