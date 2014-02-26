@@ -276,7 +276,6 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](
 }
 
 
-private[spark]
 object OpenHashSet {
 
   val INVALID_POS = -1
