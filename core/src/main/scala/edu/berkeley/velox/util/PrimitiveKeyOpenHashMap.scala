@@ -30,8 +30,8 @@ import scala.reflect._
  *
  * Under the hood, it uses our OpenHashSet implementation.
  */
-class PrimitiveKeyOpenHashMap[@specialized(Long, Int) K: ClassTag,
-                              @specialized(Long, Int, Double) V: ClassTag](
+class PrimitiveKeyOpenHashMap[K: ClassTag,
+                              V: ClassTag](
     val keySet: OpenHashSet[K], var _values: Array[V])
   extends Iterable[(K, V)]
   with Serializable {
@@ -56,7 +56,7 @@ class PrimitiveKeyOpenHashMap[@specialized(Long, Int) K: ClassTag,
    */
   def this(keySet: OpenHashSet[K]) = this(keySet, new Array[V](keySet.capacity))
 
-  require(classTag[K] == classTag[Long] || classTag[K] == classTag[Int])
+  //require(classTag[K] == classTag[Long] || classTag[K] == classTag[Int])
 
   private var _oldValues: Array[V] = null
 
