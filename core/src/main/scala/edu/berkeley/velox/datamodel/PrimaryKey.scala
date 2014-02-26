@@ -18,6 +18,8 @@ object PrimaryKey {
 }
 
 class PrimaryKey extends Comparable[PrimaryKey] {
+  var _hashcode = -1
+
   def this(table: Int, keyColumns: Array[Int]) {
     this()
     this.table = table
@@ -38,6 +40,14 @@ class PrimaryKey extends Comparable[PrimaryKey] {
   }
 
   override def hashCode: Int = {
+    // 100,000 items (IDs)
+    // 100 tables
+    // 100 column IDs
+    if(_hashcode == -1)
+      _hashcode = table*10000000+
+
+    _hashcode =
+
     table + Arrays.hashCode(keyColumns)
   }
 

@@ -18,6 +18,9 @@ object VeloxConfig extends Logging {
   var partitionList: Array[NetworkDestinationHandle] = null
   var serializable = false
 
+  var storage_parallelism = 32
+  var storage_size = 1000
+
   var bufferSize = 16384*8
   var networkService = "array"
   var sweepTime = 500
@@ -40,6 +43,8 @@ object VeloxConfig extends Logging {
     opt[Int]("sweep_time") foreach { p => sweepTime = p } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[Boolean]("serializable") foreach { p => serializable = p }
+    opt[Int]("storage_size") foreach { p => storage_size = p }
+    opt[Int]("storage_parallelism") foreach { p => storage_parallelism = p }
 
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
 

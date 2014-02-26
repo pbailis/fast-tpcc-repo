@@ -11,24 +11,27 @@ import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import edu.berkeley.velox.benchmark.operation.DeferredIncrement
+import edu.berkeley.velox.util.ConcurrentVeloxHashMap
+import edu.berkeley.velox.conf.VeloxConfig
 
 class StorageEngine extends Logging {
+
   val numLocks = 100
-  val locks = new Array[AtomicBoolean](numLocks)
+   val locks = new Array[AtomicBoolean](numLocks)
 
-  for(i <- 0 until numLocks) {
-    locks(i) = new AtomicBoolean()
-  }
+   for(i <- 0 until numLocks) {
+     locks(i) = new AtomicBoolean()
+   }
 
-  def spinlock_lock(key: PrimaryKey) {
-    val lock = locks(key.hashCode % locks.length)
-    while(lock.compareAndSet(false, true)){}
-  }
+   def spinlock_lock(key: PrimaryKey) {
+     val lock = locks(key.hashCode % locks.length)
+     while(lock.compareAndSet(false, true)){}
+   }
 
-  def spinlock_unlock(key: PrimaryKey) {
-    val lock = locks(key.hashCode % locks.length)
-    lock.set(false)
-  }
+   def spinlock_unlock(key: PrimaryKey) {
+     val lock = locks(key.hashCode % locks.length)
+     lock.set(false)
+   }
 
   def initialize() {
     new Thread(new Runnable {
@@ -48,7 +51,7 @@ class StorageEngine extends Logging {
                 Thread.sleep(nextStamp.expirationTime - currentTime)
             }
 
-            dataItems.remove(nextStamp)
+            dataItems.put(nextStamp, null)
             nextStamp = null
           }
           catch {
@@ -65,19 +68,15 @@ class StorageEngine extends Logging {
     while(it.hasNext) {
       val pk_pair = it.next()
 
-      val table = latestGoodForKey.get(pk_pair.getKey.table)
+      val latestVal = latestGoodForKey.get(pk_pair.getKey, null)
 
-      if(table != null) {
-        val latestVal = table.get(pk_pair.getKey)
-
-        if(latestVal != null) {
-          val c_it = pk_pair.getValue.columns.entrySet.iterator()
-          while(c_it.hasNext) {
-            val col = c_it.next().getKey
-            val v = latestVal.readColumn(col)
-            if(v != null) {
-              pk_pair.getValue.column(col, v)
-            }
+      if(latestVal != null) {
+        val c_it = pk_pair.getValue.columns.entrySet.iterator()
+        while(c_it.hasNext) {
+          val col = c_it.next().getKey
+          val v = latestVal.readColumn(col)
+          if(v != null) {
+            pk_pair.getValue.column(col, v)
           }
         }
       }
@@ -97,27 +96,11 @@ class StorageEngine extends Logging {
   }
 
   private def getLatestItemForKey(key: PrimaryKey): Row = {
-    val table = latestGoodForKey.get(key.table)
-
-    if(table == null)
-      return null
-
-    val ret = table.get(key)
-
-    if(ret == null) {
-      return Row.NULL
-    }
-
-    ret
+    latestGoodForKey.get(key, Row.NULL)
   }
 
   private def getItemByVersion(key: PrimaryKey, timestamp: Long): Row = {
-    val table = dataItems.get(key.table)
-
-    if(table == null)
-      return null
-
-    return table.get(new KeyTimestampPair(key, timestamp))
+    return dataItems.get(new KeyTimestampPair(key, timestamp), Row.NULL)
   }
 
   def putAll(pairs: util.Map[PrimaryKey, Row]) {
@@ -135,22 +118,15 @@ class StorageEngine extends Logging {
 
   private def put_good(key: PrimaryKey, good: Row): Boolean = {
     while (true) {
-      var table = latestGoodForKey.get(key.table)
-
-      if(table == null) {
-        latestGoodForKey.putIfAbsent(key.table, new ConcurrentHashMap[PrimaryKey, Row](100000000, .7f, 24))
-        table = latestGoodForKey.get(key.table)
-      }
-
-      val oldGood = table.get(key)
+      val oldGood = latestGoodForKey.get(key, null)
 
       if (oldGood == null) {
-        if (table.putIfAbsent(key, good) == null) {
+        if (latestGoodForKey.putIfAbsent(key, good, null) == null) {
           return true
         }
       }
       else if (oldGood.timestamp < good.timestamp) {
-        if (table.replace(key, oldGood, good)) {
+        if (latestGoodForKey.replace(key, oldGood, good, null)) {
           markForGC(key, oldGood.timestamp)
           return true
         }
@@ -183,7 +159,7 @@ class StorageEngine extends Logging {
   }
 
   def putGood(timestamp: Long, deferredIncrement: DeferredIncrement = null): Integer = {
-    val toUpdate = stampToPending.get(timestamp)
+    val toUpdate = stampToPending.get(timestamp, null)
 
     var ret = -1
 
@@ -201,13 +177,9 @@ class StorageEngine extends Logging {
 
     if(deferredIncrement != null) {
       val goodRow = new Row
-      var goodTable = latestGoodForKey.get(deferredIncrement.destinationKey.table)
-      if(goodTable == null) {
-        latestGoodForKey.put(deferredIncrement.destinationKey.table, new ConcurrentHashMap[PrimaryKey, Row](100000000, .7f, 24))
-        goodTable = latestGoodForKey.get(deferredIncrement.destinationKey.table)
-      }
+
+      latestGoodForKey.put(deferredIncrement.destinationKey, goodRow)
       spinlock_lock(deferredIncrement.counterKey)
-      goodTable.put(deferredIncrement.destinationKey, goodRow)
 
       val toInc = getLatestItemForKey(deferredIncrement.counterKey)
       val curVal = toInc.readColumn(deferredIncrement.counterColumn).asInstanceOf[Integer]
@@ -218,19 +190,12 @@ class StorageEngine extends Logging {
       ret = newVal
     }
 
-    stampToPending.remove(timestamp)
+    stampToPending.put(timestamp, null)
     return ret
   }
 
   private def addItem(key: PrimaryKey, value: Row) {
-    var table = dataItems.get(key.table)
-
-    if(table == null) {
-      dataItems.putIfAbsent(key.table, new ConcurrentHashMap[KeyTimestampPair, Row](100000000, .7f, 24))
-      table = dataItems.get(key.table)
-    }
-
-    table.put(new KeyTimestampPair(key, value.timestamp), value)
+    dataItems.put(new KeyTimestampPair(key, value.timestamp), value)
   }
 
   private def markForGC(key: PrimaryKey, timestamp: Long) {
@@ -254,9 +219,9 @@ class StorageEngine extends Logging {
 
   def numKeys: Int = { dataItems.size }
 
-  private[storage] var dataItems = new ConcurrentHashMap[Int, ConcurrentHashMap[KeyTimestampPair, Row]](100, .25f, 36)
-  private var latestGoodForKey = new ConcurrentHashMap[Int, ConcurrentHashMap[PrimaryKey, Row]](100, .25f, 36)
-  private var stampToPending = new ConcurrentHashMap[Long, List[KeyTimestampPair]](100, .25f, 36)
+  private[storage] var dataItems = new ConcurrentVeloxHashMap[KeyTimestampPair, Row](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "dataItems")
+  private var latestGoodForKey = new ConcurrentVeloxHashMap[PrimaryKey, Row](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "latestGoodForKey")
+  private var stampToPending = new ConcurrentVeloxHashMap[Long, List[KeyTimestampPair]](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "stampToPending")
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }

@@ -68,6 +68,7 @@ object VeloxBuild extends Build {
       "com.twitter" % "chill-bijection_2.10" % "0.3.5",
       "com.codahale.metrics" % "metrics-core" % "3.0.1",
       "org.scalatest" %% "scalatest" % "2.0" % "test",
+      "it.unimi.dsi"             % "fastutil"         % "6.4.4",
       "com.github.stephenc.high-scale-lib" % "high-scale-lib" % "1.1.4"
     )
   )
