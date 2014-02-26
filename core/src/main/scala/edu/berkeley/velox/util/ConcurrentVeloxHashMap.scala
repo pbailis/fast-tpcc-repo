@@ -3,8 +3,9 @@ package edu.berkeley.velox.util
 import java.util.concurrent.atomic.AtomicBoolean
 import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
+import scala.reflect.ClassTag
 
-class ConcurrentVeloxHashMap[K, V <: AnyVal](val initialSize: Int, val concurrency: Int, name: String) {
+class ConcurrentVeloxHashMap[K:ClassTag, V <: AnyVal](val initialSize: Int, val concurrency: Int, name: String) {
   val bins = new Array[VeloxBin](initialSize)
 
   for(i <- 0 until concurrency) {
