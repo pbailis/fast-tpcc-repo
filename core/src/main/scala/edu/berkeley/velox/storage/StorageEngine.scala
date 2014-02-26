@@ -145,13 +145,13 @@ class StorageEngine extends Logging {
       logger.warn("put_pending of zero key value pairs?")
       return
     }
-    val pendingPairs = new util.ArrayList[KeyTimestampPair](pairs.size)
+    val pendingPairs = new util.ArrayList[KeyRowPair](pairs.size)
 
     val it = pairs.entrySet().iterator()
     while(it.hasNext) {
       val pair = it.next()
       addItem(pair.getKey, pair.getValue)
-      pendingPairs.add(new KeyTimestampPair(pair.getKey, pair.getValue.timestamp))
+      pendingPairs.add(new KeyRowPair(pair.getKey, pair.getValue))
     }
 
     val timestamp: Long = pairs.values.iterator.next.timestamp
@@ -171,7 +171,7 @@ class StorageEngine extends Logging {
     val it = toUpdate.iterator()
     while(it.hasNext) {
       val pair = it.next()
-      val goodItem: Row = getItemByVersion(pair.key, pair.timestamp)
+      val goodItem: Row = pair.row
       put_good(pair.key, goodItem)
     }
 
@@ -221,11 +221,13 @@ class StorageEngine extends Logging {
 
   private[storage] var dataItems = new ConcurrentVeloxHashMap[KeyTimestampPair, Row](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "dataItems")
   private var latestGoodForKey = new ConcurrentVeloxHashMap[PrimaryKey, Row](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "latestGoodForKey")
-  private var stampToPending = new ConcurrentVeloxHashMap[Long, List[KeyTimestampPair]](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "stampToPending")
+  private var stampToPending = new ConcurrentVeloxHashMap[Long, List[KeyRowPair]](VeloxConfig.storage_size, VeloxConfig.storage_parallelism, "stampToPending")
   private var candidatesForGarbageCollection = new LinkedBlockingQueue[KeyTimestampPair]
   val gcTimeMs = 5000
 }
 
+
+case class KeyRowPair(val key: PrimaryKey, val row: Row)
 
 case class KeyTimestampPair(val key: PrimaryKey, val timestamp: Long) {
   var expirationTime = -1L
