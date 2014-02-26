@@ -99,7 +99,7 @@ class VeloxServer extends Logging {
   class InternalGetAllHandler extends MessageHandler[GetAllResponse, GetAllRequest] {
     def receive(src: NetworkDestinationHandle, msg: GetAllRequest): Future[GetAllResponse] = {
       // returns true if there was an old value
-      future { new GetAllResponse(storageEngine.getAll(msg.keys)) }
+      future { new GetAllResponse(storageEngine.getAll(msg.keys, msg.values)) }
     }
   }
 

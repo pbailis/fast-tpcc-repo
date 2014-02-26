@@ -359,7 +359,7 @@ def install_ykit(cluster):
 def rebuild_servers(remote, branch, deploy_key=None):
     if deploy_key:
         upload_file("all-hosts", deploy_key, "/home/ubuntu/.ssh")
-        run_cmd("all-hosts", "echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
+        run_cmd("all-hosts", "rm /home/ubuntu/.ssh/config; echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
 
     pprint('Rebuilding clients and servers...')
     run_cmd_in_velox('all-hosts',
@@ -375,6 +375,10 @@ def rebuild_servers(remote, branch, deploy_key=None):
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, **kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 2; rm *.log;"
+
+    netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.somaxconn=100000 > /dev/null ; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
+
+    HEADER+= netCmd
 
     pstr = ""
     if profile:
