@@ -222,7 +222,7 @@ class OpenHashSet[@specialized(Long, Int) T: ClassTag](
 
     val newCapacity = _capacity * 2
 
-    logger.warn(s"RESIZING HASHSET (${name})! Was $_capacity, will now be $newCapacity! You should increase the storage_size parameter")
+    logger.warn(s"RESIZING HASHSET (${name})! Was ${_capacity}, will now be $newCapacity! You should increase the storage_size parameter")
 
 
     allocateFunc(newCapacity)
