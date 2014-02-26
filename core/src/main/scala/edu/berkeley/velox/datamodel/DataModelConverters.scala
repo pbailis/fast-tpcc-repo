@@ -27,13 +27,5 @@ object DataModelConverters {
     ret
   }
 
-  implicit final def toPrimaryKeyDefinition(value: String*) : PrimaryKeyDefinition = {
-    new PrimaryKeyDefinition(value.seq.map(a => ColumnLabel(a)))
-  }
-
-  implicit final def toPrimaryKeyDefinition(value: String) : PrimaryKeyDefinition = {
-    new PrimaryKeyDefinition(List(value))
-  }
-
   implicit def stringToColumnID(name: String) : ColumnLabel = { ColumnLabel(name) }
 }
