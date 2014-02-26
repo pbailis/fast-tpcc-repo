@@ -5,7 +5,7 @@ import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
 import scala.reflect.ClassTag
 
-class ConcurrentVeloxHashMap[K:ClassTag, V <: AnyVal](val initialSize: Int, val concurrency: Int, name: String) {
+class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val concurrency: Int, name: String) {
   val bins = new Array[VeloxBin](initialSize)
 
   for(i <- 0 until concurrency) {
