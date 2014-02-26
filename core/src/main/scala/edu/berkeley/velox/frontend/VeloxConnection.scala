@@ -71,7 +71,6 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logg
     operation match {
       case s: QueryOperation => {
         ms.sendAny(new QueryRequest(database.name, table.name, new Query(s.columns, s.predicate))) onComplete {
-          // TODO: FIX
           case Success(value) => resultSetPromise success value.results
           case Failure(t) => {
             logger.error("Error executing selection", t)
