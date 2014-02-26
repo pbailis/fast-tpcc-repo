@@ -86,6 +86,6 @@ class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val 
       _lock.set(false)
     }
 
-    val map = new PrimitiveKeyOpenHashMap[K, V](initialCapacity, name)
+    val map = new util.HashMap[K, V](initialCapacity)
   }
 }
