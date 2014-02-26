@@ -33,6 +33,7 @@ class VeloxServer extends Logging {
   val lockManager = new LockManager
 
   val internalServer = new InternalRPCService
+  val executor = internalServer.networkService.setExecutor()
   internalServer.initialize()
 
   internalServer.registerHandler(new InternalGetAllHandler)
@@ -44,6 +45,7 @@ class VeloxServer extends Logging {
 
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService
+  frontendServer.networkService.setExecutor(executor)
 
   frontendServer.registerHandler(new TPCCLoadRequestHandler)
   frontendServer.registerHandler(new TPCCNewOrderRequestHandler)

@@ -1,6 +1,5 @@
 package edu.berkeley.velox.rpc
 
-import edu.berkeley.velox.net.{ArrayNetworkService,NIONetworkService}
 import edu.berkeley.velox.conf.VeloxConfig
 import java.net.InetSocketAddress
 

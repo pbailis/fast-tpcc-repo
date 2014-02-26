@@ -5,6 +5,7 @@ import com.codahale.metrics.MetricRegistry
 import java.net.InetSocketAddress
 import edu.berkeley.velox.rpc.MessageService
 import java.nio.ByteBuffer
+import java.util.concurrent.ExecutorService
 
 trait NetworkService {
 
@@ -31,6 +32,9 @@ trait NetworkService {
 
   def send(dst: NetworkDestinationHandle, buffer: ByteBuffer)
   def sendAny(buffer: ByteBuffer)
+
+  def setExecutor(executor: ExecutorService = null): ExecutorService
+
 
   def blockForConnections(numConnections: Integer)
 }

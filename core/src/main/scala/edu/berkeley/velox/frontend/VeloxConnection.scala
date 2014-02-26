@@ -19,6 +19,7 @@ object VeloxConnection {
 
 class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_parallelism: Int=1) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
+  ms.networkService.setExecutor()
   ms.initialize()
 
   for(i <- 1 until connection_parallelism)

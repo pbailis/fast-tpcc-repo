@@ -1,6 +1,6 @@
 package edu.berkeley.velox.conf
 
-import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService,NIONetworkService}
+import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService}
 import java.net.InetSocketAddress
 import edu.berkeley.velox.NetworkDestinationHandle
 import com.typesafe.scalalogging.slf4j.Logging
@@ -67,7 +67,6 @@ object VeloxConfig extends Logging {
     println("Getting network service")
     networkService match {
       case "array" => new ArrayNetworkService(performIDHandshake,tcpNoDelay,serverID)
-      case "nio" => new NIONetworkService(performIDHandshake,tcpNoDelay,serverID)
       case _ => throw new Exception(s"Invalid network service type $networkService")
     }
   }

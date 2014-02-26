@@ -38,7 +38,7 @@ class PrimaryKey extends Comparable[PrimaryKey] {
   }
 
   override def hashCode: Int = {
-    table + Arrays.hashCode(keyColumns)
+    table*Arrays.hashCode(keyColumns)
   }
 
   override def toString: String = {

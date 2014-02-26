@@ -311,11 +311,25 @@ class ArrayNetworkService(
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = if(!VeloxConfig.serializable) {
-    Executors.newFixedThreadPool(16,new ArrayNetworkThreadFactory())
-  } else {
-    Executors.newCachedThreadPool()
+  var executor: ExecutorService = null
+
+  def setExecutor(toSet: ExecutorService = null): ExecutorService = {
+    if(toSet != null) {
+      this.executor = toSet
+      return this.executor
+    }
+
+    if(!VeloxConfig.serializable) {
+      this.executor =
+        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory())
+      } else {
+      this.executor =
+        Executors.newCachedThreadPool()
+    }
+
+    this.executor
   }
+
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
