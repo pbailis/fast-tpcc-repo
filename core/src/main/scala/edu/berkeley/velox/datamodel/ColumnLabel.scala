@@ -4,7 +4,7 @@ import DataModelConverters._
 
 case class ColumnLabel(name: String, var isPrimary: Boolean=false) {
 
-  def primary(): ColumnLabel = {
+  def PRIMARY(): ColumnLabel = {
     isPrimary = true
     this
   }

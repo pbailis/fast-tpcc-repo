@@ -30,6 +30,6 @@ object ExampleDataModel {
     val nickTable = db.table("nick-table")
 
     val newTable = db.createTable("new-table",
-                                  Schema.columns("id" primary() INT,"name" STRING))
+                                  Schema.columns("id" PRIMARY() INT,"name" STRING))
   }
 }
