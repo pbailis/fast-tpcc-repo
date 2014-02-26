@@ -373,7 +373,7 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "sbt/sbt assembly; ") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
-def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, **kwargs):
+def start_servers(cluster, network_service, buffer_size, sweep_time, storage_size, storage_parallelism, profile=False, profile_depth=2, serializable = False, **kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 2; rm *.log;"
 
     pstr = ""
@@ -381,7 +381,7 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s 1>server.log-%d 2>&1 & "
+    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d --storage_size %d --storage_parallelism %d %s 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
@@ -397,6 +397,8 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
                         network_service,
                         buffer_size,
                         sweep_time,
+                        storage_size,
+                        storage_parallelism,
                         "--serializable true" if serializable else "",
                         sid)
 

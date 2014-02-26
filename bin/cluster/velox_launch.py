@@ -77,6 +77,9 @@ if __name__ == "__main__":
                         default=200, type=int,
                         help='Time the ArrayNetworkService send sweep thread should wait between sweeps')
 
+    parser.add_argument('--storage_parallelism', dest='storage_parallelism', type=int, default=32)
+    parser.add_argument('--storage_size', dest='storage_size', type=int, default=100000)
+
     parser.add_argument('--servers_per_machine', dest='servers_per_machine',
                         default=1, type=int)
     # jvm options
@@ -139,7 +142,7 @@ if __name__ == "__main__":
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
         assign_hosts(region, cluster)
-        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.storage_size, args.storage_parallelism,args.profile,  args.profile_depth,serializable=args.serializable)
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
