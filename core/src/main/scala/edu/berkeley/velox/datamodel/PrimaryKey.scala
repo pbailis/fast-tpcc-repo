@@ -43,11 +43,6 @@ class PrimaryKey extends Comparable[PrimaryKey] {
     // 100,000 items (IDs)
     // 100 tables
     // 100 column IDs
-    if(_hashcode == -1)
-      _hashcode = table*10000000+
-
-    _hashcode =
-
     table + Arrays.hashCode(keyColumns)
   }
 
