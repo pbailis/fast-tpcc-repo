@@ -4,11 +4,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
 import scala.reflect.ClassTag
+import com.typesafe.scalalogging.slf4j.Logging
 
-class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val concurrency: Int, name: String) {
+class ConcurrentVeloxHashMap[K:ClassTag, V: ClassTag](val initialSize: Int, val concurrency: Int, name: String) extends Logging{
   val bins = new Array[VeloxBin](initialSize)
 
   for(i <- 0 until concurrency) {
+    logger.error(s"$initialSize $concurrency ${initialSize/concurrency}")
     bins(i) = new VeloxBin(initialSize/concurrency, name)
   }
 
