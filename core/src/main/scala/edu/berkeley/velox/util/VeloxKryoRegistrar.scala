@@ -12,6 +12,7 @@ import edu.berkeley.velox.benchmark.operation.PreparePutAllRequest
 import edu.berkeley.velox.benchmark.operation.CommitPutAllRequest
 import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import edu.berkeley.velox.benchmark.TPCCItemKey
+import edu.berkeley.velox.benchmark.datamodel.serializable.SerializableRow
 
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
@@ -83,7 +84,8 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[SerializablePutAllRequest])
     kryo.register(classOf[SerializablePutAllResponse])
     kryo.register(classOf[SerializableUnlockRequest])
-    kryo.register(classOf[SerializableUnlockResponse])
+    kryo.register(classOf[SerializableRow])
+
 
     // Register important base types
     kryo.register(classOf[Request[_]])

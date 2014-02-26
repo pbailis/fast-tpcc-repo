@@ -86,6 +86,38 @@ class StorageEngine extends Logging {
     values
   }
 
+  def getAll(keys: Array[PrimaryKey], rows: Array[Row]): util.Map[PrimaryKey, Row] = {
+    val ret = new util.HashMap[PrimaryKey, Row](keys.size)
+    val it = keys.iterator
+    var keyno = 0
+    while(it.hasNext) {
+      val key = it.next()
+
+      val retRow = new Row
+      ret.put(key, retRow)
+
+      val table = latestGoodForKey.get(key.table)
+
+      if(table != null) {
+        val latestVal = table.get(key)
+
+        if(latestVal != null) {
+          val c_it = rows(keyno).columns.entrySet().iterator()
+          while(c_it.hasNext) {
+            val col = c_it.next().getKey
+            val v = latestVal.readColumn(col)
+            if(v != null) {
+              retRow.column(col, v)
+            }
+          }
+        }
+      }
+      keyno += 1
+    }
+
+    ret
+  }
+
   def get(key: PrimaryKey): Row = {
     return getLatestItemForKey(key)
   }

@@ -99,7 +99,7 @@ class VeloxServer extends Logging {
   class InternalGetAllHandler extends MessageHandler[GetAllResponse, GetAllRequest] {
     def receive(src: NetworkDestinationHandle, msg: GetAllRequest): Future[GetAllResponse] = {
       // returns true if there was an old value
-      future { new GetAllResponse(storageEngine.getAll(msg.keys)) }
+      future { new GetAllResponse(storageEngine.getAll(msg.keys, msg.values)) }
     }
   }
 
@@ -149,7 +149,7 @@ class VeloxServer extends Logging {
      }
    }
 
-  class InternalSerializableUnlockRequestHandler extends MessageHandler[SerializableUnlockResponse, SerializableUnlockRequest] {
+  class InternalSerializableUnlockRequestHandler extends MessageHandler[Unit, SerializableUnlockRequest] {
       def receive(src: NetworkDestinationHandle, msg: SerializableUnlockRequest) = {
         future {
           val key_it = msg.keys.iterator()
@@ -157,7 +157,6 @@ class VeloxServer extends Logging {
             val key = key_it.next()
             lockManager.unlock(key)
           }
-          new SerializableUnlockResponse
         }
       }
     }

@@ -216,11 +216,6 @@ class SerializableTransaction(lockTable: LockManager,
       }
     }
 
-  val unlockFutures = new util.ArrayList[Future[SerializableUnlockResponse]]()
-
-    logger.error(s"txn $txId unlocking ${partitionToUnlock}")
-
-
   val dest_it = partitionToUnlock.keySet.iterator()
   while(dest_it.hasNext) {
     val dest = dest_it.next()
@@ -233,15 +228,9 @@ class SerializableTransaction(lockTable: LockManager,
         lockTable.unlock(key)
       }
     } else {
-      unlockFutures.add(messageService.send(dest, new SerializableUnlockRequest(partitionToUnlock.get(dest))))
+      messageService.send(dest, new SerializableUnlockRequest(partitionToUnlock.get(dest)))
     }
   }
-
-    if(unlockFutures.size() > 0) {
-      val unlockFuture = Future.sequence(unlockFutures.asScala)
-      Await.ready(unlockFuture, Duration.Inf)
-    }
-
   }
 
   override def getQueryResult(itemKey: PrimaryKey, column: Int): Any = {

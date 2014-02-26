@@ -10,7 +10,7 @@ class PreparePutAllResponse
 case class CommitPutAllRequest(val timestamp: Long, val deferredIncrement: DeferredIncrement = null) extends Request[CommitPutAllResponse]
 class CommitPutAllResponse(val incrementResponse: Int = -1)
 
-case class GetAllRequest(val keys: util.Map[PrimaryKey, Row]) extends Request[GetAllResponse]
+case class GetAllRequest(val keys:Array[PrimaryKey], val values: Array[Row]) extends Request[GetAllResponse]
 case class GetAllResponse(val values: util.Map[PrimaryKey, Row])
 
 case class SerializableGetAllRequest(val keys: util.Map[PrimaryKey, Row]) extends Request[SerializableGetAllResponse]
@@ -19,8 +19,7 @@ case class SerializableGetAllResponse(val values: util.Map[PrimaryKey, Row])
 case class SerializablePutAllRequest(val values: util.HashMap[PrimaryKey, Row]) extends Request[SerializablePutAllResponse]
 class SerializablePutAllResponse
 
-case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends Request[SerializableUnlockResponse]
-class SerializableUnlockResponse
+case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends OneWayRequest
 
 
 

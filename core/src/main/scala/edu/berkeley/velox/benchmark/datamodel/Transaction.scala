@@ -171,24 +171,30 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     p.future
   }
 
+  class KeyRow(val keys: util.ArrayList[PrimaryKey], val rows: util.ArrayList[Row])
+
   def executeRead = {
 
     val p = Promise[Transaction]
     results.clear()
 
     if(!toGetRemote.isEmpty) {
-     val readsByPartition = new util.HashMap[NetworkDestinationHandle, GetAllRequest]
+     val readsByPartition = new util.HashMap[NetworkDestinationHandle, KeyRow]
 
 
       val tgr_it = toGetRemote.entrySet().iterator()
       while(tgr_it.hasNext) {
         val entry = tgr_it.next()
         val partition = partitioner.getMasterPartition(entry.getKey)
-        if(!readsByPartition.containsKey(partition)) {
-          readsByPartition.put(partition, new GetAllRequest(new util.HashMap[PrimaryKey, Row]))
+
+        var kr = readsByPartition.get(partition)
+        if(kr == null) {
+          kr = new KeyRow(new util.ArrayList[PrimaryKey], new util.ArrayList[Row])
+          readsByPartition.put(partition, kr)
         }
 
-        readsByPartition.get(partition).keys.put(entry.getKey, entry.getValue)
+        kr.keys.add(entry.getKey)
+        kr.rows.add(entry.getValue)
       }
 
       val getFutures = new util.ArrayList[Future[GetAllResponse]](readsByPartition.size())
@@ -196,7 +202,9 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       val rbp_it = readsByPartition.entrySet().iterator()
       while(rbp_it.hasNext) {
         val rbp = rbp_it.next()
-        getFutures.add(messageService.send(rbp.getKey, rbp.getValue))
+        val kr = rbp.getValue
+        getFutures.add(messageService.send(rbp.getKey, new GetAllRequest(kr.keys.toArray(new Array[PrimaryKey](kr.keys.size())),
+                                                                         kr.rows.toArray(new Array[Row](kr.keys.size())))))
       }
 
      val getFuture = Future.sequence(getFutures.asScala)
@@ -246,12 +254,12 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
   var deferredIncrementResponse = -1
   private var deferredIncrement: DeferredIncrement = null
 
-  private var toPutLocal = new util.HashMap[PrimaryKey, Row]
-  private var toGetLocal = new util.HashMap[PrimaryKey, Row]
+  private var toPutLocal = new util.HashMap[PrimaryKey, Row](64)
+  private var toGetLocal = new util.HashMap[PrimaryKey, Row](64)
 
-  private var toPutRemote = new util.HashMap[PrimaryKey, Row]
-  private var toGetRemote = new util.HashMap[PrimaryKey, Row]
-  var results: util.Map[PrimaryKey, Row] = new util.HashMap[PrimaryKey, Row]
+  private var toPutRemote = new util.HashMap[PrimaryKey, Row](64)
+  private var toGetRemote = new util.HashMap[PrimaryKey, Row](64)
+  var results: util.Map[PrimaryKey, Row] = new util.HashMap[PrimaryKey, Row](64)
 
   def combineFuture[T](futures: util.ArrayList[Future[T]]): Future[util.Vector[T]] = {
     val p = Promise[util.Vector[T]]

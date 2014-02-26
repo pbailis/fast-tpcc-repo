@@ -38,6 +38,7 @@ object ClientBenchmark {
     var load = false
     var run = false
     var serializable = false
+    var pct_test = false
     var connection_parallelism = 1
 
     var frontendCluster = ""
@@ -77,6 +78,8 @@ object ClientBenchmark {
       opt[Unit]("load") foreach { p => load = true }
       opt[Unit]("run") foreach { p => run = true }
       opt[Unit]("serializable") foreach { p => serializable = true }
+      opt[Unit]("pct_test") foreach { p => pct_test = true }
+
 
 
       opt[String]("network_service") foreach {
@@ -171,7 +174,7 @@ object ClientBenchmark {
     System.exit(0)
   }
 
-  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, serializable: Boolean = false): OutstandingNewOrderRequest = {
+  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, serializable: Boolean = false, pct_test: Boolean = false): OutstandingNewOrderRequest = {
     val W_ID = generator.number(1, totalWarehouses)
     val D_ID: Int = generator.number(1, 10)
     val C_ID: Int = generator.NURand(1023, 1, 3000)
@@ -181,8 +184,16 @@ object ClientBenchmark {
 
     for(i <- 1 to OL_CNT) {
       var O_W_ID = W_ID
-      if (totalWarehouses > 1 && generator.nextDouble() < chance_remote) {
-        O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
+      if (totalWarehouses > 1) {
+        if(!pct_test && generator.nextDouble() < chance_remote) {
+          O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
+
+        }
+        // in the remote tests, we want to precisely control the number of remote txns, so we
+        // only make the first item have a remote id
+        else if(pct_test && i == 1 && generator.nextDouble() < chance_remote) {
+          O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
+        }
       }
 
       warehouseIDs.add(O_W_ID)

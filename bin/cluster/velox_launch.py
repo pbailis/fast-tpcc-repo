@@ -63,6 +63,8 @@ if __name__ == "__main__":
 
     parser.add_argument('--client_bench_local', action='store_true',
                         help='Run THE CRANKSHAW TEST locally')
+
+    parser.add_argument('--wh_bench', action='store_true')
     parser.add_argument('--usefutures', action='store_true',
                         help='Have THE CRANKSHAW use futures instead of blocking for reply')
     parser.add_argument('--latency', action='store_true',
@@ -135,6 +137,33 @@ if __name__ == "__main__":
     if args.terminate:
         terminate_cluster(region, cluster_id)
 
+    if args.wh_bench:
+        for wh in [1, 2, 4, 8]:
+            for clients in [1, 10, 100, 1000, 10000, 100000]:
+                for config in ["ca", "serializable"]:
+                    runid = "whbench-WH%d-CLIENTS%d-%s" % (wh, clients, config)
+                    assign_hosts(region, cluster)
+
+                    args.output_dir += "/"+runid
+
+                    extra_args = "--warehouses_per_server %d" % wh
+                    if(config == "serializable"):
+                        args.serializable = True
+                        args.sweep_time = 0
+
+                    else:
+                        args.serializable = False
+                        args.sweep_time = 100
+
+                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+                    sleep(5)
+                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                           args.profile, args.profile_depth,
+                                           parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
+                    stop_velox_processes()
+                    fetch_logs(args.output_dir, runid, cluster)
+                    pprint("THE CRANKSHAW has completed!")
+
     if args.client_bench:
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
@@ -143,7 +172,7 @@ if __name__ == "__main__":
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=10, timeout=60, ops=50000, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
+                               parallelism=100, timeout=120, ops=10000, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
                                )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)

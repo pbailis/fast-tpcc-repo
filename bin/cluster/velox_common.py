@@ -359,7 +359,7 @@ def install_ykit(cluster):
 def rebuild_servers(remote, branch, deploy_key=None):
     if deploy_key:
         upload_file("all-hosts", deploy_key, "/home/ubuntu/.ssh")
-        run_cmd("all-hosts", "echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
+        run_cmd("all-hosts", "rm /home/ubuntu/.ssh/config; echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
 
     pprint('Rebuilding clients and servers...')
     run_cmd_in_velox('all-hosts',
@@ -375,6 +375,10 @@ def rebuild_servers(remote, branch, deploy_key=None):
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, **kwargs):
     HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 2; rm *.log;"
+
+    netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
+
+    HEADER+= netCmd
 
     pstr = ""
     if profile:
@@ -447,7 +451,7 @@ def client_bench_local_single(numservers, network_service, buffer_size, sweep_ti
 
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5, connection_parallelism=1, serializable = False):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2, parallelism=64, chance_remote=.01, ops=100000, timeout=5, connection_parallelism=1, serializable = False, extra_args=""):
     hprof = ""
 
     if profile:
@@ -455,9 +459,9 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = ("pkill -9 java; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
-           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "")
+           parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
 
     load_cmd = cmd.replace("--run", "--load").replace("--serializable", "")
     run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd)
