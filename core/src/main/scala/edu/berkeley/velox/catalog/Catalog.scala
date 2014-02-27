@@ -1,43 +1,59 @@
 package edu.berkeley.velox.catalog
 
 import edu.berkeley.velox.server.ZKClient
-import java.util.concurrent.ConcurrentHashMap
 import edu.berkeley.velox.storage.StorageManager
-import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.datamodel.PrimaryKey
 import edu.berkeley.velox.datamodel.Schema
+import scala.collection.immutable.HashMap
 
-class Catalog(storage: StorageManager) extends Logging {
+object Catalog extends Logging {
 
-  storage.setCatalog(this)
+  @volatile
+  private var schemas = new HashMap[DatabaseName, HashMap[TableName, Schema]]
 
-  var zkClient: ZKClient = null
-  var registered = false
+  @volatile
+  private var storageManagers: List[StorageManager] = Nil
 
-  def setZKClient(zk: ZKClient) {
-    zkClient = zk
-    registered = true
+  /**
+    *  Register a storage manager with the catalog.  After registration the
+    *  storage manager will be informed of all relevant updates to the Catalog.
+    *
+    *  @param manager The storage manager to register
+    *  @param notifyExisting if true, the manager will be notified of currently
+    *                        existing objects in the catalog
+    */
+  def registerStorage(manager: StorageManager, notifyExisting: Boolean = false) {
+    storageManagers.synchronized {
+      storageManagers ::= manager
+    }
+    if (notifyExisting) {
+      schemas.synchronized {
+        schemas.foreach {
+          case (dbname,tables) => {
+            manager.createDatabase(dbname)
+            tables.foreach {
+              case (tablename,schema) => manager.createTable(dbname,tablename)
+            }
+          }
+        }
+      }
+    }
   }
 
-  val schemas = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[DatabaseName, Schema]]
-
   def listLocalDatabases: Set[DatabaseName] = {
-    // convert from Java to Scala set under the covers. This sucks.
-    schemas.keySet().asScala.toSet
+    schemas.keySet
   }
 
   def createDatabase(dbName: DatabaseName): Boolean = {
-    assume(registered)
     logger.info(s"Creating database $dbName")
-    zkClient.createDatabase(dbName)
+    ZKClient.createDatabase(dbName)
   }
 
   def createTable(dbName: DatabaseName, tableName: TableName, schema: Schema): Boolean = {
-    assume(registered)
     logger.info(s"Creating table $dbName:$tableName")
-    zkClient.createTable(dbName, tableName, schema)
+    ZKClient.createTable(dbName, tableName, schema)
   }
 
   /**
@@ -46,47 +62,49 @@ class Catalog(storage: StorageManager) extends Logging {
    * @return true if the database was created, false if it already existed
    */
   def _createDatabaseTrigger(db: DatabaseName): Boolean = {
-    val dbAdded = schemas.putIfAbsent(db.toString, new ConcurrentHashMap[TableName, Schema]) == null
-
-    if (dbAdded) {
-      storage.createDatabase(db)
+    if (schemas.contains(db)) false
+    else {
+      schemas.synchronized {
+        schemas += ((db, new HashMap[TableName, Schema]))
+      }
+      storageManagers foreach (_.createDatabase(db))
+      true
     }
-
-    return dbAdded
   }
 
   def listLocalTables(db: DatabaseName): Set[TableName] = {
-    val tableMap = schemas.get(db)
-
-    if(tableMap == null) {
-      return null
+    schemas.get(db) match {
+      case Some(tm) => tm.keySet
+      case None => null
     }
-
-    tableMap.keySet().asScala.toSet
   }
 
-  def _createTableTrigger(db: DatabaseName, table: TableName, schema: Schema): Boolean = {
-    if (!checkDBExistsLocal(db)) {
-      throw new IllegalStateException(s"Trying to add table $table to database $db which doesn't exist")
+  def _createTableTrigger(db: DatabaseName, table: TableName, schema: Schema): Unit = {
+    val tm = schemas.getOrElse(db,throw new IllegalStateException(s"Trying to add table $table to database $db which doesn't exist"))
+    if (tm.contains(table)) {
+      val existing = tm(table)
+      if (!schema.equals(existing))
+        throw new IllegalStateException(s"Trying to modify schema for $table. Not supported!")
+      else
+        logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
     }
-    val tableAdded = schemas.get(db).putIfAbsent(table, schema) == null
-    if (tableAdded) {
-      storage.createTable(db, table)
-    } else {
-      throw new IllegalStateException(s"Trying to add table $table to database $db but table $table already exists!")
+    else {
+      schemas.synchronized {
+        val newMap = tm + ((table,schema))
+        schemas += ((db,newMap))
+      }
+      storageManagers foreach (_.createTable(db,table))
     }
-    tableAdded
   }
 
   def checkDBExistsLocal(db: DatabaseName): Boolean = {
-    schemas.containsKey(db)
+    schemas.contains(db)
   }
 
   /*
    * Potentially blocking call to check zookeeper
    */
   def checkTableExists(db: DatabaseName, table: TableName): Boolean = {
-    require(registered)
     /* Because there can be only one schema change at time
      * and the only way a schema exists on ZK but not locally is
      * if we are in the middle of a schema change, we know that if the
@@ -97,9 +115,10 @@ class Catalog(storage: StorageManager) extends Logging {
       false
     } else if (checkTableExistsLocal(db, table)) {
       true
-    } else if (zkClient.checkTableExistsZookeeper(db, table)) {
+    } else if (ZKClient.checkTableExistsZookeeper(db, table)) {
       // add to local schema if table exists in zookeeper but not locally
-      storage.createTable(db, table)
+      val schema = ZKClient.getSchemaFor(db,table)
+      _createTableTrigger(db,table,schema)
       true
     } else {
       // no record of table, return false
@@ -108,7 +127,10 @@ class Catalog(storage: StorageManager) extends Logging {
   }
 
   def checkTableExistsLocal(db: String, table: String): Boolean = {
-    checkDBExistsLocal(db) && schemas.get(db).contains(table)
+    if (schemas.contains(db))
+      schemas.get(db).get.contains(table)
+    else
+      false
   }
 
 
