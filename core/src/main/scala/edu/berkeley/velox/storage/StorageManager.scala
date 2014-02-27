@@ -3,6 +3,7 @@ package edu.berkeley.velox.storage
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox._
 import edu.berkeley.velox.datamodel._
+import edu.berkeley.velox.trigger.TriggerManager
 
 trait StorageManager {
 
@@ -31,7 +32,10 @@ trait StorageManager {
     * @return The number of rows inserted
     */
   final def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
-    _insert(databaseName, tableName, insertSet)
+    TriggerManager.beforeInsert(databaseName, tableName, insertSet)
+    val inserted = _insert(databaseName, tableName, insertSet)
+    TriggerManager.afterInsert(databaseName, tableName, insertSet)
+    inserted
   }
 
   /**

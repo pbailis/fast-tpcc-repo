@@ -51,6 +51,13 @@ trait ZookeeperConnection extends Logging {
     case e: NodeExistsException => logger.info("Someone else already created catalog")
   }
 
+  try {
+    client.create()
+      .withMode(CreateMode.PERSISTENT)
+      .forPath(ZKUtils.TRIGGER_ROOT)
+  } catch {
+    case e: NodeExistsException => logger.info("Someone else already created trigger")
+  }
 
   protected var groupMembershipCache = new PathChildrenCache(client, ZKUtils.CLUSTER_GROUP_NODE, true)
   //null.asInstanceOf[PathChildrenCache]
@@ -166,6 +173,7 @@ object ZookeeperConnectionUtils {
   val VELOX_NAMESPACE = "velox"
   val ZK_UTIL_PATH = "/velox-utils"
   val CATALOG_ROOT = "/catalog"
+  val TRIGGER_ROOT = "/trigger"
   val SCHEMA_BARRIER_PATH = ZKPaths.makePath(ZK_UTIL_PATH, "schema-barrier")
   val SCHEMA_LOCK_PATH = ZKPaths.makePath(ZK_UTIL_PATH, "schema-change-lock")
   val CLUSTER_GROUP_NODE = ZKPaths.makePath(ZK_UTIL_PATH, "velox-cluster")
@@ -186,6 +194,11 @@ object ZookeeperConnectionUtils {
 
   def makeTablePath(db: String, tbl: String): String = {
     ZKPaths.makePath(makeDBPath(db), tbl)
+  }
+
+  def makePath(root: String, args: String*): String = {
+    val parts = root +: args
+    parts.reduceLeft(ZKPaths.makePath(_, _))
   }
 
   def schemaToBytes(schema: Schema): Array[Byte] = {
