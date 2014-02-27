@@ -83,4 +83,32 @@ object ClientZookeeperConnection extends ZookeeperConnection {
     logger.debug("finishing schema addition")
     ret
   }
+
+  def createTrigger(dbName: DatabaseName, tableName: TableName, triggerName: String, triggerBytes: Array[Byte]): Boolean = {
+    var ret = true
+    try {
+      // make sure only one schema change at a time because all schema changes use
+      // the same barrier
+      schemaChangeLock.acquire()
+      // reset the counter
+      schemaChangeBarrier.reset(VeloxConfig.expectedNumInternalServers)
+
+      client.create().creatingParentsIfNeeded()
+        .forPath(ZKUtils.makePath(ZKUtils.TRIGGER_ROOT, dbName, tableName, triggerName), triggerBytes)
+
+      // wait until all servers have made change
+      schemaChangeBarrier.awaitUntilZero()
+    } catch {
+      // TODO better error handling
+      case e: Exception => {
+        logger.error("Error adding to trigger", e)
+        ret = false
+      }
+    } finally {
+      schemaChangeLock.release()
+    }
+    logger.debug(s"finished creating trigger $triggerName")
+    ret
+  }
+
 }

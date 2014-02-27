@@ -38,6 +38,8 @@ object ServerZookeeperConnection extends ZookeeperConnection {
   // Start watching for changes in the catalog
   client.getChildren().usingWatcher(new ServerDBWatcher(client, schemaChangeBarrier)).forPath(ZKUtils.CATALOG_ROOT)
 
+  // Start watching for triggers
+  client.getChildren().usingWatcher(new TriggerWatcher(client, schemaChangeBarrier)).forPath(ZKUtils.TRIGGER_ROOT)
 
 
   /**
@@ -77,12 +79,4 @@ object ServerZookeeperConnection extends ZookeeperConnection {
     }
     super.getServersInGroup()
   }
-
-
-
-
-
-
-
-} // end ZKClient
-
+} // end ServerZookeeperConnection

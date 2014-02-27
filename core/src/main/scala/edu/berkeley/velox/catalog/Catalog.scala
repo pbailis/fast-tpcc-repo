@@ -205,4 +205,8 @@ object Catalog extends Logging {
     _createTableTrigger(dbName, tableName, schema)
     ClientZookeeperConnection.createTable(dbName, tableName, schema)
   }
+
+  def registerTrigger(dbName: DatabaseName, tableName: TableName, triggerName: String, triggerBytes: Array[Byte]) = {
+    ClientZookeeperConnection.createTrigger(dbName, tableName, triggerName, triggerBytes)
+  }
 }
