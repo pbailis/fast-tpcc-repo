@@ -40,13 +40,11 @@ import java.util
 // it owns. It depends on the routing service to route only the correct
 // keys to it.
 
-class VeloxServer(zkConfig: ZKClient,
-                  storage: StorageManager,
-                  catalog: Catalog,
+class VeloxServer(storage: StorageManager,
                   id: NetworkDestinationHandle) extends Logging {
 
-  val servers = zkConfig.getServersInGroup()
-  val partitioner = new RandomPartitioner(zkConfig)
+  val servers = ZKClient.getServersInGroup()
+  val partitioner = new RandomPartitioner
 
   val internalServer = new InternalRPCService(id, servers)
   internalServer.initialize()
@@ -71,7 +69,7 @@ class VeloxServer(zkConfig: ZKClient,
   class FrontendCreateDatabaseRequestHandler extends MessageHandler[CreateDatabaseResponse, CreateDatabaseRequest] {
     def receive(src: NetworkDestinationHandle, msg: CreateDatabaseRequest): Future[CreateDatabaseResponse] = {
       future {
-        catalog.createDatabase(msg.name)
+        Catalog.createDatabase(msg.name)
         new CreateDatabaseResponse
       }
     }
@@ -80,7 +78,7 @@ class VeloxServer(zkConfig: ZKClient,
   class FrontendCreateTableRequestHandler extends MessageHandler[CreateTableResponse, CreateTableRequest] {
     def receive(src: NetworkDestinationHandle, msg: CreateTableRequest): Future[CreateTableResponse] = {
       future {
-        catalog.createTable(msg.database, msg.table, msg.schema)
+        Catalog.createTable(msg.database, msg.table, msg.schema)
         new CreateTableResponse
       }
     }
@@ -94,7 +92,7 @@ class VeloxServer(zkConfig: ZKClient,
 
       msg.insertSet.getRows.foreach(
         r => {
-          val pkey = catalog.extractPrimaryKey(msg.database, msg.table, r)
+          val pkey = Catalog.extractPrimaryKey(msg.database, msg.table, r)
           val partition = partitioner.getMasterPartition(pkey)
           if(!requestsByPartition.containsKey(partition)) {
             requestsByPartition.put(partition, new InsertSet)
@@ -174,13 +172,10 @@ object VeloxServer extends Logging {
     VeloxConfig.initialize(args)
 
     val storage = new StorageManager
-    val catalog = new Catalog(storage)
-    val zkClient = new ZKClient(catalog)
     val myAddr = s"${VeloxConfig.serverIpAddress}:${VeloxConfig.internalServerPort}"
-    val id = zkClient.registerWithZooKeeper(myAddr)
+    val id = ZKClient.registerWithZooKeeper(myAddr)
 
-    catalog.setZKClient(zkClient)
     // Register with ZK. initialize network service and message service
-    val kvserver = new VeloxServer(zkClient, storage, catalog, id)
+    val kvserver = new VeloxServer(storage, id)
   }
 }

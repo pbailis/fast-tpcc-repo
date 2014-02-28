@@ -24,4 +24,29 @@ class Schema {
   override def toString: String = {
     s"(Columns: $columns)"
   }
+
+  override def equals(that: Any): Boolean = {
+    if (that.isInstanceOf[Schema])
+      equals(that.asInstanceOf[Schema])
+    else
+      false
+  }
+
+  def equals(schema: Schema): Boolean = {
+    if (schema.columns == null && columns == null)
+      true
+    else if (schema.columns == null || columns == null)
+      false
+    else if (schema.columns.size != columns.size)
+      false
+    else {
+      schema.columns.zip(columns).foldLeft(true)(
+        (eq,colpair) => {
+          if (!eq) eq
+          else colpair._1.schemaEquals(colpair._2)
+        }
+      )
+    }
+  }
+
 }

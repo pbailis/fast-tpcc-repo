@@ -16,7 +16,6 @@ import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.utils.ZKPaths
 import scala.collection.JavaConverters._
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.server.ZKClient._
 import edu.berkeley.velox.util.zk.DistributedCountdownLatch
 import edu.berkeley.velox.catalog.Catalog
 import edu.berkeley.velox.datamodel.{Schema, TableName, DatabaseName}
@@ -29,7 +28,32 @@ import java.nio.ByteBuffer
  * and Recipes classes are threadsafe, and almost all of the mutable state is contained
  * in them. There should be one shared client per JVM.
  */
-class ZKClient(val catalog: Catalog) extends Logging {
+object ZKClient extends Logging {
+
+  protected val VELOX_NAMESPACE = "velox"
+  protected val ZK_UTIL_PATH = "/velox-utils"
+  protected val CATALOG_ROOT = "/catalog"
+  protected val SCHEMA_BARRIER_PATH = ZKPaths.makePath(ZK_UTIL_PATH, "schema-barrier")
+  protected val SCHEMA_LOCK_PATH = ZKPaths.makePath(ZK_UTIL_PATH, "schema-change-lock")
+  protected val CLUSTER_GROUP_NODE = ZKPaths.makePath(ZK_UTIL_PATH, "velox-cluster")
+
+  /**
+   * Strips the last 10 characters from a path and creates an Int from them.
+   * This assumes Zookeeper's sequential node naming format.
+   * @param path The full Zookeeper path of a sequentially named node
+   * @return The sequential ID assigned this node by Zookeeper
+   */
+  def getServerIdFromPath(path: String): NetworkDestinationHandle = {
+    path.substring(path.length - 10).toInt
+  }
+
+  def makeDBPath(dbName: String): String = {
+    ZKPaths.makePath(CATALOG_ROOT, dbName)
+  }
+
+  def makeTablePath(db: String, tbl: String): String = {
+    ZKPaths.makePath(makeDBPath(db), tbl)
+  }
 
   private var groupMembershipCache = null.asInstanceOf[PathChildrenCache]
   private var registered = false
@@ -228,11 +252,11 @@ class ZKClient(val catalog: Catalog) extends Logging {
       val catalogDBs = client.getChildren.usingWatcher(new DBWatcher).forPath(CATALOG_ROOT)
         .asScala
         .toSet
-      val localDBs = catalog.listLocalDatabases
+      val localDBs = Catalog.listLocalDatabases
       val diff = catalogDBs -- localDBs
       if (diff.size == 1) {
         val newDBName = diff.toList(0)
-        catalog._createDatabaseTrigger(newDBName)
+        Catalog._createDatabaseTrigger(newDBName)
         client.getChildren.usingWatcher(new TableWatcher(newDBName)).forPath(makeDBPath(newDBName))
       } else if (diff.size == 0) {
         // we already know about all the databases in the catalog.
@@ -257,12 +281,12 @@ class ZKClient(val catalog: Catalog) extends Logging {
         .forPath(ZKPaths.makePath(CATALOG_ROOT, dbname))
         .asScala
         .toSet
-      val localTables = catalog.listLocalTables(dbname)
+      val localTables = Catalog.listLocalTables(dbname)
       val diff = catalogTables -- localTables
       if (diff.size == 1) {
         val newTableName = diff.toList(0)
         val schemaBytes = client.getData.forPath(makeTablePath(dbname, newTableName))
-        catalog._createTableTrigger(dbname, newTableName, bytesToSchema(schemaBytes))
+        Catalog._createTableTrigger(dbname, newTableName, bytesToSchema(schemaBytes))
       } else if (diff.size == 0) {
         // we already know about all the tables in the catalog.
         logger.warn("Table watcher activated but all tables accounted for")
@@ -274,6 +298,19 @@ class ZKClient(val catalog: Catalog) extends Logging {
     }
   } // end TableWatcher
 
+
+  /** Get the schema for the specified database and table
+    *
+    * @param db Database table exists in
+    * @param table Table to get the schema for
+    *
+    * @return The specified schema
+    */
+  def getSchemaFor(db: String, table: String): Schema = {
+    val schemaBytes = client.getData.forPath(makeTablePath(db, table))
+    bytesToSchema(schemaBytes)
+  }
+
   private def schemaToBytes(schema: Schema): Array[Byte] = {
     KryoThreadLocal.kryoTL.get().serialize(schema).array()
   }
@@ -284,30 +321,3 @@ class ZKClient(val catalog: Catalog) extends Logging {
 
 } // end ZKClient
 
-object ZKClient {
-
-  protected val VELOX_NAMESPACE = "velox"
-  protected val ZK_UTIL_PATH = "/velox-utils"
-  protected val CATALOG_ROOT = "/catalog"
-  protected val SCHEMA_BARRIER_PATH = ZKPaths.makePath(ZK_UTIL_PATH, "schema-barrier")
-  protected val SCHEMA_LOCK_PATH = ZKPaths.makePath(ZK_UTIL_PATH, "schema-change-lock")
-  protected val CLUSTER_GROUP_NODE = ZKPaths.makePath(ZK_UTIL_PATH, "velox-cluster")
-
-  /**
-   * Strips the last 10 characters from a path and creates an Int from them.
-   * This assumes Zookeeper's sequential node naming format.
-   * @param path The full Zookeeper path of a sequentially named node
-   * @return The sequential ID assigned this node by Zookeeper
-   */
-  def getServerIdFromPath(path: String): NetworkDestinationHandle = {
-    path.substring(path.length - 10).toInt
-  }
-
-  def makeDBPath(dbName: String): String = {
-    ZKPaths.makePath(CATALOG_ROOT, dbName)
-  }
-
-  def makeTablePath(db: String, tbl: String): String = {
-    ZKPaths.makePath(makeDBPath(db), tbl)
-  }
-}

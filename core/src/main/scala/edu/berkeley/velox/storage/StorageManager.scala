@@ -10,18 +10,12 @@ import com.typesafe.scalalogging.slf4j.Logging
 
 class StorageManager extends Logging {
 
-  var catalog: Catalog = null
-  var registered = false
-
-  def setCatalog(catalog: Catalog) {
-    this.catalog = catalog
-    registered = true
-  }
-
   // Correct but dumb implementations of database and tables.
   // No attempt to be fast or efficient, no schema for now,
   // no error handling.
   val dbs = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, Table]]()
+
+  Catalog.registerStorageManager(this,true)
 
   /**
    * Create a new database. Nop if db already exists.
@@ -55,7 +49,7 @@ class StorageManager extends Logging {
   def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet) {
     val table =  dbs.get(databaseName).get(tableName)
     insertSet.getRows foreach {
-      r => table.insert(catalog.extractPrimaryKey(databaseName, tableName, r), r)
+      r => table.insert(Catalog.extractPrimaryKey(databaseName, tableName, r), r)
     }
   }
 

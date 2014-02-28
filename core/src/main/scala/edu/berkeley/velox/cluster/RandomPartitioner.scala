@@ -6,10 +6,9 @@ import edu.berkeley.velox.datamodel.PrimaryKey
 
 // We give the partitioner a reference to the zkConfig so that it knows
 // the current list of servers in the cluster
-class RandomPartitioner(zkConfig: ZKClient) extends Partitioner {
+class RandomPartitioner extends Partitioner {
   override def getMasterPartition(key: PrimaryKey): NetworkDestinationHandle = {
-    assume(zkConfig != null)
-    val index = Math.abs(key.hashCode() % zkConfig.getServersInGroup().size)
-    zkConfig.getServersInGroup().keys.toList(index)
+    val index = Math.abs(key.hashCode() % ZKClient.getServersInGroup().size)
+    ZKClient.getServersInGroup().keys.toList(index)
   }
 }
