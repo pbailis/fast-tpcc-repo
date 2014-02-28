@@ -43,7 +43,7 @@ class Schema {
       schema.columns.zip(columns).foldLeft(true)(
         (eq,colpair) => {
           if (!eq) eq
-          else colpair._1.equals(colpair._2)
+          else colpair._1.schemaEquals(colpair._2)
         }
       )
     }

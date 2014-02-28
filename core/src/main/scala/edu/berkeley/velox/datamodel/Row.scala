@@ -3,6 +3,7 @@ package edu.berkeley.velox.datamodel
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
+import scala.collection.mutable.StringBuilder
 
 protected[velox] class Row {
   // TODO : this is expensive
@@ -37,6 +38,19 @@ protected[velox] class Row {
     var ret = 0
     columns.entrySet.asScala.foreach(pair => ret *= pair.getKey.name.hashCode*pair.getValue.hashCode())
     ret
+  }
+
+  override def toString(): String = {
+    val sb = new StringBuilder("row(")
+    val it = columns.entrySet.iterator
+    while (it.hasNext) {
+      val kv = it.next
+      sb.append(kv.getKey)
+      sb.append("->")
+      sb.append(kv.getValue)
+      sb.append(", ")
+    }
+    sb.result
   }
 }
 
