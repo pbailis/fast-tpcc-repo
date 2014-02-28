@@ -149,7 +149,7 @@ class VeloxServer extends Logging {
      }
    }
 
-  class InternalSerializableUnlockRequestHandler extends MessageHandler[SerializableUnlockResponse, SerializableUnlockRequest] {
+  class InternalSerializableUnlockRequestHandler extends MessageHandler[Unit, SerializableUnlockRequest] {
       def receive(src: NetworkDestinationHandle, msg: SerializableUnlockRequest) = {
         future {
           val key_it = msg.keys.iterator()
@@ -157,7 +157,6 @@ class VeloxServer extends Logging {
             val key = key_it.next()
             lockManager.unlock(key)
           }
-          new SerializableUnlockResponse
         }
       }
     }
