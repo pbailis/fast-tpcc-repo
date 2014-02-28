@@ -458,7 +458,7 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         hprof += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
-    cmd = ("pkill -9 java; "
+    cmd = ("pkill -9 java; sleep 2; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
           (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
