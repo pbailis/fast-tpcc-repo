@@ -90,8 +90,17 @@ object Catalog extends Logging {
     }
     else {
       schemas.synchronized {
-        val newMap = tm + ((table,schema))
-        schemas += ((db,newMap))
+        // recheck for race condition
+        if (tm.contains(table)) {
+          val existing = tm(table)
+          if (!schema.equals(existing))
+            throw new IllegalStateException(s"Trying to modify schema for $table. Not supported!")
+          else
+            logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
+        } else {
+          val newMap = tm + ((table,schema))
+          schemas += ((db,newMap))
+        }
       }
       storageManagers foreach (_.createTable(db,table))
     }
