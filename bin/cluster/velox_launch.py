@@ -139,7 +139,7 @@ if __name__ == "__main__":
 
     if args.wh_bench:
         for wh in [1, 2, 4, 8]:
-            for clients in [1, 10, 100, 1000, 10000, 100000]:
+            for clients in [100, 1000]:#[1, 10, 100, 1000, 10000, 100000]:
                 for config in ["ca", "serializable"]:
                     runid = "whbench-WH%d-CLIENTS%d-%s" % (wh, clients, config)
                     assign_hosts(region, cluster)
@@ -153,7 +153,10 @@ if __name__ == "__main__":
 
                     else:
                         args.serializable = False
-                        args.sweep_time = 100
+                        if clients > 1000:
+                            args.sweep_time = 100
+                        else:
+                            args.sweep_time = 0
 
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
                     sleep(10)
