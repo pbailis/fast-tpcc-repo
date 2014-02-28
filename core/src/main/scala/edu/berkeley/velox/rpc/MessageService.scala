@@ -77,7 +77,10 @@ abstract class MessageService extends Logging {
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
 
-    requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+    if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+    }
+
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
     } else {
@@ -143,11 +146,15 @@ abstract class MessageService extends Logging {
       val h = handlers.get(key)
       assert(h != null)
       try {
-        h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-          case Success(response) => {
-            sendResponse(src, requestId, response)
+        val f= h.receive(src, msg.asInstanceOf[Request[Any]])
+
+        if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
+          f onComplete {
+            case Success(response) => {
+              sendResponse(src, requestId, response)
+            }
+            case Failure(t) => logger.error(s"Error receiving message $t")
           }
-          case Failure(t) => logger.error(s"Error receiving message $t")
         }
       }  catch {
         case e: Exception => {

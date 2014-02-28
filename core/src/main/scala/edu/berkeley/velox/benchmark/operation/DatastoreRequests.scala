@@ -19,8 +19,7 @@ case class SerializableGetAllResponse(val values: util.Map[PrimaryKey, Row])
 case class SerializablePutAllRequest(val values: util.HashMap[PrimaryKey, Row]) extends Request[SerializablePutAllResponse]
 class SerializablePutAllResponse
 
-case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends Request[SerializableUnlockResponse]
-class SerializableUnlockResponse
+case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends OneWayRequest
 
 
 
