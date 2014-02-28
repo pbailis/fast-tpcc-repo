@@ -26,7 +26,7 @@ object SerializableRowGenerator {
   }
 }
 
-class SerializableRow extends Row with Logging {
+class SerializableRow extends Row {
   var forUpdate = false
   var needsLock = true
 
