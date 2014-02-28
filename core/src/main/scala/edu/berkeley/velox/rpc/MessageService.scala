@@ -77,7 +77,10 @@ abstract class MessageService extends Logging {
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
 
-    requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+    if(!msg.isInstanceOf[OneWayRequest]) {
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+    }
+
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
     } else {
@@ -96,7 +99,7 @@ abstract class MessageService extends Logging {
     p.future
   }
 
-  private def sendResponse(dst: NetworkDestinationHandle, requestId: RequestId, response: Any) {
+  def sendResponse(dst: NetworkDestinationHandle, requestId: RequestId, response: Any) {
     if (dst == serviceID) {
       requestMap.remove(requestId) success response
     } else {
@@ -139,17 +142,21 @@ abstract class MessageService extends Logging {
   private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any, wrapped: Boolean = false): Unit = {
     if(!serializable || wrapped) {
       val key = msg.getClass().hashCode()
-      assert(handlers.containsKey(key))
       val h = handlers.get(key)
       assert(h != null)
       try {
-        h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-          case Success(response) => {
-            sendResponse(src, requestId, response)
+        val f = h.receive(src, requestId, msg.asInstanceOf[Request[Any]])
+        if(f != null) {
+          f onComplete {
+            case Success(response) => {
+              if(!msg.isInstanceOf[OneWayRequest]) {
+                sendResponse(src, requestId, response)
+              }
+            }
+            case Failure(t) => logger.error(s"Error receiving message $t")
           }
-          case Failure(t) => logger.error(s"Error receiving message $t")
         }
-      }  catch {
+      } catch {
         case e: Exception => {
           logger.error("Handler exception", e)
         }

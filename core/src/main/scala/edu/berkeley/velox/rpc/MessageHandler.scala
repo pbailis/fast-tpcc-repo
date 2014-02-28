@@ -1,6 +1,6 @@
 package edu.berkeley.velox.rpc
 
-import edu.berkeley.velox.NetworkDestinationHandle
+import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 import scala.concurrent.Future
 import com.typesafe.scalalogging.slf4j.Logging
 
@@ -18,6 +18,6 @@ trait MessageHandler[+R, -M <: Request[R]] extends Logging {
     * @param msg the actual message body
     * @return the response to be sent to the calling process (future).
     */
-  def receive(src: NetworkDestinationHandle, msg: M): Future[R]
+  def receive(src: NetworkDestinationHandle, requestID: RequestId, msg: M): Future[R]
 }
 

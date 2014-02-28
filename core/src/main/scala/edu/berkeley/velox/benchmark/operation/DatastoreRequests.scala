@@ -3,6 +3,7 @@ package edu.berkeley.velox.benchmark.operation
 import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import java.util
 import edu.berkeley.velox.rpc.{OneWayRequest, Request}
+import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 
 case class PreparePutAllRequest(val values: util.Map[PrimaryKey, Row]) extends Request[PreparePutAllResponse]
 class PreparePutAllResponse
@@ -19,8 +20,16 @@ case class SerializableGetAllResponse(val values: util.Map[PrimaryKey, Row])
 case class SerializablePutAllRequest(val values: util.HashMap[PrimaryKey, Row]) extends Request[SerializablePutAllResponse]
 class SerializablePutAllResponse
 
-case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends Request[SerializableUnlockResponse]
-class SerializableUnlockResponse
+case class SerializableUnlockRequest(val keys: util.HashSet[PrimaryKey]) extends OneWayRequest
+
+class MicroCfreePut extends Request[Boolean]
+
+class MicroTwoPLPutAndLock extends Request[Boolean]
+class MicroTwoPLUnlock extends OneWayRequest
+
+case class MicroOptimizedTwoPL(val clientID: NetworkDestinationHandle, val clientRequestID: RequestId, val numItems: Int, val numRemaining: Int) extends Request[Boolean]
+
+
 
 
 

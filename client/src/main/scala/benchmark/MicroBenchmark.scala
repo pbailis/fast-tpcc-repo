@@ -1,8 +1,4 @@
-
-
-
-package benchmark
-
+package edu.berkeley.velox.benchmark
 
 import edu.berkeley.velox.conf.VeloxConfig
 import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
@@ -11,14 +7,17 @@ import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 
 import scala.util.{Success, Failure}
-import scala.concurrent.ExecutionContext.Implicits.global
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import scala.concurrent.{Await, Future}
 import scala.concurrent
 import scala.concurrent.duration.Duration
-import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderRequest, TPCCNewOrderResponse}
+import edu.berkeley.velox.benchmark.operation._
 import edu.berkeley.velox.benchmark.util.RandomGenerator
 import java.util._
 import java.util.concurrent.Semaphore
+import scala.util.Failure
+import scala.util.Success
+import scala.collection.JavaConverters._
 
 
 object MicroBenchmark {
@@ -38,11 +37,14 @@ object MicroBenchmark {
     var waitTimeSeconds = 20
     var chance_remote = 0.01
     var status_time = 10
-    var warehouses_per_server = 1
-    var load = false
-    var run = false
     var serializable = false
     var connection_parallelism = 1
+
+
+    var cfree = false
+    var twopl = false
+    var opt_twopl = false
+    var num_items = 1
 
     var frontendCluster = ""
 
@@ -75,11 +77,16 @@ object MicroBenchmark {
         p => VeloxConfig.sweepTime = p
       } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
 
-      opt[Int]("warehouses_per_server") foreach {
-        i => warehouses_per_server = i
+
+      opt[Unit]("cfree") foreach( p=> cfree = true )
+      opt[Unit]("twopl") foreach( p=> twopl = true )
+      opt[Unit]("opt_twopl") foreach( p=> opt_twopl = true )
+
+
+
+      opt[Int]("num_items") foreach {
+        i => num_items = i
       }
-      opt[Unit]("load") foreach { p => load = true }
-      opt[Unit]("run") foreach { p => run = true }
       opt[Unit]("serializable") foreach { p => serializable = true }
 
 
@@ -87,6 +94,8 @@ object MicroBenchmark {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
     }
+
+
 
     val opsDone = new AtomicInteger(0)
 
@@ -98,22 +107,11 @@ object MicroBenchmark {
 
     val client = new VeloxConnection(clusterAddresses, connection_parallelism)
 
-    totalWarehouses = clusterAddresses.size*warehouses_per_server
-
-    if(load) {
-      println(s"Loading $totalWarehouses warehouses...}")
-      val loadFuture = Future.sequence((1 to totalWarehouses).map(wh => client.loadTPCC(wh)))
-      Await.result(loadFuture, Duration.Inf)
-      println(s"...loaded ${totalWarehouses} warehouses")
-    }
-
-    if(!run) {
-      System.exit(0)
-    }
-
     @volatile var finished = false
     val requestSem = new Semaphore(0)
 
+
+    val numServers = clusterAddresses.size
 
     println(s"Starting $parallelism threads!")
 
@@ -124,18 +122,54 @@ object MicroBenchmark {
           while (!finished) {
             requestSem.acquireUninterruptibly()
 
-            val request = singleNewOrder(client, chance_remote, serializable)
-            request.future onComplete {
-              case Success(value) => {
-                numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
-                if(!value.committed) {
-                 numAborts.incrementAndGet()
-                }
-
-                opsDone.incrementAndGet
-                requestSem.release
+            if(cfree) {
+              val startServer = Math.abs(Random.nextInt)
+              var i = 0
+              var futures = new ArrayList[Future[Boolean]](num_items)
+              while(i < num_items) {
+                futures.add(client.send(((startServer+i) % numServers)+1, new MicroCfreePut))
+                i += 1
               }
-              case Failure(t) => println("An error has occured: " + t.getMessage)
+
+              val combinedFuture = Future.sequence(futures.asScala)
+              combinedFuture.onComplete {
+                case Success(value) => {
+                  opsDone.incrementAndGet()
+                  requestSem.release
+                }
+                case Failure(t) => println("An error has occurred: "+t.getMessage)
+              }
+            } else if (twopl) {
+              // to avoid deadlocks, we never wrap around
+              val startServer: Int = (Math.abs(Random.nextInt) % (numServers-num_items+1))
+              val st = System.currentTimeMillis()
+              var i = 0
+              while(i < num_items) {
+                val f = client.send(startServer+i+1, new MicroTwoPLPutAndLock)
+                Await.ready(f, Duration.Inf)
+                i += 1
+              }
+
+              i = 0
+              while(i < num_items) {
+                client.send(startServer+i+1, new MicroTwoPLUnlock)
+                i += 1
+              }
+              opsDone.incrementAndGet()
+              numMs.addAndGet(System.currentTimeMillis()-st)
+              requestSem.release
+            } else if(opt_twopl) {
+              // to avoid deadlocks, we never wrap around
+              val startServer: Int = (Math.abs(Random.nextInt) % (numServers-num_items+1))
+              val future = client.send((startServer)+1, new MicroOptimizedTwoPL(VeloxConfig.partitionId, -1, num_items, num_items))
+
+              future.onComplete {
+                case Success(value) => {
+                    opsDone.incrementAndGet()
+                    requestSem.release
+                  }
+                  case Failure(t) => println("An error has occurred: "+t.getMessage)
+              }
             }
           }
         }
@@ -152,7 +186,7 @@ object MicroBenchmark {
             val curThru = (opsDone.get()).toDouble/curTime
             val latency = numMs.get()/opsDone.get().toDouble
 
-            println(s"STATUS @ ${curTime}s: $curThru ops/sec (lat: $latency ms)")
+            println(s"STATUS @ ${curTime}s: $curThru ops/sec (lat: $latency ms; $opsDone")
           }
         }
       }).start
@@ -174,41 +208,4 @@ object MicroBenchmark {
     println(s"In $gtime seconds and with $parallelism threads, completed $opsDone, $numAborts aborts \nTOTAL THROUGHPUT: $pthruput ops/sec (avg latency ${latency} ms)")
     System.exit(0)
   }
-
-  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, serializable: Boolean = false): OutstandingNewOrderRequest = {
-    val W_ID = generator.number(1, totalWarehouses)
-    val D_ID: Int = generator.number(1, 10)
-    val C_ID: Int = generator.NURand(1023, 1, 3000)
-    val OL_CNT: Int = generator.number(5, 15)
-    val rollback: Boolean = generator.nextDouble < .01
-    var warehouseIDs = new ArrayList[Int]()
-
-    for(i <- 1 to OL_CNT) {
-      var O_W_ID = W_ID
-      if (totalWarehouses > 1 && generator.nextDouble() < chance_remote) {
-        O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
-      }
-
-      warehouseIDs.add(O_W_ID)
-    }
-
-    var OL_I_IDs = new ArrayList[Int]()
-    var OL_QUANTITY_LIST = new ArrayList[Int]()
-
-    for(ol_cnt <- 1 to OL_CNT) {
-      var OL_I_ID = generator.NURand(8191, 1, 100000)
-      if(rollback && ol_cnt == OL_CNT) {
-        OL_I_ID = -1
-      }
-
-      OL_I_IDs.add(OL_I_ID)
-      OL_QUANTITY_LIST.add(generator.number(1, 10))
-    }
-
-    return new OutstandingNewOrderRequest(conn.newOrder(new TPCCNewOrderRequest(W_ID, D_ID, C_ID, OL_I_IDs, warehouseIDs, OL_QUANTITY_LIST, serializable)),
-                                          System.currentTimeMillis())
-  }
-
-  case class OutstandingNewOrderRequest(future: Future[TPCCNewOrderResponse], startTimeMs: Long)
-
 }

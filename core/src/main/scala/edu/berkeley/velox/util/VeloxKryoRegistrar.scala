@@ -71,19 +71,13 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[util.Map[PrimaryKey, Row]])
     kryo.register(classOf[TPCCItemKey])
     kryo.register(classOf[util.ArrayList[Int]])
-    kryo.register(classOf[DeferredIncrement])
-    kryo.register(classOf[TPCCNewOrderRequest])
-    kryo.register(classOf[TPCCNewOrderResponse])
-    kryo.register(classOf[TPCCNewOrderLineResult])
-    kryo.register(classOf[TPCCLoadRequest])
-    kryo.register(classOf[TPCCLoadResponse])
 
-    kryo.register(classOf[SerializableGetAllRequest])
-    kryo.register(classOf[SerializableGetAllResponse])
-    kryo.register(classOf[SerializablePutAllRequest])
-    kryo.register(classOf[SerializablePutAllResponse])
-    kryo.register(classOf[SerializableUnlockRequest])
-    kryo.register(classOf[SerializableUnlockResponse])
+    kryo.register(classOf[MicroCfreePut])
+    kryo.register(classOf[MicroTwoPLPutAndLock])
+    kryo.register(classOf[MicroTwoPLUnlock])
+    kryo.register(classOf[MicroOptimizedTwoPL])
+    kryo.register(classOf[Boolean])
+
 
     // Register important base types
     kryo.register(classOf[Request[_]])

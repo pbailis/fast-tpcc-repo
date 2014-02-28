@@ -138,16 +138,52 @@ if __name__ == "__main__":
     if args.client_bench:
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
-        assign_hosts(region, cluster)
-        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
-        sleep(5)
-        run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
-                               args.profile, args.profile_depth,
-                               parallelism=10, timeout=120, ops=50000, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
-                               )
-        stop_velox_processes()
-        fetch_logs(args.output_dir, runid, cluster)
-        pprint("THE CRANKSHAW has completed!")
+
+        for config in ["opt_twopl", "cfree", "twopl", "opt_twopl"]:
+            for it in range(0, 3):
+                for num_items in range(1, 8):
+
+                    parallelism = 16
+                    base_arg = ""
+                    if config == "cfree":
+                        args.sweep_time = 100
+                        ops = 1000000
+                        num_clients = 16
+                    elif config == "twopl":
+                        args.sweep_time = 0
+                        ops = 1024
+                        parallelism = 64
+                        args.serializable = True
+                        num_clients = 1
+                    else:
+                        args.sweep_time = 0
+                        ops = 1024
+                        parallelism = 128
+                        args.serializable = True
+                        num_clients = 1
+
+                        if config == "opt_twopl" and num_items == 1:
+                            args.sweep_time = 100
+                            args.serializable = False
+                            ops = 1000000
+
+
+                    cluster = Cluster(region, cluster_id, num_servers, num_clients, args.servers_per_machine)
+
+                    assign_hosts(region, cluster)
+                    extra_args = base_arg+"--%s --num_items %d" % (config, num_items)
+                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+                    sleep(10)
+                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                           args.profile, args.profile_depth,
+                                           parallelism=parallelism, timeout=180, ops=ops, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable,
+                                           extra_client_args=extra_args)
+                    stop_velox_processes()
+
+                    odir = args.output_dir+("/%s-ITEMS%d-IT%d" % (config,num_items, it))
+
+                    fetch_logs(odir, runid, cluster)
+                    pprint("THE CRANKSHAW has completed!")
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")

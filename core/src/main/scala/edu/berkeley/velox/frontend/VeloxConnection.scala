@@ -9,6 +9,8 @@ import collection.JavaConversions._
 import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderResponse, TPCCNewOrderRequest, TPCCLoadRequest, TPCCLoadResponse}
 import edu.berkeley.velox.cluster.TPCCPartitioner
 import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox._
+import edu.berkeley.velox.benchmark.operation.TPCCNewOrderRequest
 
 
 object VeloxConnection {
@@ -25,6 +27,10 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_p
   for(i <- 1 until connection_parallelism)
     ms.connect(serverAddresses)
 
+
+  def send[R](dst: NetworkDestinationHandle, msg: Request[R]): Future[R] = {
+    ms.send(dst, msg)
+  }
 
   def warehouseToServer(W_ID: Int) = {
     (W_ID) % (serverAddresses.size+1)

@@ -138,7 +138,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def needSend(): Boolean = {
-    if(sweeping == false && currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
+    if(!sweeping && currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
       sweeping = true
       return true
     }
@@ -206,7 +206,11 @@ class Receiver (
 
   def run() = try {
       while(bytes.remaining != 0) {
-        messageService.receiveRemoteMessage(src,bytes)
+        try {
+          messageService.receiveRemoteMessage(src,bytes)
+         } catch {
+          case e: Exception => logger.error("Error receiving message", e)
+        }
       }
    } catch {
      case t: Throwable => {
