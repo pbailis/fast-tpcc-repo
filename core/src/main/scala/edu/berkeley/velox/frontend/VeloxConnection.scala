@@ -27,7 +27,7 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_p
 
 
   def warehouseToServer(W_ID: Int) = {
-    (W_ID) % (serverAddresses.size+1)
+    (W_ID % serverAddresses.size) +1
   }
 
   def loadTPCC(W_ID: Int): Future[TPCCLoadResponse] = {
