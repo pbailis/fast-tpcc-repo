@@ -113,7 +113,7 @@ object ClientBenchmark {
     val db = dbf.value.get.get
 
     val tblf = db.createTable(TABLE_NAME,
-                              Schema.columns(ID_COL primary() INT,
+                              Schema.columns(ID_COL PRIMARY() INT,
                                              STR_COL STRING))
     Await.ready(tblf, Duration.Inf)
     println("table successfully added")
