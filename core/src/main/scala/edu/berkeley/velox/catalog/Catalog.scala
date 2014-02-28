@@ -42,6 +42,18 @@ object Catalog extends Logging {
     }
   }
 
+  def getSchema(db: DatabaseName, table: TableName): Schema = {
+    schemas.get(db) match {
+      case Some(tbls) => tbls.getOrElse(table,null)
+      case None => null
+    }
+  }
+
+  def isPrimaryKeyFor(db: DatabaseName, table: TableName, column: ColumnLabel): Boolean = {
+    val pk = schemas(db)(table).primaryKey
+    pk.size == 1 && pk.head.equals(column)
+  }
+
   def listLocalDatabases: Set[DatabaseName] = {
     schemas.keySet
   }
@@ -137,14 +149,14 @@ object Catalog extends Logging {
 
   def checkTableExistsLocal(db: String, table: String): Boolean = {
     if (schemas.contains(db))
-      schemas.get(db).get.contains(table)
+      schemas(db).contains(table)
     else
       false
   }
 
 
   def extractPrimaryKey(database: DatabaseName, table: TableName, row: Row): PrimaryKey  = {
-    val definition = schemas.get(database).get(table).columns.filter(_.isPrimary)
+    val definition = schemas(database)(table).primaryKey
     val ret = new Array[Value](definition.size)
     var i = 0
     definition.foreach (

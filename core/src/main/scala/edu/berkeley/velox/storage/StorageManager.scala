@@ -53,20 +53,44 @@ class StorageManager extends Logging {
     }
   }
 
+  private def isPrimaryKeyQuery(databaseName: DatabaseName,
+                                tableName: TableName,
+                                query: Query): Boolean = {
+    query.predicate match {
+      case Some(p) => {
+        p match {
+          case eqp: EqualityPredicate =>
+            Catalog.isPrimaryKeyFor(databaseName,
+                                    tableName,
+                                    eqp.column)
+          case _ => false
+        }
+      }
+      case None => false
+    }
+  }
+
   def query(databaseName: DatabaseName,
             tableName: TableName,
             query: Query) : ResultSet = {
     val rows = new ArrayBuffer[Row]
     val table = dbs.get(databaseName).get(tableName)
 
-    table.rows.values.asScala foreach {
-      row => query.predicate match {
-        case Some(p) => {
-          p match {
-            case eqp: EqualityPredicate => if(row.get(eqp.column) == eqp.value) rows += row.project(query.columns)
+    if (isPrimaryKeyQuery(databaseName,tableName,query)) {
+      val pkv = PrimaryKey(Seq(query.predicate.get.asInstanceOf[EqualityPredicate].value))
+      val row = table.get(pkv)
+      if (row != null)
+        rows += row.project(query.columns)
+    } else {
+      table.rows.values.asScala foreach {
+        row => query.predicate match {
+          case Some(p) => {
+            p match {
+              case eqp: EqualityPredicate => if(row.get(eqp.column) == eqp.value) rows += row.project(query.columns)
+            }
           }
+          case None => rows :+ row.project(query.columns)
         }
-        case None => rows :+ row.project(query.columns)
       }
     }
 
@@ -77,7 +101,7 @@ class StorageManager extends Logging {
 class Table {
   val rows = new ConcurrentHashMap[PrimaryKey, Row]()
 
-  def get(key: Row) : Row = {
+  def get(key: PrimaryKey) : Row = {
     rows.get(key)
   }
 

@@ -10,16 +10,16 @@ object Schema {
 
 class Schema {
   var columns: Seq[TypedColumn] = null
+  var primaryKey: Seq[ColumnLabel] = null
 
   def setColumns(columns: Seq[TypedColumn]): Schema = {
     this.columns = columns
+    primaryKey = columns.filter(_.isPrimary)
     this
   }
 
-  def columns(columns: TypedColumn*): Schema = {
-    this.columns = columns
-    this
-  }
+  def columns(columns: TypedColumn*): Schema =
+    setColumns(columns)
 
   override def toString: String = {
     s"(Columns: $columns)"
