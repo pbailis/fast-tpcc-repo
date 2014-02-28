@@ -20,18 +20,12 @@ object VeloxBuild extends Build {
 
   lazy val client = Project("client", file("client"), settings = clientSettings) dependsOn(core)
 
-  lazy val externalJassh = Project("external-jassh", file("external/jassh"), settings = externalJasshSettings)
-
-  lazy val management = Project("management", file("management"), settings = managementSettings) dependsOn (externalJassh)
-
   lazy val assemblyProj = Project("assembly", file("assembly"), settings = assemblyProjSettings) dependsOn (packages: _*)
 
-  lazy val packages = Seq[ClasspathDependency](core, client, management)
-  lazy val packageProjects = Seq[ProjectReference](core, client, management)
-  lazy val allExternal = Seq[ClasspathDependency](externalJassh)
-  lazy val allExternalRefs = Seq[ProjectReference](externalJassh)
-  lazy val allProjects = packageProjects ++ allExternalRefs ++ Seq[ProjectReference](assemblyProj)
-  lazy val allDeps = packages ++ allExternal
+  lazy val packages = Seq[ClasspathDependency](core, client)
+  lazy val packageProjects = Seq[ProjectReference](core, client)
+  lazy val allProjects = packageProjects ++ Seq[ProjectReference](assemblyProj)
+  lazy val allDeps = packages
 
 
   lazy val assembleDeps = TaskKey[Unit]("assemble-deps", "Build assembly of dependencies and packages Spark projects")
@@ -71,26 +65,6 @@ object VeloxBuild extends Build {
       "org.apache.curator" % "curator-framework" % "2.3.0",
       "org.apache.curator" % "curator-recipes" % "2.3.0",
       "org.apache.curator" % "curator-test" % "2.3.0"
-    )
-  )
-
-  def externalJasshSettings = sharedSettings ++ Seq(
-    name := "velox-external",
-
-    libraryDependencies ++= Seq(
-      "com.typesafe"      %% "scalalogging-slf4j" % "1.0.1",
-      "com.jcraft"         % "jsch"               % "0.1.50",
-      "org.apache.commons" % "commons-compress"   % "1.7"
-    )
-  )
-
-  def managementSettings = sharedSettings ++ Seq(
-    name := "velox-management",
-
-    libraryDependencies ++= Seq(
-      "com.amazonaws" % "aws-java-sdk" % "1.2.1",
-      "com.github.seratch" %% "awscala" % "0.1.3",
-      "com.github.scopt" %% "scopt" % "3.2.0"
     )
   )
 
