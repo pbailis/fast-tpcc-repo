@@ -154,7 +154,7 @@ if __name__ == "__main__":
                     else:
                         args.serializable = False
                         if clients > 1000:
-                            args.sweep_time = 100
+                            args.sweep_time = 5
                         else:
                             args.sweep_time = 0
 
