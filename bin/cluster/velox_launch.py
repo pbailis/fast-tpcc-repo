@@ -139,9 +139,9 @@ if __name__ == "__main__":
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
 
-        for config in ["opt_twopl", "cfree", "twopl", "opt_twopl"]:
-            for it in range(0, 3):
-                for num_items in range(1, 8):
+        for it in range(0, 3):
+            for num_items in range(1, 9):
+                for config in ["cfree", "opt_twopl", "twopl"]:
 
                     parallelism = 16
                     base_arg = ""
@@ -149,16 +149,17 @@ if __name__ == "__main__":
                         args.sweep_time = 100
                         ops = 1000000
                         num_clients = 16
+                        args.serializable = False
                     elif config == "twopl":
                         args.sweep_time = 0
                         ops = 1024
-                        parallelism = 64
+                        parallelism = 256
                         args.serializable = True
                         num_clients = 1
                     else:
                         args.sweep_time = 0
                         ops = 1024
-                        parallelism = 128
+                        parallelism = 256
                         args.serializable = True
                         num_clients = 1
 
@@ -166,6 +167,7 @@ if __name__ == "__main__":
                             args.sweep_time = 100
                             args.serializable = False
                             ops = 1000000
+                            num_clients = 16
 
 
                     cluster = Cluster(region, cluster_id, num_servers, num_clients, args.servers_per_machine)
