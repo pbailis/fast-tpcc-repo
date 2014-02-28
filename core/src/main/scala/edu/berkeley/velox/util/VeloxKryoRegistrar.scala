@@ -83,7 +83,6 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[SerializablePutAllRequest])
     kryo.register(classOf[SerializablePutAllResponse])
     kryo.register(classOf[SerializableUnlockRequest])
-    kryo.register(classOf[SerializableUnlockResponse])
 
     // Register important base types
     kryo.register(classOf[Request[_]])
