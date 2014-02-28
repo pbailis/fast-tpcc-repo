@@ -15,7 +15,7 @@ class StorageManager extends Logging {
   // no error handling.
   val dbs = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, Table]]()
 
-  Catalog.registerStorage(this,true)
+  Catalog.registerStorageManager(this,true)
 
   /**
    * Create a new database. Nop if db already exists.

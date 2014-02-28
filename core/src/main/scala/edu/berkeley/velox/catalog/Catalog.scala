@@ -24,7 +24,7 @@ object Catalog extends Logging {
     *  @param notifyExisting if true, the manager will be notified of currently
     *                        existing objects in the catalog
     */
-  def registerStorage(manager: StorageManager, notifyExisting: Boolean = false) {
+  def registerStorageManager(manager: StorageManager, notifyExisting: Boolean = false) {
     storageManagers.synchronized {
       storageManagers ::= manager
     }

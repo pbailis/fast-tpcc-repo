@@ -37,6 +37,8 @@ class Schema {
       true
     else if (schema.columns == null || columns == null)
       false
+    else if (schema.columns.size != columns.size)
+      false
     else {
       schema.columns.zip(columns).foldLeft(true)(
         (eq,colpair) => {
