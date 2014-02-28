@@ -156,7 +156,7 @@ if __name__ == "__main__":
                         args.sweep_time = 100
 
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
-                    sleep(5)
+                    sleep(10)
                     run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                            args.profile, args.profile_depth,
                                            parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)

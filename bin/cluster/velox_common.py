@@ -312,7 +312,7 @@ def setup_security_group(region, group_name=VELOX_SECURITY_GROUP):
         group = conn.create_security_group(group_name, "Velox EC2 all-open SG")
         group.authorize('tcp', 0, 65535, '0.0.0.0/0')
     except Exception as e:
-        pprint("Oops; couldn't create a new security group (%s). This is probably fine: "+e % (group_name))
+        pprint("Oops; couldn't create a new security group (%s). This is probably fine: " % (group_name))
 
 
 # Assigns hosts to clusters (and specifically as servers, clients)
@@ -374,7 +374,7 @@ def rebuild_servers(remote, branch, deploy_key=None):
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, **kwargs):
-    HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 2; rm *.log;"
+    HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 4; rm *.log;"
 
     netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
 
