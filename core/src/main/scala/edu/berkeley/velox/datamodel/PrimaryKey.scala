@@ -79,7 +79,7 @@ class PrimaryKey extends Comparable[PrimaryKey] {
       columnIndex += 1
     }
 
-    return -1
+    return 0
   }
 
   var table: Int = -1

@@ -12,6 +12,8 @@ VELOX_FRONTEND_PORT_START = 9000
 VELOX_BASE_DIR="/home/ubuntu/velox"
 
 HEAP_SIZE_GB = 240
+CLIENT_HEAP_SIZE_GB = 240
+
 VELOX_JAR_LOCATION = "assembly/target/scala-2.10/velox-assembly-0.1.jar"
 VELOX_SECURITY_GROUP = "velox"
 
@@ -117,12 +119,22 @@ class Cluster:
         self.serversPerMachine = serversPerMachine
 
     def allocateHosts(self, hosts):
+        cr1s = hosts.filter(lambda x: x.instance_type.find("cr1") == -1)
+        non_cr1s = hosts.filter(lambda x: x not in cr1s)
+
+        hosts = cr1s + non_cr1s
+
         for host in hosts:
-            if len(self.servers) < self.numServers:
+            if len(self.clients) < self.numClients:
+                self.clients.append(host)
+            elif len(self.servers) < self.numServers:
+                if host.instance_type.find('cr1') == -1:
+                    pprint("Host "+host+" had type "+host.instance_type+" so skipping in server assignment!")
+                    continue
+
                 for i in range(0, self.serversPerMachine):
                     self.servers.append(host)
-            elif len(self.clients) < self.numClients:
-                self.clients.append(host)
+
 
         assert len(self.getAllHosts()) == self.getNumHosts(), "Don't have exactly as many hosts as I expect!" \
                                                           " (expect: %d, have: %d)" \
@@ -135,12 +147,13 @@ class Cluster:
         return self.numServers + self.numClients
 
 class Host:
-    def __init__(self, ip, regionName, cluster_id, instanceid, status):
+    def __init__(self, ip, regionName, cluster_id, instanceid, status, instance_type):
         self.ip = ip
         self.regionName = regionName
         self.cluster_id = cluster_id
         self.instanceid = instanceid
         self.status = status
+        self.instance_type = instance_type
 
 
 # Passing cluster_id=None will return all hosts without a tag.
@@ -162,7 +175,7 @@ def get_instances(regionName, cluster_id):
     for i in instances:
         if cluster_id is None and len(i.tags) != 0:
             continue
-        hosts.append(Host(str(i.public_dns_name), regionName, cluster_id, str(i.id), str(i.state)))
+        hosts.append(Host(str(i.public_dns_name), regionName, cluster_id, str(i.id), str(i.state), i.instance_type))
 
     return hosts
 
@@ -460,7 +473,7 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
 
     cmd = ("pkill -9 java; sleep 2; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
-          (hprof, HEAP_SIZE_GB, HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
+          (hprof, CLIENT_HEAP_SIZE_GB, CLIENT_HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
 
     load_cmd = cmd.replace("--run", "--load").replace("--serializable", "")
