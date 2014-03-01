@@ -139,12 +139,12 @@ if __name__ == "__main__":
 
     if args.wh_bench:
         for wh in [1, 2, 4, 8]:
-            for clients in [100, 1000]:#[1, 10, 100, 1000, 10000, 100000]:
+            for clients in [1, 10, 100, 1000, 10000, 100000]:
                 for config in ["ca", "serializable"]:
                     runid = "whbench-WH%d-CLIENTS%d-%s" % (wh, clients, config)
                     assign_hosts(region, cluster)
 
-                    args.output_dir += "/"+runid
+                    args.output_dir = "output/"+runid
 
                     extra_args = "--warehouses_per_server %d" % wh
                     if(config == "serializable"):
@@ -159,7 +159,7 @@ if __name__ == "__main__":
                             args.sweep_time = 0
 
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
-                    sleep(10)
+                    sleep(15)
                     run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                            args.profile, args.profile_depth,
                                            parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
