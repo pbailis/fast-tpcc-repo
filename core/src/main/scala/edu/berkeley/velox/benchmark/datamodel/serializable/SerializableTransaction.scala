@@ -94,7 +94,7 @@ class SerializableTransaction(lockTable: LockManager,
     Collections.sort(partitions, IntComparator)
 
     val p_it = partitions.iterator()
-  while(p_it.hasNext) {
+    while(p_it.hasNext) {
       val partition = p_it.next()
 
       if(partition == VeloxConfig.partitionId) {
