@@ -167,6 +167,33 @@ if __name__ == "__main__":
                     fetch_logs(args.output_dir, runid, cluster)
                     pprint("THE CRANKSHAW has completed!")
 
+    if args.remote_bench:
+       for remote in [0, .25, .5, .75, 1]:
+           for config in ["ca", "serializable"]:
+               runid = "remotebench-PCT%f-%s" % (remote, config)
+               assign_hosts(region, cluster)
+
+               args.output_dir += "/"+runid
+
+               extra_args = "--pct_test true"
+               if(config == "serializable"):
+                   args.serializable = True
+                   args.sweep_time = 0
+                   clients = 10000
+
+               else:
+                    args.serializable = False
+                    clients = 100000
+
+               start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+               sleep(10)
+               run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                      args.profile, args.profile_depth,
+                                      parallelism=16, timeout=120, ops=clients, chance_remote=remote, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
+               stop_velox_processes()
+               fetch_logs(args.output_dir, runid, cluster)
+               pprint("THE CRANKSHAW has completed!")
+
     if args.client_bench:
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
