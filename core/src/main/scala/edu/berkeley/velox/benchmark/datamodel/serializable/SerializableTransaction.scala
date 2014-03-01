@@ -45,24 +45,23 @@ class SerializableTransaction(lockTable: LockManager,
     }
 
     value.timestamp = txId
-    var warehouse = -1
+    var partition = VeloxConfig.partitionId
     if(key.table != TPCCConstants.ITEM_TABLE) {
-      warehouse = key.keyColumns(0)
+      partition = partitioner.getMasterPartition(key)
     }
 
-    var keys = toPut.get(warehouse)
+    var keys = toPut.get(partition)
     if(keys == null) {
       keys = new util.HashMap[PrimaryKey, Row]
-      toPut.put(warehouse, keys)
+      toPut.put(partition, keys)
     }
 
-    toPut.get(warehouse).put(key, value)
+    toPut.get(partition).put(key, value)
 
     return this
   }
 
   override def get(key: PrimaryKey, columns: Row): SerializableTransaction = {
-        var warehouse = -1
     readKeys.add(key)
 
     if(columns.isInstanceOf[SerializableRow] && columns.asInstanceOf[SerializableRow].forUpdate) {
@@ -70,17 +69,18 @@ class SerializableTransaction(lockTable: LockManager,
     }
 
 
+    var partition = VeloxConfig.partitionId
     if(key.table != TPCCConstants.ITEM_TABLE) {
-      warehouse = key.keyColumns(0)
+      partition = partitioner.getMasterPartition(key)
     }
 
-    var keys = toGet.get(warehouse)
+    var keys = toGet.get(partition)
     if(keys == null) {
       keys = new util.HashMap[PrimaryKey, Row]
-      toGet.put(warehouse, keys)
+      toGet.put(partition, keys)
     }
 
-    toGet.get(warehouse).put(key, columns)
+    toGet.get(partition).put(key, columns)
 
     return this
   }
@@ -90,21 +90,15 @@ class SerializableTransaction(lockTable: LockManager,
   override def executeWrite = {
     val p = Promise[SerializableTransaction]
 
-    val warehouses = new util.ArrayList[Int](toPut.keySet)
-    Collections.sort(warehouses, IntComparator)
+    val partitions = new util.ArrayList[Int](toPut.keySet)
+    Collections.sort(partitions, IntComparator)
 
-    val wh_it = warehouses.iterator()
-  while(wh_it.hasNext) {
-      val warehouse = wh_it.next()
-      var partition = VeloxConfig.partitionId
-      if(warehouse != -1) {
-        partition = partitioner.getPartitionForWarehouse(warehouse)
-      }
-
-    logger.error(s"write locking $partition $warehouse")
+    val p_it = partitions.iterator()
+  while(p_it.hasNext) {
+      val partition = p_it.next()
 
       if(partition == VeloxConfig.partitionId) {
-        val keys = new util.ArrayList[PrimaryKey](toPut.get(warehouse).keySet())
+        val keys = new util.ArrayList[PrimaryKey](toPut.get(partition).keySet())
         Collections.sort(keys)
         var key_it = keys.iterator()
         while(key_it.hasNext) {
@@ -113,15 +107,12 @@ class SerializableTransaction(lockTable: LockManager,
             lockTable.writeLock(lockKey,txId)
           }
         }
-        storage.putAll(toPut.get(warehouse))
+        storage.putAll(toPut.get(partition))
 
       } else {
-        val f = messageService.send(partition, new SerializablePutAllRequest(toPut.get(warehouse)))
+        val f = messageService.send(partition, new SerializablePutAllRequest(toPut.get(partition)))
         Await.ready(f, Duration.Inf)
       }
-
-    logger.error(s"done writelocking $partition $warehouse")
-
     }
 
     p success this
@@ -131,22 +122,15 @@ class SerializableTransaction(lockTable: LockManager,
   override def executeRead = {
     val p = Promise[SerializableTransaction]
 
-    val warehouses = new util.ArrayList[Int](toGet.keySet)
-    Collections.sort(warehouses, IntComparator)
+    val partitions = new util.ArrayList[Int](toGet.keySet)
+    Collections.sort(partitions, IntComparator)
 
-    val wh_it = warehouses.iterator()
-    while(wh_it.hasNext) {
-      val warehouse = wh_it.next()
-      var partition = VeloxConfig.partitionId
-      if(warehouse != -1) {
-        partition = partitioner.getPartitionForWarehouse(warehouse)
-      }
-
-      logger.error(s"read locking $partition $warehouse")
-
+    val p_it = partitions.iterator()
+    while(p_it.hasNext) {
+      val partition = p_it.next()
 
       if(partition == VeloxConfig.partitionId) {
-        val partitionEntries = toGet.get(warehouse)
+        val partitionEntries = toGet.get(partition)
 
         //logger.error(s"$txId locking $partitionEntries")
 
@@ -162,18 +146,15 @@ class SerializableTransaction(lockTable: LockManager,
             lockTable.readLock(key, txId)
           }
         }
-        results.putAll(storage.getAll(toGet.get(warehouse)))
+        results.putAll(storage.getAll(toGet.get(partition)))
       } else {
 
         //logger.error(s"$txId locking ${toGet.get(warehouse)}")
 
-        val f = messageService.send(partition, new SerializableGetAllRequest(toGet.get(warehouse)))
+        val f = messageService.send(partition, new SerializableGetAllRequest(toGet.get(partition)))
         Await.ready(f, Duration.Inf)
         results.putAll(f.value.get.get.values)
       }
-
-      logger.error(s"done readlocking $partition $warehouse")
-
     }
 
     //logger.error(s"$txId finished locking")
