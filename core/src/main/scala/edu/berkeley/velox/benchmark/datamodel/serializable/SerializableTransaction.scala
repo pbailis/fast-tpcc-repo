@@ -101,6 +101,8 @@ class SerializableTransaction(lockTable: LockManager,
         partition = partitioner.getPartitionForWarehouse(warehouse)
       }
 
+    logger.error(s"write locking $partition $warehouse")
+
       if(partition == VeloxConfig.partitionId) {
         val keys = new util.ArrayList[PrimaryKey](toPut.get(warehouse).keySet())
         Collections.sort(keys)
@@ -117,6 +119,9 @@ class SerializableTransaction(lockTable: LockManager,
         val f = messageService.send(partition, new SerializablePutAllRequest(toPut.get(warehouse)))
         Await.ready(f, Duration.Inf)
       }
+
+    logger.error(s"done writelocking $partition $warehouse")
+
     }
 
     p success this
@@ -136,6 +141,9 @@ class SerializableTransaction(lockTable: LockManager,
       if(warehouse != -1) {
         partition = partitioner.getPartitionForWarehouse(warehouse)
       }
+
+      logger.error(s"read locking $partition $warehouse")
+
 
       if(partition == VeloxConfig.partitionId) {
         val partitionEntries = toGet.get(warehouse)
@@ -163,6 +171,9 @@ class SerializableTransaction(lockTable: LockManager,
         Await.ready(f, Duration.Inf)
         results.putAll(f.value.get.get.values)
       }
+
+      logger.error(s"done readlocking $partition $warehouse")
+
     }
 
     //logger.error(s"$txId finished locking")
