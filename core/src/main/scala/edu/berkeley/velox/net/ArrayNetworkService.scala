@@ -96,6 +96,8 @@ class SocketBuffer(
         buf.limit(writePos.get)
         buf.position(0)
 
+        logger.error(s"sending buf! $buf")
+
         // wrap the array and write it out
         while(buf.hasRemaining) {
           channel.write(buf)
