@@ -91,10 +91,13 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
         prepareFutures.add(messageService.send(wbp.getKey, wbp.getValue.asInstanceOf[TPCCUpdateStock]))
       }
 
+      logger.error(s"starting prepare future!")
       val prepareFuture = Future.sequence(prepareFutures.asScala)
 
       prepareFuture onComplete {
         case Success(responses) => {
+          logger.error(s"finished prepare future!")
+
           deferredIncrementResponse = storage.putGood(txId, deferredIncrement)
           toPutLocal.clear()
           toPutRemote.clear()
@@ -132,10 +135,14 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
         getFutures.add(messageService.send(rbp.getKey, rbp.getValue.asInstanceOf[TPCCReadStock]))
       }
 
+      logger.error(s"starting get future!")
+
      val getFuture = Future.sequence(getFutures.asScala)
 
      getFuture onComplete {
        case Success(responses) => {
+         logger.error(s"finsihed get future!")
+
          val resp_it = responses.iterator
          while(resp_it.hasNext) {
            resp_it.next().depositResults(results)
