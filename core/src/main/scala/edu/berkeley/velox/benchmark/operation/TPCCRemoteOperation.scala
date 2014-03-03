@@ -47,7 +47,7 @@ case class TPCCReturnStock(W_ID: Int,
                            DIST_XX: String) extends RemoteOperationResponse {
 
   def depositResults(resultsMap: util.Map[PrimaryKey, Row]) {
-    val oldsize = resultsMap.size()
+    println(s"results for ${PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_IMMUTABLE, W_ID, OL_I_ID)}")
 
     resultsMap.put(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_IMMUTABLE, W_ID, OL_I_ID),
       Row.column(TPCCConstants.S_DATA_COL, S_DATA_COL).column(TPCCConstants.formatSDistXX(D_ID), DIST_XX))
