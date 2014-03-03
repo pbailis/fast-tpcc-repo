@@ -63,7 +63,7 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[Array[PrimaryKey]])
     kryo.register(classOf[Array[Row]])
 
-    Log.set(LEVEL_DEBUG)
+    Log.set(LEVEL_TRACE)
 
     kryo.register(classOf[PreparePutAllRequest])
     kryo.register(classOf[PreparePutAllResponse])
