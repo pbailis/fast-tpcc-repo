@@ -81,25 +81,27 @@ class MultiConnectArrayNetworkService (
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
     while(true) {
-      try {
-        val clientChannel = SocketChannel.open()
-        clientChannel.connect(address)
-        assert(clientChannel.isConnected)
-        val bos = new ByteArrayOutputStream()
-        val dos = new DataOutputStream(bos)
+      for(i <- 1 to VeloxConfig.outbound_conn_degree) {
+        try {
+          val clientChannel = SocketChannel.open()
+          clientChannel.connect(address)
+          assert(clientChannel.isConnected)
+          val bos = new ByteArrayOutputStream()
+          val dos = new DataOutputStream(bos)
 
-        if(performIDHandshake) {
-          dos.writeInt(serverID)
-          dos.flush()
-          val bytes = bos.toByteArray()
-          assert(bytes.size == 4)
-          clientChannel.socket.getOutputStream.write(bytes)
+          if(performIDHandshake) {
+            dos.writeInt(serverID)
+            dos.flush()
+            val bytes = bos.toByteArray()
+            assert(bytes.size == 4)
+            clientChannel.socket.getOutputStream.write(bytes)
+          }
+          _registerConnection(handle, clientChannel)
+          return;
+        } catch {
+          case e: Exception => logger.error("Error connecting to "+address, e)
+          Thread.sleep(500)
         }
-        _registerConnection(handle, clientChannel)
-        return;
-      } catch {
-        case e: Exception => logger.error("Error connecting to "+address, e)
-        Thread.sleep(500)
       }
     }
   }
