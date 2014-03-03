@@ -89,8 +89,6 @@ object ClientBenchmark {
 
     parser.parse(args)
 
-    println(s"pct test is $pct_test")
-
     val clusterAddresses = frontendCluster.split(",").map {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
@@ -123,7 +121,7 @@ object ClientBenchmark {
           while (!finished) {
             requestSem.acquireUninterruptibly()
 
-            val request = singleNewOrder(client, chance_remote, serializable)
+            val request = singleNewOrder(client, chance_remote, serializable, pct_test)
             request.future onComplete {
               case Success(value) => {
                 numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
@@ -188,7 +186,6 @@ object ClientBenchmark {
         if(pct_test == false && generator.nextDouble() < chance_remote) {
           println("OOO NOOO")
           O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
-
         }
         // in the remote tests, we want to precisely control the number of remote txns, so we
         // only make the first item have a remote id
