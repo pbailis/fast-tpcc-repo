@@ -329,6 +329,10 @@ class ArrayNetworkService(
         Executors.newCachedThreadPool()
     }
 
+    if(VeloxConfig.thread_handler) {
+      messageService.executor = this.executor;
+    }
+
     this.executor
   }
 
@@ -338,9 +342,6 @@ class ArrayNetworkService(
 
   override def setMessageService(messageService: MessageService) {
     this.messageService = messageService
-    if(VeloxConfig.thread_handler) {
-      messageService.executor = executor;
-    }
   }
 
   def blockForConnections(numConnections: Integer) {
