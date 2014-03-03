@@ -114,6 +114,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
   def executeRead = {
 
+    results.putAll(storage.getAll(toGetLocal))
+
     val p = Promise[Transaction]
     results.clear()
 
@@ -128,9 +130,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       }
 
      val getFuture = Future.sequence(getFutures.asScala)
-
-    results.putAll(storage.getAll(toGetLocal))
-
 
      getFuture onComplete {
        case Success(responses) => {
@@ -150,8 +149,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
      toGetLocal.clear
      toGetRemote.clear
     } else {
-      results.putAll(storage.getAll(toGetLocal))
-      toGetLocal.clear
       p success this
     }
 
