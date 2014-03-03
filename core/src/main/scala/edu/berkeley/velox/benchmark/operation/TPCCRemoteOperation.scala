@@ -59,14 +59,16 @@ case class TPCCReturnStock(W_ID: Int,
 
 }
 
-case class TPCCUpdateStock(W_ID: Int, I_ID: Int, currentOrderCount: Int, currentRemoteCount: Int, currentStock: Int) extends RemoteOperation with Request[TPCCUpdateStockResponse] {
+case class TPCCUpdateStock(W_ID: Int, I_ID: Int, currentOrderCount: Int, currentRemoteCount: Int, currentStock: Int, timestamp: Long) extends RemoteOperation with Request[TPCCUpdateStockResponse] {
   def getWarehouse = { W_ID }
 
   def execute(storage: StorageEngine) = {
+    val toPut = Row.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
+                        .column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount)
+                        .column(TPCCConstants.S_QUANTITY_COL, currentStock)
+    toPut.timestamp = timestamp
      storage.put(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, W_ID, I_ID),
-                 Row.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
-                    .column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount)
-                    .column(TPCCConstants.S_QUANTITY_COL, currentStock))
+                 toPut)
       new TPCCUpdateStockResponse
    }
 }

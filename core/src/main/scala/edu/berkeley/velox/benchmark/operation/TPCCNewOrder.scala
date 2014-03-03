@@ -147,7 +147,7 @@ object TPCCNewOrder extends Logging {
             }
 
             if(partitioner.getPartitionForWarehouse(S_W_ID) != VeloxConfig.partitionId) {
-              writeTxn.addRemotePutOperation(new TPCCUpdateStock(S_W_ID, OL_I_ID, currentOrderCount, currentRemoteCount, currentStock))
+              writeTxn.addRemotePutOperation(new TPCCUpdateStock(S_W_ID, OL_I_ID, currentOrderCount, currentRemoteCount, currentStock, writeTxn.txId))
             } else {
               writeTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).put(PrimaryKey.pkey(S_W_ID, OL_I_ID),
                           Row.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
