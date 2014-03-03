@@ -29,7 +29,7 @@ case class TPCCReadStock(W_ID: Int, D_ID: Int, OL_I_ID: Int) extends RemoteOpera
     new TPCCReturnStock(W_ID,
                         D_ID,
       OL_I_ID,
-                        m_row.column(TPCCConstants.S_ORDER_CNT).asInstanceOf[Int],
+                        m_row.readColumn(TPCCConstants.S_ORDER_CNT).asInstanceOf[Int],
                         m_row.readColumn(TPCCConstants.S_REMOTE_CNT).asInstanceOf[Int],
                         m_row.readColumn(TPCCConstants.S_QUANTITY_COL).asInstanceOf[Int],
                         i_row.readColumn(TPCCConstants.S_DATA_COL).asInstanceOf[String],
