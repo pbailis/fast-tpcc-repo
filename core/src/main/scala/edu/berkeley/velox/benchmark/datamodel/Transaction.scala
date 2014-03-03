@@ -114,10 +114,12 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
   def executeRead = {
 
-    results.putAll(storage.getAll(toGetLocal))
 
     val p = Promise[Transaction]
     results.clear()
+
+    results.putAll(storage.getAll(toGetLocal))
+
 
     if(!toGetRemote.isEmpty) {
       val getFutures = new util.ArrayList[Future[RemoteOperationResponse]](toGetRemote.size())
