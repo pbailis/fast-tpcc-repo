@@ -41,8 +41,9 @@ abstract class MessageService extends Logging {
   var serviceID : Integer = -1
 
   val serializable = VeloxConfig.serializable
+  val thread_handler = VeloxConfig.thread_handler
 
-  val executor = if(serializable) Executors.newCachedThreadPool() else null
+  var executor = if(serializable) Executors.newCachedThreadPool() else null
 
   /**
    * The collection of handlers for various message types
@@ -140,7 +141,7 @@ abstract class MessageService extends Logging {
 
   // doesn't block, but does set up a handler that will deliver the message when it's ready
   private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any, wrapped: Boolean = false): Unit = {
-    if(!serializable || wrapped) {
+    if((!serializable && !thread_handler) || wrapped) {
       val key = msg.getClass().hashCode()
       assert(handlers.containsKey(key))
       val h = handlers.get(key)
@@ -148,7 +149,7 @@ abstract class MessageService extends Logging {
       try {
         val f= h.receive(src, msg.asInstanceOf[Request[Any]])
 
-        if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
+        if(!msg.isInstanceOf[OneWayRequest]) {
           f onComplete {
             case Success(response) => {
               sendResponse(src, requestId, response)
