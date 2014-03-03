@@ -171,7 +171,7 @@ object VeloxServer extends Logging {
     logger.info("Initializing Server")
     VeloxConfig.initialize(args)
 
-    val storage = new StorageManager
+    val storage = VeloxConfig.getStorageManager
     val myAddr = s"${VeloxConfig.serverIpAddress}:${VeloxConfig.internalServerPort}"
     val id = ZKClient.registerWithZooKeeper(myAddr)
 
