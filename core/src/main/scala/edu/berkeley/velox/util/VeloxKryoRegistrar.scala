@@ -61,7 +61,7 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[GetAllResponse])
     kryo.register(classOf[Array[Int]])
     kryo.register(classOf[Array[PrimaryKey]], new Serializer[Array[PrimaryKey]] {
-      def write(kryo: Kryo, output: Output, arr: Array[PrimaryKey]) {
+      override def write(kryo: Kryo, output: Output, arr: Array[PrimaryKey]) {
         output.writeShort(arr.length)
         var i = 0
         while(i < arr.length) {
@@ -70,7 +70,7 @@ object VeloxKryoRegistrar {
         }
       }
 
-      def read(kryo: Kryo, input: Input, t: java.lang.Class[Array[PrimaryKey]]) {
+      override def read(kryo: Kryo, input: Input, t: java.lang.Class[Array[PrimaryKey]]) = {
         val len = input.readShort()
         val ret = new Array[PrimaryKey](len)
         var i = 0
@@ -83,7 +83,7 @@ object VeloxKryoRegistrar {
 
     })
     kryo.register(classOf[Array[Row]], new Serializer[Array[Row]] {
-          def write(kryo: Kryo, output: Output, arr: Array[Row]) {
+      override def write(kryo: Kryo, output: Output, arr: Array[Row]) {
             output.writeShort(arr.length)
             var i = 0
             while(i < arr.length) {
@@ -92,7 +92,7 @@ object VeloxKryoRegistrar {
             }
           }
 
-          def read(kryo: Kryo, input: Input, t: java.lang.Class[Array[Row]]) {
+          override def read(kryo: Kryo, input: Input, t: java.lang.Class[Array[Row]]) = {
             val len = input.readShort()
             val ret = new Array[Row](len)
             var i = 0
