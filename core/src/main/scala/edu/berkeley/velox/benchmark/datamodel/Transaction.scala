@@ -118,7 +118,11 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     val p = Promise[Transaction]
     results.clear()
 
+    logger.error(s"reading $toGetLocal")
+
     results.putAll(storage.getAll(toGetLocal))
+
+    logger.error(s"read $toGetLocal, results is $results")
 
 
     if(!toGetRemote.isEmpty) {
@@ -139,6 +143,9 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
          val resp_it = responses.iterator
          while(resp_it.hasNext) {
            resp_it.next().depositResults(results)
+
+           logger.error(s"post deposit $toGetLocal, results is $results")
+
          }
 
          p success this
