@@ -194,6 +194,8 @@ if __name__ == "__main__":
                         if remote > 0:
                             thread_handlers = False
                             outbound_conn_degree = 2
+                        else:
+                            thread_handlers = True
 
                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable, thread_handlers=thread_handlers, outbound_conn_degree=outbound_conn_degree)
                    sleep(15)
