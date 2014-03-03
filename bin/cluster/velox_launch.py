@@ -190,7 +190,7 @@ if __name__ == "__main__":
                         args.serializable = False
                         args.sweep_time = 200
                         clients = 100000
-                        args.buffer_size = 1310720
+                        args.buffer_size = 131072
                         if remote > 0:
                             thread_handlers = False
                             outbound_conn_degree = 2
