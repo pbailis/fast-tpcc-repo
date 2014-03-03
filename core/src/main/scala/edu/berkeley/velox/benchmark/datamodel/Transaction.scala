@@ -94,7 +94,11 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       val prepareFuture = Future.sequence(prepareFutures.asScala)
 
       prepareFuture onComplete {
-        case Success(responses) => { }
+        case Success(responses) => {
+          deferredIncrementResponse = storage.putGood(txId, deferredIncrement)
+          toPutLocal.clear()
+          toPutRemote.clear()
+        }
         case Failure(t) => {
           p.failure(t)
         }

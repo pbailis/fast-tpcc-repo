@@ -184,14 +184,11 @@ object ClientBenchmark {
       var O_W_ID = W_ID
       if (totalWarehouses > 1) {
         if(pct_test == false && generator.nextDouble() < chance_remote) {
-          println("OOO NOOO")
           O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
         }
         // in the remote tests, we want to precisely control the number of remote txns, so we
         // only make the first item have a remote id
         else if(pct_test && i == 1 && generator.nextDouble() < chance_remote) {
-          println(s"OKAY $i")
-
           O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
         }
       }
