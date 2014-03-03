@@ -9,6 +9,8 @@ import java.util.concurrent.ExecutorService
 
 trait NetworkService {
 
+  var executor: ExecutorService
+
   var messageSentMeter = metrics.meter(MetricRegistry.name(getClass.getName, "messages-sent"))
   var messageReceivedMeter = metrics.meter(MetricRegistry.name(getClass.getName, "messages-received"))
   var bytesWrittenMeter = metrics.meter(MetricRegistry.name(getClass.getName, "bytes-written"))

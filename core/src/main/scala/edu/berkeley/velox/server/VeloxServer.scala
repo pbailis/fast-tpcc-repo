@@ -36,6 +36,7 @@ class VeloxServer extends Logging {
   val executor = internalServer.networkService.setExecutor()
   internalServer.initialize()
 
+
   internalServer.registerHandler(new InternalGetAllHandler)
   internalServer.registerHandler(new InternalPreparePutAllHandler)
   internalServer.registerHandler(new InternalCommitPutAllHandler)

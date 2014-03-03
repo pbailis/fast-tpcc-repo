@@ -35,5 +35,11 @@ class InternalRPCService extends MessageService {
 
     networkService.blockForConnections(VeloxConfig.internalServerAddresses.keys.size-1)
     logger.info(s"${VeloxConfig.partitionId} started internal RPC!")
+
+
+    if(VeloxConfig.thread_handler) {
+      executor = networkService.executor;
+    }
+
   }
 }

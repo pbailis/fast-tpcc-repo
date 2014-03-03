@@ -329,10 +329,6 @@ class ArrayNetworkService(
         Executors.newCachedThreadPool()
     }
 
-    if(VeloxConfig.thread_handler) {
-      messageService.executor = this.executor;
-    }
-
     this.executor
   }
 
