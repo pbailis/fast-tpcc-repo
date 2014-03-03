@@ -14,6 +14,9 @@ import edu.berkeley.velox.datamodel.{PrimaryKey, Row}
 import edu.berkeley.velox.benchmark.TPCCItemKey
 import edu.berkeley.velox.benchmark.datamodel.serializable.SerializableRow
 
+import com.esotericsoftware.minlog.Log;
+import com.esotericsoftware.minlog.Log._
+
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
   */
@@ -60,6 +63,7 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[Array[PrimaryKey]])
     kryo.register(classOf[Array[Row]])
 
+    Log.set(LEVEL_DEBUG)
 
     kryo.register(classOf[PreparePutAllRequest])
     kryo.register(classOf[PreparePutAllResponse])
