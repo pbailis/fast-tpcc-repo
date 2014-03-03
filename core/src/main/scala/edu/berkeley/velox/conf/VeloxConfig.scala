@@ -1,6 +1,6 @@
 package edu.berkeley.velox.conf
 
-import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService}
+import edu.berkeley.velox.net.{MultiConnectArrayNetworkService, NetworkService, ArrayNetworkService}
 import java.net.InetSocketAddress
 import edu.berkeley.velox.NetworkDestinationHandle
 import com.typesafe.scalalogging.slf4j.Logging
@@ -18,6 +18,7 @@ object VeloxConfig extends Logging {
   var partitionList: Array[NetworkDestinationHandle] = null
   var serializable = false
   var thread_handler = false
+  var outbound_conn_degree = 1
 
   var bufferSize = 16384*8
   var networkService = "array"
@@ -42,7 +43,7 @@ object VeloxConfig extends Logging {
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[Boolean]("serializable") foreach { p => serializable = p }
     opt[Unit]("thread_handlers") foreach { p => thread_handler = true }
-
+    opt[Int]("outbound_conn_degree") foreach {p => outbound_conn_degree = p }
 
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
 
@@ -69,7 +70,12 @@ object VeloxConfig extends Logging {
   def getNetworkService(performIDHandshake: Boolean = false, tcpNoDelay: Boolean = true, serverID: Integer = -1): NetworkService = {
     println("Getting network service")
     networkService match {
-      case "array" => new ArrayNetworkService(performIDHandshake,tcpNoDelay,serverID)
+      case "array" => {
+        if(outbound_conn_degree == 1)
+          new ArrayNetworkService(performIDHandshake,tcpNoDelay,serverID)
+        else
+          new MultiConnectArrayNetworkService(performIDHandshake, tcpNoDelay, serverID)
+      }
       case _ => throw new Exception(s"Invalid network service type $networkService")
     }
   }

@@ -149,7 +149,7 @@ abstract class MessageService extends Logging {
       try {
         val f= h.receive(src, msg.asInstanceOf[Request[Any]])
 
-        if(!msg.isInstanceOf[OneWayRequest]) {
+        if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
           f onComplete {
             case Success(response) => {
               sendResponse(src, requestId, response)
