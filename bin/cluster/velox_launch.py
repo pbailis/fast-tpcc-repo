@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
     if args.remote_bench:
        for it in range(0, 1):
-           for remote in [0, .25, .5, .75, 1]:
+           for remote in [1, 0, .25, .5, .75]:
                for config in ["ca", "serializable"]:
                    runid = "remotebench-PCT%f-%s-IT%d" % (remote, config, it)
                    assign_hosts(region, cluster)
@@ -190,7 +190,7 @@ if __name__ == "__main__":
                         args.serializable = False
                         args.sweep_time = 200
                         clients = 100000
-                        args.buffer_size = 131072
+                        args.buffer_size = 131072*2
                         if remote > 0:
                             thread_handlers = False
                             outbound_conn_degree = 2
