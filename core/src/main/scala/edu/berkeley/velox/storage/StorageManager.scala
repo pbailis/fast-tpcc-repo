@@ -10,8 +10,6 @@ import com.typesafe.scalalogging.slf4j.Logging
 
 trait StorageManager {
 
-  Catalog.registerStorageManager(this,true)
-
   /**
     * Create a new database. No-op if db already exists.
     *
