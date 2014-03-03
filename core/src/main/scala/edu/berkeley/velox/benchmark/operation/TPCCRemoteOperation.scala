@@ -28,7 +28,7 @@ case class TPCCReadStock(W_ID: Int, D_ID: Int, OL_I_ID: Int) extends RemoteOpera
 
     new TPCCReturnStock(W_ID,
                         D_ID,
-      OL_I_ID,
+                        OL_I_ID,
                         m_row.readColumn(TPCCConstants.S_ORDER_CNT).asInstanceOf[Int],
                         m_row.readColumn(TPCCConstants.S_REMOTE_CNT).asInstanceOf[Int],
                         m_row.readColumn(TPCCConstants.S_QUANTITY_COL).asInstanceOf[Int],
@@ -49,10 +49,15 @@ case class TPCCReturnStock(W_ID: Int,
   def depositResults(resultsMap: util.Map[PrimaryKey, Row]) {
     resultsMap.put(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_IMMUTABLE, W_ID, OL_I_ID),
       Row.column(TPCCConstants.S_DATA_COL, S_DATA_COL).column(TPCCConstants.formatSDistXX(D_ID), DIST_XX))
+
+
     resultsMap.put(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, W_ID, OL_I_ID),
       Row.column(TPCCConstants.S_ORDER_CNT, ORDER_CNT)
         .column(TPCCConstants.S_REMOTE_CNT, REMOTE_CNT)
         .column(TPCCConstants.S_QUANTITY_COL, S_QUANTITY))
+
+    println(s"depositing results $W_ID $D_ID $OL_I_ID resultsMap is $resultsMap")
+
   }
 
 }

@@ -114,6 +114,9 @@ object TPCCNewOrder extends Logging {
             val I_PRICE = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.ITEM_TABLE, OL_I_ID), TPCCConstants.I_PRICE_COL).asInstanceOf[Double]
             val I_DATA = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.ITEM_TABLE, OL_I_ID), TPCCConstants.I_DATA_COL).asInstanceOf[String]
             val I_NAME = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.ITEM_TABLE, OL_I_ID), TPCCConstants.I_NAME_COL).asInstanceOf[String]
+            println(s"getting results $W_ID $D_ID $OL_I_ID resultsMap is ${readTxn.results}")
+
+
             val S_DATA = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_IMMUTABLE, S_W_ID, OL_I_ID), TPCCConstants.S_DATA_COL).asInstanceOf[String]
             var currentStock = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.STOCK_TABLE_MUTABLE, S_W_ID, OL_I_ID), TPCCConstants.S_QUANTITY_COL).asInstanceOf[Integer]
 
