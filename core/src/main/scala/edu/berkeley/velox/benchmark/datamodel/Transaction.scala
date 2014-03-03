@@ -113,17 +113,10 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
   class KeyRow(val keys: util.ArrayList[PrimaryKey], val rows: util.ArrayList[Row])
 
   def executeRead = {
-
-
     val p = Promise[Transaction]
     results.clear()
 
-    logger.error(s"reading $toGetLocal")
-
     results.putAll(storage.getAll(toGetLocal))
-
-    logger.error(s"read $toGetLocal, results is $results")
-
 
     if(!toGetRemote.isEmpty) {
       val getFutures = new util.ArrayList[Future[RemoteOperationResponse]](toGetRemote.size())
@@ -143,9 +136,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
          val resp_it = responses.iterator
          while(resp_it.hasNext) {
            resp_it.next().depositResults(results)
-
-           logger.error(s"post deposit $toGetLocal, results is $results")
-
          }
 
          p success this
@@ -155,8 +145,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
        }
      }
 
-     toGetLocal.clear
-     toGetRemote.clear
     } else {
       p success this
     }
