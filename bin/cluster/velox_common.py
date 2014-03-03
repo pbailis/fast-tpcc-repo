@@ -388,8 +388,8 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "sbt/sbt assembly; ") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
-def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, **kwargs):
-    HEADER = "pkill -9 java; cd /home/ubuntu/velox/; sleep 10; rm *.log;"
+def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, thread_handlers= False, outbound_conn_degree=1, **kwargs):
+    HEADER = "pkill -9 java; pkill -9 java; cd /home/ubuntu/velox/; sleep 10; rm *.log;"
 
     netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
 
@@ -400,7 +400,7 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s 1>server.log-%d 2>&1 & "
+    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
@@ -417,6 +417,8 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
                         buffer_size,
                         sweep_time,
                         "--serializable true" if serializable else "",
+                        "--thread_handlers" if thread_handlers else "",
+                        outbound_conn_degree,
                         sid)
 
         server = cluster.servers[sid]

@@ -184,15 +184,19 @@ if __name__ == "__main__":
                        args.serializable = True
                        args.sweep_time = 0
                        clients = 10000
+                       thread_handlers = False
 
                    else:
                         args.serializable = False
-                        args.sweep_time = 10
+                        args.sweep_time = 200
                         clients = 100000
                         args.buffer_size = 1310720
+                        if remote > 0:
+                            thread_handlers = False
+                            outbound_conn_degree = 2
 
-                   start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
-                   sleep(10)
+                   start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable, thread_handlers=thread_handlers, outbound_conn_degree=outbound_conn_degree)
+                   sleep(15)
                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                           args.profile, args.profile_depth,
                                           parallelism=16, timeout=120, ops=clients, chance_remote=remote, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
