@@ -153,7 +153,7 @@ abstract class MessageService extends Logging {
             case Success(response) => {
               sendResponse(src, requestId, response)
             }
-            case Failure(t) => logger.error(s"Error receiving message $t")
+            case Failure(t) => logger.error(s"Error receiving message $t", t)
           }
         }
       }  catch {
