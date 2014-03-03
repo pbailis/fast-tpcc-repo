@@ -133,6 +133,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
      getFuture onComplete {
        case Success(responses) => {
 
+         logger.error(s"success! $responses")
+
          val resp_it = responses.iterator
          while(resp_it.hasNext) {
            resp_it.next().depositResults(results)
@@ -146,6 +148,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
      }
 
     } else {
+      logger.error("no remote!")
       p success this
     }
 
