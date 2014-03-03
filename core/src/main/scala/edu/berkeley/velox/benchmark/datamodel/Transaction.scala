@@ -169,7 +169,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
   private var deferredIncrement: DeferredIncrement = null
 
   private var toPutLocal = new util.HashMap[PrimaryKey, Row](64)
-  private var toGetLocal = new util.HashMap[PrimaryKey, Row](64)
+  var toGetLocal = new util.HashMap[PrimaryKey, Row](64)
 
   private var toPutRemote = new util.HashMap[NetworkDestinationHandle, RemoteOperation](64)
   private var toGetRemote = new util.HashMap[NetworkDestinationHandle, RemoteOperation](64)

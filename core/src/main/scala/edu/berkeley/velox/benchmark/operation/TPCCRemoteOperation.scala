@@ -57,9 +57,6 @@ case class TPCCReturnStock(W_ID: Int,
       Row.column(TPCCConstants.S_ORDER_CNT, ORDER_CNT)
         .column(TPCCConstants.S_REMOTE_CNT, REMOTE_CNT)
         .column(TPCCConstants.S_QUANTITY_COL, S_QUANTITY))
-
-    println(s"depositing results $W_ID $D_ID $OL_I_ID resultsMap is $resultsMap ${resultsMap.size()} $oldsize")
-
   }
 
 }
