@@ -132,9 +132,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
      getFuture onComplete {
        case Success(responses) => {
-
-         logger.error(s"success! $responses")
-
          val resp_it = responses.iterator
          while(resp_it.hasNext) {
            resp_it.next().depositResults(results)
@@ -148,7 +145,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
      }
 
     } else {
-      logger.error("no remote!")
       p success this
     }
 
@@ -177,28 +173,5 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
   private var toPutRemote = new util.HashMap[NetworkDestinationHandle, RemoteOperation](64)
   private var toGetRemote = new util.HashMap[NetworkDestinationHandle, RemoteOperation](64)
   var results: util.Map[PrimaryKey, Row] = new util.HashMap[PrimaryKey, Row](64)
-
-  def combineFuture[T](futures: util.ArrayList[Future[T]]): Future[util.Vector[T]] = {
-    val p = Promise[util.Vector[T]]
-    val totalFutures = futures.size()
-    val ret = new util.Vector[T](totalFutures)
-    val future_it = futures.iterator()
-    while(future_it.hasNext()) {
-      val future = future_it.next()
-      future.onComplete {
-        case Success(r) => {
-          ret.add(r)
-          if(ret.size() == totalFutures) {
-            logger.error(s"ALL got ${ret.size()} of $totalFutures")
-            p.trySuccess(ret)
-          } else {
-            logger.error(s"NOT got ${ret.size()} of $totalFutures")
-          }
-        }
-        case Failure(t) => p tryFailure t
-      }
-    }
-    p.future
-  }
 }
 
