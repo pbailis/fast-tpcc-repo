@@ -14,10 +14,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
 
-import java.util.Vector
+import java.util.ArrayList
 
 class MultiSendSweeper(
-  connections: ConcurrentHashMap[NetworkDestinationHandle, Vector[SocketBufferPool]],
+  connections: ConcurrentHashMap[NetworkDestinationHandle, ArrayList[SocketBufferPool]],
   executor: ExecutorService) extends Runnable {
 
   def run() {
@@ -63,7 +63,7 @@ class MultiConnectArrayNetworkService (
     this.executor
   }
 
-  val connections = new ConcurrentHashMap[NetworkDestinationHandle, Vector[SocketBufferPool]]
+  val connections = new ConcurrentHashMap[NetworkDestinationHandle, ArrayList[SocketBufferPool]]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
 
@@ -122,7 +122,7 @@ class MultiConnectArrayNetworkService (
   def _registerConnection(partitionId: NetworkDestinationHandle, channel: SocketChannel) {
     val bufPool = new SocketBufferPool(channel)
 
-    connections.putIfAbsent(partitionId, new Vector[SocketBufferPool])
+    connections.putIfAbsent(partitionId, new ArrayList[SocketBufferPool])
 
     connections.get(partitionId).add(bufPool)
     logger.info(s"Adding connection from $partitionId")
