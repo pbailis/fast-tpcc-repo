@@ -42,6 +42,7 @@ class VeloxServer extends Logging {
   internalServer.registerHandler(new InternalSerializableGetAllRequestHandler)
   internalServer.registerHandler(new InternalSerializablePutAllRequestHandler)
   internalServer.registerHandler(new InternalSerializableUnlockRequestHandler)
+  internalServer.registerHandler(new RemoteOperationHandler)
 
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService
@@ -99,7 +100,17 @@ class VeloxServer extends Logging {
   class InternalGetAllHandler extends MessageHandler[GetAllResponse, GetAllRequest] {
     def receive(src: NetworkDestinationHandle, msg: GetAllRequest): Future[GetAllResponse] = {
       // returns true if there was an old value
-      future { new GetAllResponse(storageEngine.getAll(msg.keys, msg.values)) }
+      future {
+        new GetAllResponse(storageEngine.getAll(msg.keys, msg.values))
+      }
+    }
+  }
+
+  class RemoteOperationHandler extends MessageHandler[RemoteOperationResponse, RemoteOperation] {
+    def receive(src: NetworkDestinationHandle, msg: RemoteOperation) {
+      future {
+        msg.execute(storageEngine)
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 package edu.berkeley.benchmark.tpcc
 
-import edu.berkeley.velox.benchmark.operation.{DeferredIncrement, TPCCNewOrderLineResult, TPCCNewOrderRequest, TPCCNewOrderResponse}
+import edu.berkeley.velox.benchmark.operation._
 import edu.berkeley.velox.benchmark.datamodel.Transaction
 import edu.berkeley.velox.datamodel.{Row, PrimaryKey, Timestamp}
 
@@ -13,6 +13,12 @@ import scala.util.{Failure, Success}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.storage.StorageEngine
+import edu.berkeley.velox.conf.VeloxConfig
+import edu.berkeley.velox.benchmark.operation.TPCCNewOrderRequest
+import scala.util.Failure
+import scala.util.Success
+import edu.berkeley.velox.benchmark.operation.TPCCNewOrderLineResult
+import edu.berkeley.velox.benchmark.operation.DeferredIncrement
 
 object TPCCNewOrder extends Logging {
   def execute(request: TPCCNewOrderRequest,
@@ -67,16 +73,22 @@ object TPCCNewOrder extends Logging {
       val OL_I_ID: Int = OL_I_IDs.get(ol_cnt)
       val S_W_ID: Int = OL_SUPPLY_W_IDs.get(ol_cnt)
 
+      if(S_W_ID != W_ID && partitioner.getPartitionForWarehouse(W_ID) != VeloxConfig.partitionId) {
+        readTxn.addRemoteGetOperation(new TPCCReadStock(S_W_ID, D_ID, OL_I_ID))
+      } else {
+        readTxn.table(TPCCConstants.STOCK_TABLE_IMMUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID),
+          Row.column(TPCCConstants.S_DATA_COL)
+          .column(TPCCConstants.formatSDistXX(D_ID)))
+
+        readTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID),
+          Row.column(TPCCConstants.S_ORDER_CNT).column(TPCCConstants.S_REMOTE_CNT).column(TPCCConstants.S_QUANTITY_COL))
+      }
+
       readTxn.table(TPCCConstants.ITEM_TABLE).get(PrimaryKey.pkey(OL_I_ID),
         Row.column(TPCCConstants.I_PRICE_COL)
         .column(TPCCConstants.I_NAME_COL)
         .column(TPCCConstants.I_DATA_COL))
 
-      readTxn.table(TPCCConstants.STOCK_TABLE_IMMUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID),
-        Row.column(TPCCConstants.S_DATA_COL)
-        .column(TPCCConstants.formatSDistXX(D_ID)))
-
-      readTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID), Row.column(TPCCConstants.S_ORDER_CNT).column(TPCCConstants.S_REMOTE_CNT).column(TPCCConstants.S_QUANTITY_COL))
       ol_cnt += 1
     }
 
@@ -133,11 +145,14 @@ object TPCCNewOrder extends Logging {
               currentRemoteCount += 1
             }
 
-            writeTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).put(PrimaryKey.pkey(S_W_ID, OL_I_ID),
-              Row.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
-              .column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount)
-                .column(TPCCConstants.S_QUANTITY_COL, currentStock))
-
+            if(S_W_ID != W_ID && partitioner.getPartitionForWarehouse(W_ID) != VeloxConfig.partitionId) {
+              writeTxn.addRemotePutOperation(new TPCCUpdateStock(S_W_ID, OL_I_ID, currentOrderCount, currentRemoteCount, currentStock))
+            } else {
+              writeTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).put(PrimaryKey.pkey(S_W_ID, OL_I_ID),
+                          Row.column(TPCCConstants.S_ORDER_CNT, currentOrderCount)
+                          .column(TPCCConstants.S_REMOTE_CNT, currentRemoteCount)
+                            .column(TPCCConstants.S_QUANTITY_COL, currentStock))
+            }
           }
           ol_cnt += 1
         }

@@ -28,12 +28,22 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     return new Table(tableName, this)
   }
 
+  def addRemoteGetOperation(op: RemoteOperation): Transaction = {
+    toGetRemote.put(partitioner.getPartitionForWarehouse(op.getWarehouse()), op)
+    this
+  }
+
+  def addRemotePutOperation(op: RemoteOperation): Transaction = {
+    toPutRemote.put(partitioner.getPartitionForWarehouse(op.getWarehouse()), op)
+    this
+  }
+
   def put(key: PrimaryKey, value: Row): Transaction = {
     value.timestamp = txId
     if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
       toPutLocal.put(key, value)
     else
-      toPutRemote.put(key, value)
+      throw new RuntimeException("not supported!")
 
     return this
   }
@@ -42,15 +52,9 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     if(partitioner.getMasterPartition(key) == VeloxConfig.partitionId)
       toGetLocal.put(key, columns)
     else
-      toGetRemote.put(key, columns)
+      throw new RuntimeException("not supported!")
 
     return this
-  }
-
-  def executeRead(engine: StorageEngine) {
-    results.clear()
-    results = engine.getAll(toGetRemote)
-    toGetRemote.clear()
   }
 
   def executeWriteLocal {
@@ -63,12 +67,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     val p = Promise[Transaction]
 
     val allKeys = new util.ArrayList[PrimaryKey](toPutRemote.size+toPutLocal.size)
-
-    val tpr_key_it = toPutRemote.keySet().iterator()
-    while(tpr_key_it.hasNext) {
-      allKeys.add(tpr_key_it.next())
-    }
-
 
     val tpl_key_it = toPutLocal.keySet().iterator()
     while(tpl_key_it.hasNext) {
@@ -85,29 +83,9 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     storage.putPending(toPutLocal)
 
     if(!toPutRemote.isEmpty) {
+      val prepareFutures = new util.ArrayList[Future[RemoteOperationResponse]](toPutRemote.size())
 
-      val tpr_val_it = toPutRemote.values().iterator()
-      while(tpr_val_it.hasNext) {
-        tpr_val_it.next().transactionKeys = keyArr
-      }
-
-      val writesByPartition = new util.HashMap[NetworkDestinationHandle, PreparePutAllRequest]
-
-      val tpr_entry_it = toPutRemote.entrySet().iterator()
-
-      while(tpr_entry_it.hasNext) {
-        val pair = tpr_entry_it.next
-        val partition = partitioner.getMasterPartition(pair.getKey)
-        if(!writesByPartition.containsKey(partition)) {
-          writesByPartition.put(partition, new PreparePutAllRequest(new util.HashMap[PrimaryKey, Row]))
-        }
-
-        writesByPartition.get(partition).values.put(pair.getKey, pair.getValue)
-      }
-
-      val prepareFutures = new util.ArrayList[Future[Any]](writesByPartition.size())
-
-      val wbp_it = writesByPartition.entrySet().iterator()
+      val wbp_it = toPutRemote.entrySet().iterator()
       while(wbp_it.hasNext) {
         val wbp = wbp_it.next()
         prepareFutures.add(messageService.send(wbp.getKey, wbp.getValue))
@@ -116,46 +94,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       val prepareFuture = Future.sequence(prepareFutures.asScala)
 
       prepareFuture onComplete {
-        case Success(responses) => {
-          deferredIncrementResponse = storage.putGood(txId, deferredIncrement)
-          toPutLocal.clear()
-
-          var deferredPartition = -1
-          if(deferredIncrement != null) {
-            deferredPartition = partitioner.getMasterPartition(deferredIncrement.counterKey)
-          }
-
-          val commitFutures = new util.ArrayList[Future[CommitPutAllResponse]](writesByPartition.size())
-
-          val cf_it = writesByPartition.keySet().iterator()
-          while(cf_it.hasNext) {
-            var deferral: DeferredIncrement = null
-
-            val destination = cf_it.next()
-
-            if(destination == deferredPartition) {
-              deferral = deferredIncrement
-            }
-
-            messageService.send(destination, new CommitPutAllRequest(txId, deferral))
-          }
-
-          val commitFuture = Future.sequence(commitFutures.asScala)
-
-          commitFuture onComplete {
-            case Success(responses) => {
-              val resp_it = responses.iterator
-              while(resp_it.hasNext && deferredIncrementResponse == -1) {
-                val response = resp_it.next()
-                if(response.incrementResponse > -1) {
-                  deferredIncrementResponse = response.incrementResponse
-                }
-              }
-              p success this
-            }
-            case Failure(t) => p failure t
-          }
-        }
+        case Success(responses) => { }
         case Failure(t) => {
           p.failure(t)
         }
@@ -179,37 +118,18 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     results.clear()
 
     if(!toGetRemote.isEmpty) {
-     val readsByPartition = new util.HashMap[NetworkDestinationHandle, KeyRow]
+      val getFutures = new util.ArrayList[Future[RemoteOperationResponse]](toGetRemote.size())
 
-
-      val tgr_it = toGetRemote.entrySet().iterator()
-      while(tgr_it.hasNext) {
-        val entry = tgr_it.next()
-        val partition = partitioner.getMasterPartition(entry.getKey)
-
-        var kr = readsByPartition.get(partition)
-        if(kr == null) {
-          kr = new KeyRow(new util.ArrayList[PrimaryKey], new util.ArrayList[Row])
-          readsByPartition.put(partition, kr)
-        }
-
-        kr.keys.add(entry.getKey)
-        kr.rows.add(entry.getValue)
-      }
-
-      val getFutures = new util.ArrayList[Future[GetAllResponse]](readsByPartition.size())
-
-      val rbp_it = readsByPartition.entrySet().iterator()
+      val rbp_it = toGetRemote.entrySet().iterator()
       while(rbp_it.hasNext) {
         val rbp = rbp_it.next()
-        val kr = rbp.getValue
-        getFutures.add(messageService.send(rbp.getKey, new GetAllRequest(kr.keys.toArray(new Array[PrimaryKey](kr.keys.size())),
-                                                                         kr.rows.toArray(new Array[Row](kr.keys.size())))))
+
+        getFutures.add(messageService.send(rbp.getKey, rbp.getValue))
       }
 
      val getFuture = Future.sequence(getFutures.asScala)
 
-      results.putAll(storage.getAll(toGetLocal))
+    results.putAll(storage.getAll(toGetLocal))
 
 
      getFuture onComplete {
@@ -217,7 +137,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
          val resp_it = responses.iterator
          while(resp_it.hasNext) {
-           results.putAll(resp_it.next().values)
+           resp_it.next().depositResults(results)
          }
 
          p success this
@@ -257,8 +177,8 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
   private var toPutLocal = new util.HashMap[PrimaryKey, Row](64)
   private var toGetLocal = new util.HashMap[PrimaryKey, Row](64)
 
-  private var toPutRemote = new util.HashMap[PrimaryKey, Row](64)
-  private var toGetRemote = new util.HashMap[PrimaryKey, Row](64)
+  private var toPutRemote = new util.HashMap[NetworkDestinationHandle, RemoteOperation](64)
+  private var toGetRemote = new util.HashMap[NetworkDestinationHandle, RemoteOperation](64)
   var results: util.Map[PrimaryKey, Row] = new util.HashMap[PrimaryKey, Row](64)
 
   def combineFuture[T](futures: util.ArrayList[Future[T]]): Future[util.Vector[T]] = {

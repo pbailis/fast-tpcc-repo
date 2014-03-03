@@ -86,6 +86,13 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[SerializableUnlockRequest])
     kryo.register(classOf[SerializableRow])
 
+    kryo.register(classOf[RemoteOperation])
+    kryo.register(classOf[RemoteOperationResponse])
+    kryo.register(classOf[TPCCUpdateStock])
+    kryo.register(classOf[TPCCUpdateStockResponse])
+    kryo.register(classOf[TPCCReadStock])
+    kryo.register(classOf[TPCCReturnStock])
+
 
     // Register important base types
     kryo.register(classOf[Request[_]])
