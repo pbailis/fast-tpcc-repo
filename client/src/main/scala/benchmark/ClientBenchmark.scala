@@ -80,8 +80,6 @@ object ClientBenchmark {
       opt[Unit]("serializable") foreach { p => serializable = true }
       opt[Unit]("pct_test") foreach { p => pct_test = true }
 
-
-
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
@@ -90,6 +88,8 @@ object ClientBenchmark {
     val opsDone = new AtomicInteger(0)
 
     parser.parse(args)
+
+    println(s"pct test is $pct_test")
 
     val clusterAddresses = frontendCluster.split(",").map {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
@@ -185,7 +185,7 @@ object ClientBenchmark {
     for(i <- 1 to OL_CNT) {
       var O_W_ID = W_ID
       if (totalWarehouses > 1) {
-        if(!pct_test && generator.nextDouble() < chance_remote) {
+        if(pct_test == false && generator.nextDouble() < chance_remote) {
           println("OOO NOOO")
           O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
 
