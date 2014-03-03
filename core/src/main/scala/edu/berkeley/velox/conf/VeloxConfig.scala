@@ -41,7 +41,7 @@ object VeloxConfig extends Logging {
     opt[Int]("sweep_time") foreach { p => sweepTime = p } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[Boolean]("serializable") foreach { p => serializable = p }
-    opt[Unit]("thread_handler") foreach { p => thread_handler = true }
+    opt[Unit]("thread_handlers") foreach { p => thread_handler = true }
 
 
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
