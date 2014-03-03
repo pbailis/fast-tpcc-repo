@@ -1,6 +1,6 @@
 package edu.berkeley.velox.util
 
-import com.esotericsoftware.kryo.Kryo
+import com.esotericsoftware.kryo.{Serializer, Kryo}
 import com.twitter.chill.{AllScalaRegistrar, EmptyScalaKryoInstantiator}
 import edu.berkeley.velox.rpc.Request
 import java.util.concurrent.LinkedBlockingQueue
@@ -60,10 +60,52 @@ object VeloxKryoRegistrar {
     kryo.register(classOf[GetAllRequest])
     kryo.register(classOf[GetAllResponse])
     kryo.register(classOf[Array[Int]])
-    kryo.register(classOf[Array[PrimaryKey]])
-    kryo.register(classOf[Array[Row]])
+    kryo.register(classOf[Array[PrimaryKey]], new Serializer[Array[PrimaryKey]] {
+      def write(kryo: Kryo, output: Output, arr: Array[PrimaryKey]) {
+        output.writeShort(arr.length)
+        var i = 0
+        while(i < arr.length) {
+          kryo.writeObject(output, arr(i))
+          i += 1
+        }
+      }
 
-    Log.set(LEVEL_TRACE)
+      def read(kryo: Kryo, input: Input, t: java.lang.Class[Array[PrimaryKey]]) {
+        val len = input.readShort()
+        val ret = new Array[PrimaryKey](len)
+        var i = 0
+        while(i < len) {
+          ret(i) = kryo.readObject(input, Class[PrimaryKey])
+          i += 1
+        }
+        ret
+      }
+
+    })
+    kryo.register(classOf[Array[Row]], new Serializer[Array[Row]] {
+          def write(kryo: Kryo, output: Output, arr: Array[Row]) {
+            output.writeShort(arr.length)
+            var i = 0
+            while(i < arr.length) {
+              kryo.writeObject(output, arr(i))
+              i += 1
+            }
+          }
+
+          def read(kryo: Kryo, input: Input, t: java.lang.Class[Array[Row]]) {
+            val len = input.readShort()
+            val ret = new Array[Row](len)
+            var i = 0
+            while(i < len) {
+              ret(i) = kryo.readObject(input, Class[Row])
+              i += 1
+            }
+            ret
+          }
+
+        })
+
+    //Log.set(LEVEL_TRACE)
 
     kryo.register(classOf[PreparePutAllRequest])
     kryo.register(classOf[PreparePutAllResponse])

@@ -1,6 +1,8 @@
 package edu.berkeley.velox.datamodel
 
 import java.util.Arrays
+import com.esotericsoftware.kryo.{KryoSerializable, Kryo}
+import com.esotericsoftware.kryo.io.{Input, Output}
 
 object PrimaryKey {
   def pkey(columns: Int*): PrimaryKey = {
@@ -17,7 +19,7 @@ object PrimaryKey {
   }
 }
 
-class PrimaryKey extends Comparable[PrimaryKey] {
+class PrimaryKey extends Comparable[PrimaryKey] with KryoSerializable {
   def this(table: Int, keyColumns: Array[Int]) {
     this()
     this.table = table
@@ -84,5 +86,28 @@ class PrimaryKey extends Comparable[PrimaryKey] {
 
   var table: Int = -1
   var keyColumns: Array[Int] = null
+
+  override def write(kryo: Kryo, output: Output) {
+    output.writeInt(table)
+    output.writeShort(keyColumns.length)
+
+    var i = 0
+    while(i < keyColumns.length) {
+      output.writeInt(keyColumns(i))
+      i += 1
+    }
+  }
+
+  override def read(kryo: Kryo, input: Input) {
+    table = input.readInt()
+    val len = input.readShort()
+    keyColumns = new Array[Int](len)
+
+    var i = 0
+    while(i < keyColumns.length) {
+      keyColumns(i) = input.readInt()
+      i += 1
+    }
+  }
 }
 
