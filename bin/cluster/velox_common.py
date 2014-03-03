@@ -119,8 +119,10 @@ class Cluster:
         self.serversPerMachine = serversPerMachine
 
     def allocateHosts(self, hosts):
-        cr1s = hosts.filter(lambda x: x.instance_type.find("cr1") == -1)
-        non_cr1s = hosts.filter(lambda x: x not in cr1s)
+        for h in hosts:
+            print h.instance_type
+        cr1s = [h for h in hosts if h.instance_type.find("cr1") == -1]
+        non_cr1s = [h for h in hosts if h not in cr1s]
 
         hosts = cr1s + non_cr1s
 
