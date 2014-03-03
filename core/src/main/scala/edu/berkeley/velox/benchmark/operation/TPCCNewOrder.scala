@@ -73,7 +73,7 @@ object TPCCNewOrder extends Logging {
       val OL_I_ID: Int = OL_I_IDs.get(ol_cnt)
       val S_W_ID: Int = OL_SUPPLY_W_IDs.get(ol_cnt)
 
-      if(S_W_ID != W_ID && partitioner.getPartitionForWarehouse(S_W_ID) != VeloxConfig.partitionId) {
+      if(partitioner.getPartitionForWarehouse(S_W_ID) != VeloxConfig.partitionId) {
         readTxn.addRemoteGetOperation(new TPCCReadStock(S_W_ID, D_ID, OL_I_ID))
       } else {
         readTxn.table(TPCCConstants.STOCK_TABLE_IMMUTABLE).get(PrimaryKey.pkey(S_W_ID, OL_I_ID),
@@ -148,7 +148,7 @@ object TPCCNewOrder extends Logging {
               currentRemoteCount += 1
             }
 
-            if(S_W_ID != W_ID && partitioner.getPartitionForWarehouse(S_W_ID) != VeloxConfig.partitionId) {
+            if(partitioner.getPartitionForWarehouse(S_W_ID) != VeloxConfig.partitionId) {
               writeTxn.addRemotePutOperation(new TPCCUpdateStock(S_W_ID, OL_I_ID, currentOrderCount, currentRemoteCount, currentStock))
             } else {
               writeTxn.table(TPCCConstants.STOCK_TABLE_MUTABLE).put(PrimaryKey.pkey(S_W_ID, OL_I_ID),
