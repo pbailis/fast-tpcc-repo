@@ -123,7 +123,7 @@ object ClientBenchmark {
           while (!finished) {
             requestSem.acquireUninterruptibly()
 
-            val request = singleNewOrder(client, chance_remote, serializable)
+            val request = singleNewOrder(client, chance_remote, serializable, pct_test)
             request.future onComplete {
               case Success(value) => {
                 numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
