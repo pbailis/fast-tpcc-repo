@@ -88,7 +88,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       val wbp_it = toPutRemote.entrySet().iterator()
       while(wbp_it.hasNext) {
         val wbp = wbp_it.next()
-        prepareFutures.add(messageService.send(wbp.getKey, wbp.getValue))
+        prepareFutures.add(messageService.send(wbp.getKey, wbp.getValue.asInstanceOf[TPCCUpdateStock]))
       }
 
       val prepareFuture = Future.sequence(prepareFutures.asScala)
@@ -124,7 +124,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       while(rbp_it.hasNext) {
         val rbp = rbp_it.next()
 
-        getFutures.add(messageService.send(rbp.getKey, rbp.getValue))
+        getFutures.add(messageService.send(rbp.getKey, rbp.getValue.asInstanceOf[TPCCReadStock]))
       }
 
      val getFuture = Future.sequence(getFutures.asScala)

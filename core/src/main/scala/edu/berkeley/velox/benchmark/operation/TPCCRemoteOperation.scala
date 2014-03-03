@@ -10,7 +10,7 @@ import java.util
  * Created by pbailis on 3/2/14.
  */
 
-trait RemoteOperation extends Request[RemoteOperationResponse] {
+trait RemoteOperation {
   def getWarehouse(): Int
   def execute(storage: StorageEngine) : RemoteOperationResponse
 }
