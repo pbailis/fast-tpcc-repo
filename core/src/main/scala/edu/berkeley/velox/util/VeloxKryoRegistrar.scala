@@ -75,7 +75,7 @@ object VeloxKryoRegistrar {
         val ret = new Array[PrimaryKey](len)
         var i = 0
         while(i < len) {
-          ret(i) = kryo.readObject(input, Class[PrimaryKey])
+          ret(i) = kryo.readObject(input, classOf[PrimaryKey])
           i += 1
         }
         ret
@@ -97,7 +97,7 @@ object VeloxKryoRegistrar {
             val ret = new Array[Row](len)
             var i = 0
             while(i < len) {
-              ret(i) = kryo.readObject(input, Class[Row])
+              ret(i) = kryo.readObject(input, classOf[Row])
               i += 1
             }
             ret
