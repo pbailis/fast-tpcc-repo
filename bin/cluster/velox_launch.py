@@ -177,7 +177,7 @@ if __name__ == "__main__":
                    runid = "remotebench-PCT%f-%s-IT%d" % (remote, config, it)
                    assign_hosts(region, cluster)
 
-                   args.output_dir += "/"+runid
+                   args.output_dir = "output/"+runid
 
                    extra_args = "--pct_test"
                    if(config == "serializable"):
