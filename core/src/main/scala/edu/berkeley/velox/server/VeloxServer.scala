@@ -106,8 +106,16 @@ class VeloxServer extends Logging {
     }
   }
 
-  class RemoteOperationHandler extends MessageHandler[RemoteOperationResponse, RemoteOperation] {
-    def receive(src: NetworkDestinationHandle, msg: RemoteOperation): Future[RemoteOperationResponse] = {
+  class ReadStockOperationHandler extends MessageHandler[TPCCReturnStock, TPCCReadStock] {
+    def receive(src: NetworkDestinationHandle, msg: TPCCReadStock): Future[TPCCReturnStock] = {
+      future {
+        msg.execute(storageEngine)
+      }
+    }
+  }
+
+  class RemoteOperationHandler extends MessageHandler[TPCCUpdateStockResponse, TPCCUpdateStock] {
+    def receive(src: NetworkDestinationHandle, msg: TPCCUpdateStock): Future[TPCCUpdateStockResponse] = {
       future {
         msg.execute(storageEngine)
       }
