@@ -17,6 +17,10 @@ class InternalRPCService extends MessageService {
   networkService.setMessageService(this)
 
   override def initialize() {
+    if(VeloxConfig.thread_handler) {
+      executor = networkService.executor;
+    }
+
     logger.info(s"${VeloxConfig.partitionId} starting internal RPC acceptor on port ${VeloxConfig.internalServerPort}")
     configureInboundListener(VeloxConfig.internalServerPort);
     networkService.start()
@@ -37,9 +41,7 @@ class InternalRPCService extends MessageService {
     logger.info(s"${VeloxConfig.partitionId} started internal RPC!")
 
 
-    if(VeloxConfig.thread_handler) {
-      executor = networkService.executor;
-    }
+
 
   }
 }
