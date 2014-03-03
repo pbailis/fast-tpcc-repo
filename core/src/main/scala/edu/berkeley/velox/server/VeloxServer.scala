@@ -107,7 +107,7 @@ class VeloxServer extends Logging {
   }
 
   class RemoteOperationHandler extends MessageHandler[RemoteOperationResponse, RemoteOperation] {
-    def receive(src: NetworkDestinationHandle, msg: RemoteOperation) {
+    def receive(src: NetworkDestinationHandle, msg: RemoteOperation): Future[RemoteOperationResponse] = {
       future {
         msg.execute(storageEngine)
       }
