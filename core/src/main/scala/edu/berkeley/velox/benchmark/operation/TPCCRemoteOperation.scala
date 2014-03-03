@@ -10,7 +10,7 @@ import java.util
  * Created by pbailis on 3/2/14.
  */
 
-trait RemoteOperation extends Request[RemoteOperationResponse] {
+trait RemoteOperation {
   def getWarehouse(): Int
   def execute(storage: StorageEngine) : RemoteOperationResponse
 }
@@ -19,7 +19,7 @@ trait RemoteOperationResponse {
   def depositResults(resultsMap: util.Map[PrimaryKey, Row])
 }
 
-case class TPCCReadStock(W_ID: Int, D_ID: Int, OL_I_ID: Int) extends RemoteOperation {
+case class TPCCReadStock(W_ID: Int, D_ID: Int, OL_I_ID: Int) extends RemoteOperation with Request[TPCCReturnStock] {
   def getWarehouse = { W_ID }
 
   def execute(storage: StorageEngine) = {
@@ -57,7 +57,7 @@ case class TPCCReturnStock(W_ID: Int,
 
 }
 
-case class TPCCUpdateStock(W_ID: Int, I_ID: Int, currentOrderCount: Int, currentRemoteCount: Int, currentStock: Int) extends RemoteOperation {
+case class TPCCUpdateStock(W_ID: Int, I_ID: Int, currentOrderCount: Int, currentRemoteCount: Int, currentStock: Int) extends RemoteOperation with Request[TPCCUpdateStockResponse] {
   def getWarehouse = { W_ID }
 
   def execute(storage: StorageEngine) = {

@@ -42,7 +42,9 @@ class VeloxServer extends Logging {
   internalServer.registerHandler(new InternalSerializableGetAllRequestHandler)
   internalServer.registerHandler(new InternalSerializablePutAllRequestHandler)
   internalServer.registerHandler(new InternalSerializableUnlockRequestHandler)
-  internalServer.registerHandler(new RemoteOperationHandler)
+  internalServer.registerHandler(new ReadStockOperationHandler)
+  internalServer.registerHandler(new UpdateStockOperationHandler)
+
 
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService
@@ -114,7 +116,7 @@ class VeloxServer extends Logging {
     }
   }
 
-  class RemoteOperationHandler extends MessageHandler[TPCCUpdateStockResponse, TPCCUpdateStock] {
+  class UpdateStockOperationHandler extends MessageHandler[TPCCUpdateStockResponse, TPCCUpdateStock] {
     def receive(src: NetworkDestinationHandle, msg: TPCCUpdateStock): Future[TPCCUpdateStockResponse] = {
       future {
         msg.execute(storageEngine)
