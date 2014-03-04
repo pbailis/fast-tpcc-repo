@@ -42,7 +42,7 @@ class SocketBuffer(
       return false
     }
 
-    logger.error(s"writing $bytes to $this $buf ${writePos.get()}")
+    //logger.error(s"writing $bytes to $this $buf ${writePos.get()}")
 
 
     val len = bytes.remaining
