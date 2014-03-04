@@ -65,6 +65,7 @@ if __name__ == "__main__":
                         help='Run THE CRANKSHAW TEST locally')
 
     parser.add_argument('--wh_bench', action='store_true')
+    parser.add_argument('--client_sweep', action='store_true')
     parser.add_argument('--remote_bench', action='store_true')
 
     parser.add_argument('--usefutures', action='store_true',
@@ -75,7 +76,7 @@ if __name__ == "__main__":
                         default='array', type=str,
                         help="Which network service to use [array/nio]")
     parser.add_argument('--buffer_size', dest='buffer_size',
-                        default=16384*8, type=int,
+                        default=131072*1.5, type=int,
                         help='Size (in bytes) to make the network buffer')
     parser.add_argument('--sweep_time', dest='sweep_time',
                         default=200, type=int,
@@ -142,37 +143,62 @@ if __name__ == "__main__":
     if args.wh_bench:
         for it in range(0, 1):
             for wh in [1, 2, 4, 8]:
-                for clients in [100, 1000, 10000, 100000]:
-                    for config in ["ca", "serializable"]:
-                        runid = "whbench-WH%d-CLIENTS%d-%s-IT%d" % (wh, clients, config, it)
-                        assign_hosts(region, cluster)
+                for config in ["ca", "serializable"]:
+                    runid = "whbench-WH%d-%s-IT%d" % (wh, config, it)
+                    assign_hosts(region, cluster)
+                    
+                    args.output_dir = "output/"+runid
+                    
+                    extra_args = "--warehouses_per_server %d" % wh
+                    if(config == "serializable"):
+                        args.serializable = True
+                        args.sweep_time = 0
+                        clients = 1000
+                        
+                    else:
+                        clients = 100000
+                        args.sweep_time = 200
+                        
+                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+                    sleep(15)
+                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                           args.profile, args.profile_depth,
+                                           parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
+                    stop_velox_processes()
+                    fetch_logs(args.output_dir, runid, cluster)
+                    pprint("THE CRANKSHAW has completed!")
 
-                        args.output_dir = "output/"+runid
 
-                        extra_args = "--warehouses_per_server %d" % wh
-                        if(config == "serializable"):
-                            args.serializable = True
-                            args.sweep_time = 0
+    if args.client_sweep:
+        for it in range(0, 1):
+            for clients in [1, 16, 64, 256]:#1, 10, 100, 1000, 10000]:
+                for config in ["serializable"]:#["ca", "serializable"]:
+                    runid = "client_sweep-CLIENTS%d-%s-IT%d" % (clients, config, it)
+                    assign_hosts(region, cluster)
+                    
+                    args.output_dir = "output/"+runid
+                    
+                    extra_args = ""
+                    if(config == "serializable"):
+                        args.serializable = True
+                        args.sweep_time = 0
 
-                        else:
-                            args.serializable = False
-                            if clients > 1000:
-                                args.sweep_time = 5
-                            else:
-                                args.sweep_time = 0
-
-                        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
-                        sleep(15)
-                        run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
-                                               args.profile, args.profile_depth,
-                                               parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
-                        stop_velox_processes()
-                        fetch_logs(args.output_dir, runid, cluster)
-                        pprint("THE CRANKSHAW has completed!")
+                    else:
+                        clients = 100000
+                        args.sweep_time = 200
+                        
+                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+                    sleep(15)
+                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                           args.profile, args.profile_depth,
+                                           parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
+                    stop_velox_processes()
+                    fetch_logs(args.output_dir, runid, cluster)
+                    pprint("THE CRANKSHAW has completed!")
 
     if args.remote_bench:
        for it in range(0, 1):
-           for remote in [1, 0, .25, .5, .75]:
+           for remote in [0, .25, .5, .75, 1]:
                for config in ["ca", "serializable"]:
                    runid = "remotebench-PCT%f-%s-IT%d" % (remote, config, it)
                    assign_hosts(region, cluster)
@@ -196,6 +222,7 @@ if __name__ == "__main__":
                             outbound_conn_degree = 2
                         else:
                             thread_handlers = False
+                            outbound_conn_degree = 1
 
                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable, thread_handlers=thread_handlers, outbound_conn_degree=outbound_conn_degree)
                    sleep(15)
