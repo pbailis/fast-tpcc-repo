@@ -55,14 +55,11 @@ class SocketBuffer(
       }
       else {
         writePos.getAndAdd(-len)
-
-        logger.error(s"failed write! $buf")
-
         // can't upgrade to write lock, so unlock
         rwlock.readLock.unlock
         rwlock.writeLock.lock
         // recheck in case someone else got it
-        if (pool.currentBuffer == this) {
+        if (pool.currentBuffer == this && writePos.get > 4) {
           val r = pool.swap(bytes)
           send(false)
           rwlock.writeLock.unlock
@@ -149,8 +146,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     var sent = false
     while(!sent) {
       sent = currentBuffer.write(bytes)
-      if(!sent)
-        logger.error(s"not sent!")
     }
   }
 
