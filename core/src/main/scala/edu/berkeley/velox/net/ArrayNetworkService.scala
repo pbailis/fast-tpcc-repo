@@ -221,6 +221,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       sweeping = false
     } catch  {
       case e: Exception => logger.error("error sweeping", e)
+    }
   }
 }
 
