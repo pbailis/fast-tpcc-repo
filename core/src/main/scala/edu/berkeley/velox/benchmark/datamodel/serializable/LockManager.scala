@@ -62,6 +62,8 @@ class LockManager extends Logging {
      }
 
     def acquire(wantType: LockType, requestor: Long) {
+      if(true)
+        return
       lockLock.lock()
       val request = new LockRequest(lockLock.newCondition, wantType)
 
@@ -111,6 +113,9 @@ class LockManager extends Logging {
     }
 
     def release() {
+      if(true)
+        return
+
       lockLock.lock()
 
       assert(mode == READ_LOCK || numLockers.get() == 1)
