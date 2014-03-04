@@ -161,7 +161,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     * @return true if requested bytes written successfully into new buffer
     */
   def swap(bytes: ByteBuffer):Boolean = {
-    var newBuf: SocketBuffer = null// pool.poll
+    var newBuf = pool.poll
 
     // TODO: Should probably have a limit on the number of buffers we create
     if (newBuf == null)
@@ -193,6 +193,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       buf.send(true)
       returnBuffer(buf)
     } else {
+      logger.error(s"not sending buffer! ${buf.writePos}")
       lastSent = System.currentTimeMillis()
     }
     buf.rwlock.writeLock.unlock()
