@@ -235,7 +235,7 @@ class SerializableTransaction(lockTable: LockManager,
     } else {
       messageService.send(dest, new SerializableUnlockRequest(partitionToUnlock.get(dest)))
     }
-
+  }
 
     logger.error(s"unlocked!")
 
