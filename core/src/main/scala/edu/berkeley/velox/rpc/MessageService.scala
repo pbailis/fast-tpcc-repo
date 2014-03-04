@@ -177,6 +177,7 @@ abstract class MessageService extends Logging {
       recvRequest_(src, requestId, msg)
     } else {
       // receive the response message
+      logger.error(s"got message $msg")
       requestMap.remove(requestId) success msg
     }
   }
