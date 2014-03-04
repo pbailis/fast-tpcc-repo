@@ -52,9 +52,6 @@ class SocketBuffer(
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
-        logger.error(s"writing to $buf ${writePos} $this")
-
-
         rwlock.readLock.unlock
         true
       }
@@ -98,10 +95,6 @@ class SocketBuffer(
         buf.putInt(writePos.get-4)
         buf.limit(writePos.get)
         buf.position(0)
-
-
-        logger.error(s"sending $buf forced $forced ${writePos} $this")
-
 
         // wrap the array and write it out
         while(buf.hasRemaining) {
@@ -168,7 +161,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     * @return true if requested bytes written successfully into new buffer
     */
   def swap(bytes: ByteBuffer):Boolean = {
-    var newBuf = pool.poll
+    var newBuf: SocketBuffer = null// pool.poll
 
     // TODO: Should probably have a limit on the number of buffers we create
     if (newBuf == null)
