@@ -232,7 +232,7 @@ class Receiver (
 
   def run() = try {
       while(bytes.remaining != 0) {
-        logger.error(s"receiving $bytes")
+        //logger.error(s"receiving $bytes")
         messageService.receiveRemoteMessage(src,bytes)
       }
    } catch {
@@ -263,7 +263,7 @@ class ReaderThread (
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
-          logger.error(s"perfect read! $read $len $readBuffer")
+          //logger.error(s"perfect read! $read $len $readBuffer")
           executor.submit(new Receiver(readBuffer,src,messageService))
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
@@ -272,7 +272,7 @@ class ReaderThread (
         else {
 
           while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
-            logger.error(s"imperfect read! $read $len $readBuffer")
+            //logger.error(s"imperfect read! $read $len $readBuffer")
 
 
             if (len > VeloxConfig.bufferSize) {
@@ -290,7 +290,7 @@ class ReaderThread (
             else
               len = -1 // indicate we can't put the whole int
 
-            logger.error(s"end of loop! $read $len $readBuffer")
+            //logger.error(s"end of loop! $read $len $readBuffer")
 
           }
         }
