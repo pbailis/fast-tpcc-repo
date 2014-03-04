@@ -127,8 +127,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   @volatile var lastSent = 0l
   @volatile var sweeping = false
 
-  val poolLock = new ReentrantLock
-
   // Create an runnable that calls forceSend so we
   // don't have to create a new object every time
   val forceRunner = new Runnable() {
@@ -145,12 +143,10 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def send(bytes: ByteBuffer) {
-    poolLock.lock()
     var sent = false
     while(!sent) {
       sent = currentBuffer.write(bytes)
     }
-    poolLock.unlock()
   }
 
   /** Swap the active buffer.  This should only be called by a thread
@@ -188,7 +184,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     */
   def forceSend() {
     try {
-      poolLock.lock()
 
       val buf = currentBuffer
       //logger.error(s"forcesend on $buf ${buf.buf} ${buf.writePos}")
@@ -223,7 +218,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
 
       sweeping = false
 
-      poolLock.unlock()
 
     } catch  {
       case e: Exception => logger.error("error sweeping", e)
