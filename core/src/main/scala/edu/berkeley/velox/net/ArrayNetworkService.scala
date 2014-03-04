@@ -271,6 +271,7 @@ class ReaderThread (
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
+          logger.error(s"perfect read! $read $len $readBuffer")
           executor.submit(new Receiver(readBuffer,src,messageService))
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
@@ -279,6 +280,9 @@ class ReaderThread (
         else {
 
           while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
+            logger.error(s"imperfect read! $read $len $readBuffer")
+
+
             if (len > VeloxConfig.bufferSize) {
               println(s"OHH NO LEN TO BIG $len")
             }
@@ -293,6 +297,9 @@ class ReaderThread (
               len = readBuffer.getInt
             else
               len = -1 // indicate we can't put the whole int
+
+            logger.error(s"end of loop! $read $len $readBuffer")
+
           }
         }
 
