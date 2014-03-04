@@ -91,15 +91,11 @@ class SocketBuffer(
         buf.limit(writePos.get)
         buf.position(0)
 
-        logger.error(s"sending $this $buf forced is $forced")
-
         // wrap the array and write it out
         while(buf.hasRemaining) {
           channel.write(buf)
         }
         pool.lastSent = System.currentTimeMillis
-
-        logger.error(s"sent $this $buf forced is $forced")
 
         // reset write position
         buf.clear
