@@ -139,7 +139,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def needSend(): Boolean = {
-    if(currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
+    if(sweeping == false && currentBuffer.writePos.get > 4 && ((System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime || VeloxConfig.sweepTime == 0)) {
       sweeping = true
       return true
     }
