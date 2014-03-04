@@ -10,7 +10,7 @@ import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
 
@@ -157,7 +157,10 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     *
     * @return true if requested bytes written successfully into new buffer
     */
+  val poolLock = new ReentrantLock
+
   def swap(bytes: ByteBuffer):Boolean = {
+    poolLock.lock()
     var newBuf = pool.poll
 
     // TODO: Should probably have a limit on the number of buffers we create
@@ -171,6 +174,8 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
         false
 
     currentBuffer = newBuf
+
+    poolLock.unlock()
 
     ret
 
@@ -229,9 +234,6 @@ class ReaderThread (
       var allocedBuffer = false
 
       if (read >= 4) {
-
-        logger.error(s"read $read from $channel")
-
         readBuffer.flip
 
         var len = readBuffer.getInt
