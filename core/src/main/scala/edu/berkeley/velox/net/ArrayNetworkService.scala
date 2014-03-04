@@ -320,8 +320,10 @@ class SendSweeper(
       val cit = connections.keySet.iterator
       while (cit.hasNext) {
         val sp = connections.get(cit.next)
-        if (sp.needSend)
-          executor.submit(sp.forceRunner)
+        sp.forceSend()
+
+        //if (sp.needSend)
+        //  executor.submit(sp.forceRunner)
       }
     }
   }
