@@ -241,6 +241,7 @@ class Receiver (
 
   def run() = try {
       while(bytes.remaining != 0) {
+        logger.error(s"receiving $bytes")
         messageService.receiveRemoteMessage(src,bytes)
       }
    } catch {
