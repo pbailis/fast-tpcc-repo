@@ -194,7 +194,6 @@ object TPCCNewOrderSerializable extends Logging {
 
               txn.commit()
 
-              logger.error("committing!")
               p success new TPCCNewOrderResponse(W_ID, D_ID, C_ID, O_ID, OL_CNT, C_LAST, C_CREDIT, C_DISCOUNT, W_TAX, D_TAX, O_ENTRY_D, totalAmount, newOrderLines)
             }
             case Failure(t) => {
