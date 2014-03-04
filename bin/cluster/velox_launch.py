@@ -153,15 +153,14 @@ if __name__ == "__main__":
                     if(config == "serializable"):
                         args.serializable = True
                         args.sweep_time = 0
-                        clients = 1000
-                        
+                        clients = 1200
                     else:
                         clients = 100000
                         args.sweep_time = 200
                         
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
                     sleep(15)
-                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time+1,
                                            args.profile, args.profile_depth,
                                            parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
                     stop_velox_processes()
@@ -189,7 +188,7 @@ if __name__ == "__main__":
                         
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
                     sleep(15)
-                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                    run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time+1,
                                            args.profile, args.profile_depth,
                                            parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
                     stop_velox_processes()
@@ -209,8 +208,12 @@ if __name__ == "__main__":
                    if(config == "serializable"):
                        args.serializable = True
                        args.sweep_time = 0
-                       clients = 10000
+                       if remote == 0:
+                           clients = 500
+                       else:
+                           clients = 1000
                        thread_handlers = False
+                       outbound_conn_degree =1
 
                    else:
                         args.serializable = False
@@ -226,7 +229,7 @@ if __name__ == "__main__":
 
                    start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable, thread_handlers=thread_handlers, outbound_conn_degree=outbound_conn_degree)
                    sleep(15)
-                   run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                   run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time+1,
                                           args.profile, args.profile_depth,
                                           parallelism=16, timeout=120, ops=clients, chance_remote=remote, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
                    stop_velox_processes()
