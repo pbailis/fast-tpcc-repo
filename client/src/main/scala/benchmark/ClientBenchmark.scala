@@ -136,10 +136,12 @@ object ClientBenchmark {
                  numAborts.incrementAndGet()
                 }
 
-                println("got response!")
 
                 opsDone.incrementAndGet
                 requestSem.release
+
+                println(s"got response! ${requestSem.availablePermits()}")
+
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }
