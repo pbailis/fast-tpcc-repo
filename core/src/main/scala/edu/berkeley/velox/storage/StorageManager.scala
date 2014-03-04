@@ -1,12 +1,8 @@
 package edu.berkeley.velox.storage
 
-import java.util.concurrent.ConcurrentHashMap
+import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox._
 import edu.berkeley.velox.datamodel._
-import scala.collection.JavaConverters._
-import scala.collection.mutable.{ArrayBuffer, LinkedList}
-import edu.berkeley.velox.catalog.Catalog
-import com.typesafe.scalalogging.slf4j.Logging
 
 trait StorageManager {
 
