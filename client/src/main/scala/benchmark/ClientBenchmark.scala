@@ -121,6 +121,9 @@ object ClientBenchmark {
         val rand = new Random
         override def run() = {
           while (!finished) {
+            println("sending request!")
+
+
             requestSem.acquireUninterruptibly()
 
             val request = singleNewOrder(client, chance_remote, serializable, pct_test)
@@ -130,6 +133,8 @@ object ClientBenchmark {
                 if(!value.committed) {
                  numAborts.incrementAndGet()
                 }
+
+                println("got response!")
 
                 opsDone.incrementAndGet
                 requestSem.release
