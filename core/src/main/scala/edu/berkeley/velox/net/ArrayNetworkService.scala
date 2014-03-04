@@ -191,8 +191,9 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
-    logger.error(s"forcesend on $buf")
     val buf = currentBuffer
+    logger.error(s"forcesend on $buf")
+
     buf.rwlock.writeLock.lock()
     var didsend = false
     if (currentBuffer == buf && buf.writePos.get > 4) {
