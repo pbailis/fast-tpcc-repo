@@ -9,7 +9,7 @@ import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
@@ -131,7 +131,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
-  @volatile var sweeping = false
+  val sweeping = new AtomicBoolean()
 
   // Create an runnable that calls forceSend so we
   // don't have to create a new object every time
@@ -140,9 +140,8 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def needSend(): Boolean = {
-    if(sweeping == false && currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
-      sweeping = true
-      return true
+    if(currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
+      return sweeping.compareAndSet(false, true)
     }
 
     return false
@@ -196,7 +195,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       lastSent = System.currentTimeMillis()
     }
     buf.rwlock.writeLock.unlock()
-    sweeping = false
+    sweeping.set(false)
   }
 
 }
