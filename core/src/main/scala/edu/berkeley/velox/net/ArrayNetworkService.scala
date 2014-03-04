@@ -52,6 +52,9 @@ class SocketBuffer(
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
+        logger.error(s"writing to $buf ${writePos} $this")
+
+
         rwlock.readLock.unlock
         true
       }
@@ -97,18 +100,14 @@ class SocketBuffer(
         buf.position(0)
 
 
-        logger.error(s"sending $buf forced $forced ${writePos}")
+        logger.error(s"sending $buf forced $forced ${writePos} $this")
 
 
         // wrap the array and write it out
         while(buf.hasRemaining) {
           channel.write(buf)
-          logger.error(s"sent $buf, remaining: ${buf.hasRemaining}")
         }
         pool.lastSent = System.currentTimeMillis
-
-        logger.error(s"sent $buf!")
-
 
         // reset write position
         buf.clear
