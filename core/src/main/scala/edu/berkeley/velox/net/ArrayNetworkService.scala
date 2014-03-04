@@ -56,6 +56,8 @@ class SocketBuffer(
       else {
         writePos.getAndAdd(-len)
 
+        logger.error(s"failed write! $buf")
+
         // can't upgrade to write lock, so unlock
         rwlock.readLock.unlock
         rwlock.writeLock.lock
@@ -144,7 +146,12 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def send(bytes: ByteBuffer) {
-    while(!currentBuffer.write(bytes)) {}
+    var sent = false
+    while(!sent) {
+      sent = currentBuffer.write(bytes)
+      if(!sent)
+        logger.error(s"not sent!")
+    }
   }
 
   /** Swap the active buffer.  This should only be called by a thread
