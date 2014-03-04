@@ -90,6 +90,8 @@ class SerializableTransaction(lockTable: LockManager,
   override def executeWrite = {
     val p = Promise[SerializableTransaction]
 
+    logger.error(s"locking!")
+
     val partitions = new util.ArrayList[Int](toPut.keySet)
     Collections.sort(partitions, IntComparator)
 
@@ -115,12 +117,18 @@ class SerializableTransaction(lockTable: LockManager,
       }
     }
 
+    logger.error(s"locked!")
+
+
     p success this
     p.future
   }
 
   override def executeRead = {
     val p = Promise[SerializableTransaction]
+
+
+    logger.error(s"locking!")
 
     val partitions = new util.ArrayList[Int](toGet.keySet)
     Collections.sort(partitions, IntComparator)
@@ -159,6 +167,9 @@ class SerializableTransaction(lockTable: LockManager,
 
     //logger.error(s"$txId finished locking")
 
+    logger.error(s"locked!")
+
+
     p success this
 
      p.future
@@ -176,6 +187,8 @@ class SerializableTransaction(lockTable: LockManager,
     var key_it = readKeys.iterator()
     val partitionToUnlock = new util.HashMap[NetworkDestinationHandle, util.HashSet[PrimaryKey]]()
 
+
+    logger.error(s"unlocking!")
 
   while(key_it.hasNext) {
     val key = key_it.next()
@@ -222,7 +235,10 @@ class SerializableTransaction(lockTable: LockManager,
     } else {
       messageService.send(dest, new SerializableUnlockRequest(partitionToUnlock.get(dest)))
     }
-  }
+
+
+    logger.error(s"unlocked!")
+
   }
 
   override def getQueryResult(itemKey: PrimaryKey, column: Int): Any = {

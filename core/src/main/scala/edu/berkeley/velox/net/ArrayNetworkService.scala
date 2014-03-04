@@ -191,8 +191,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
-    poolLock.lock()
-
     val buf = currentBuffer
     buf.rwlock.writeLock.lock()
     var didsend = false
@@ -200,15 +198,11 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       swap(null)
       buf.send(true)
       didsend = true
-    } else {
-      logger.error(s"$buf did not send! ${buf.writePos} ${buf.buf}")
     }
     buf.rwlock.writeLock.unlock()
     if (didsend)
       returnBuffer(buf)
     sweeping = false
-    poolLock.unlock()
-
   }
 }
 
