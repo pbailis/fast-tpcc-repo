@@ -64,9 +64,9 @@ class SocketBuffer(
         rwlock.writeLock.lock
         // recheck in case someone else got it
         if (pool.currentBuffer == this && needsend) {
+          needsend = false
           val r = pool.swap(bytes)
           send(false)
-          needsend = false
           rwlock.writeLock.unlock
           pool.returnBuffer(this)
           r
@@ -188,9 +188,9 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     buf.needsend = true
     buf.rwlock.writeLock.lock()
     if (buf == currentBuffer && buf.needsend && buf.writePos.get > 4) {
+      buf.needsend = false
       swap(null)
       buf.send(true)
-      buf.needsend = false
       returnBuffer(buf)
     } else {
       lastSent = System.currentTimeMillis()
