@@ -202,8 +202,8 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       didsend = true
     }
     buf.rwlock.writeLock.unlock()
-    if (didsend)
-      returnBuffer(buf)
+    //if (didsend)
+    //  returnBuffer(buf)
     sweeping = false
     poolLock.unlock()
 
