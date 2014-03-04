@@ -180,44 +180,47 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
 
   }
 
-  def returnBuffer(buf: SocketBuffer) = {} //pool.put(buf)
+  def returnBuffer(buf: SocketBuffer) = pool.put(buf)
 
   /**
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
-    val buf = currentBuffer
-    //logger.error(s"forcesend on $buf ${buf.buf} ${buf.writePos}")
+    try {
+      val buf = currentBuffer
+      //logger.error(s"forcesend on $buf ${buf.buf} ${buf.writePos}")
 
-    var writeBytes = -1
+      var writeBytes = -1
 
-    buf.rwlock.writeLock.lock()
-    var didsend = false
-    if (currentBuffer == buf && buf.writePos.get > 4) {
+      buf.rwlock.writeLock.lock()
+      var didsend = false
+      if (currentBuffer == buf && buf.writePos.get > 4) {
 
-      //logger.error(s"forcesending 1 on $buf ${buf.buf} ${buf.writePos}")
+        //logger.error(s"forcesending 1 on $buf ${buf.buf} ${buf.writePos}")
 
-      writeBytes = buf.writePos.get()
-
-
-      swap(null)
-
-      //logger.error(s"forcesending 2 on $buf ${buf.buf} ${buf.writePos}")
-
-      buf.send(true)
-
-      //logger.error(s"forcesending 3 on $buf ${buf.buf} ${buf.writePos}")
+        writeBytes = buf.writePos.get()
 
 
-      didsend = true
-    }
-    buf.rwlock.writeLock.unlock()
-    if (didsend)
-      returnBuffer(buf)
+        swap(null)
 
-    //logger.error(s"finished forcesend on $buf ${buf.buf} $didsend $writeBytes")
+        //logger.error(s"forcesending 2 on $buf ${buf.buf} ${buf.writePos}")
 
-    sweeping = false
+        buf.send(true)
+
+        //logger.error(s"forcesending 3 on $buf ${buf.buf} ${buf.writePos}")
+
+
+        didsend = true
+      }
+      buf.rwlock.writeLock.unlock()
+      if (didsend)
+        returnBuffer(buf)
+
+      //logger.error(s"finished forcesend on $buf ${buf.buf} $didsend $writeBytes")
+
+      sweeping = false
+    } catch  {
+      case e: Exception => logger.error("error sweeping", e)
   }
 }
 
