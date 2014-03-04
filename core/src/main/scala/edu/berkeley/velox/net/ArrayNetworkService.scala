@@ -130,8 +130,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   @volatile var lastSent = 0l
   @volatile var sweeping = false
 
-  val poolLock = new ReentrantLock
-
   // Create an runnable that calls forceSend so we
   // don't have to create a new object every time
   val forceRunner = new Runnable() {
@@ -149,12 +147,9 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
 
   def send(bytes: ByteBuffer) {
     var sent = false
-    poolLock.lock()
     while(!sent) {
       sent = currentBuffer.write(bytes)
     }
-
-    poolLock.unlock()
   }
 
   /** Swap the active buffer.  This should only be called by a thread
@@ -167,7 +162,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     */
 
   def swap(bytes: ByteBuffer):Boolean = {
-    poolLock.lock()
     var newBuf = pool.poll
 
     // TODO: Should probably have a limit on the number of buffers we create
@@ -181,8 +175,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
         false
 
     currentBuffer = newBuf
-
-    poolLock.unlock()
 
     ret
 
