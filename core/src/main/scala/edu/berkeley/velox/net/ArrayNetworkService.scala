@@ -197,9 +197,12 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     val buf = currentBuffer
     logger.error(s"forcesend on $buf ${buf.buf}")
 
+    val writeBytes = -1
+
     buf.rwlock.writeLock.lock()
     var didsend = false
     if (currentBuffer == buf && buf.writePos.get > 4) {
+      writeBytes = buf.writePos.get()
       swap(null)
       buf.send(true)
       didsend = true
@@ -208,7 +211,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     if (didsend)
       returnBuffer(buf)
 
-    logger.error(s"finished forcesend on $buf ${buf.buf} $didsend")
+    logger.error(s"finished forcesend on $buf ${buf.buf} $didsend $writeBytes")
 
     sweeping = false
   }
