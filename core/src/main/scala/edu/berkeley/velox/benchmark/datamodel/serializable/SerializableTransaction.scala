@@ -90,7 +90,7 @@ class SerializableTransaction(lockTable: LockManager,
   override def executeWrite = {
     val p = Promise[SerializableTransaction]
 
-    logger.error(s"locking!")
+    logger.error(s"write locking! $txId")
 
     val partitions = new util.ArrayList[Int](toPut.keySet)
     Collections.sort(partitions, IntComparator)
@@ -117,7 +117,7 @@ class SerializableTransaction(lockTable: LockManager,
       }
     }
 
-    logger.error(s"locked!")
+    logger.error(s"write locked! $txId")
 
 
     p success this
@@ -128,7 +128,7 @@ class SerializableTransaction(lockTable: LockManager,
     val p = Promise[SerializableTransaction]
 
 
-    logger.error(s"locking!")
+    logger.error(s"read locking! $txId")
 
     val partitions = new util.ArrayList[Int](toGet.keySet)
     Collections.sort(partitions, IntComparator)
@@ -167,7 +167,7 @@ class SerializableTransaction(lockTable: LockManager,
 
     //logger.error(s"$txId finished locking")
 
-    logger.error(s"locked!")
+    logger.error(s"read locked! $txId")
 
 
     p success this
@@ -188,7 +188,7 @@ class SerializableTransaction(lockTable: LockManager,
     val partitionToUnlock = new util.HashMap[NetworkDestinationHandle, util.HashSet[PrimaryKey]]()
 
 
-    logger.error(s"unlocking!")
+    logger.error(s"unlocking! $txId")
 
   while(key_it.hasNext) {
     val key = key_it.next()
@@ -237,7 +237,7 @@ class SerializableTransaction(lockTable: LockManager,
     }
   }
 
-    logger.error(s"unlocked!")
+    logger.error(s"unlocked! $txId")
 
   }
 
