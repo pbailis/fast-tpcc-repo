@@ -200,10 +200,12 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       swap(null)
       buf.send(true)
       didsend = true
+    } else {
+      logger.error(s"$buf did not send! ${buf.writePos} ${buf.buf}")
     }
     buf.rwlock.writeLock.unlock()
-    //if (didsend)
-    //  returnBuffer(buf)
+    if (didsend)
+      returnBuffer(buf)
     sweeping = false
     poolLock.unlock()
 
