@@ -120,36 +120,39 @@ object ClientBenchmark {
       new Thread(new Runnable {
         val rand = new Random
         override def run() = {
-          while (!finished) {
+          try {
+            while (!finished) {
 
 
-            requestSem.acquireUninterruptibly()
+              requestSem.acquireUninterruptibly()
 
-            println("sending request!")
+              println("sending request!")
 
 
-            val request = singleNewOrder(client, chance_remote, serializable, pct_test)
-            request.future onComplete {
-              case Success(value) => {
-                numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
-                if(!value.committed) {
-                 numAborts.incrementAndGet()
+              val request = singleNewOrder(client, chance_remote, serializable, pct_test)
+              request.future onComplete {
+                case Success(value) => {
+                  numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
+                  if(!value.committed) {
+                   numAborts.incrementAndGet()
+                  }
+
+
+                  opsDone.incrementAndGet
+                  requestSem.release
+
+                  println(s"got response! ${requestSem.availablePermits()}")
+
                 }
-
-
-                opsDone.incrementAndGet
-                requestSem.release
-
-                println(s"got response! ${requestSem.availablePermits()}")
-
+                case Failure(t) => println("An error has occured: " + t.getMessage)
               }
-              case Failure(t) => println("An error has occured: " + t.getMessage)
             }
-          }
 
-          println("finished?!?!")
+            println("finished?!?!")
+        } catch {
+            case e: Exception => throw new RuntimeException(e)
         }
-      }).start
+      }}).start
     }
 
     if(status_time > 0) {
