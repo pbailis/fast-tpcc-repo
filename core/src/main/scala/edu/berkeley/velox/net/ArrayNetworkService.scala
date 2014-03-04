@@ -180,7 +180,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
 
   }
 
-  def returnBuffer(buf: SocketBuffer) = pool.put(buf)
+  def returnBuffer(buf: SocketBuffer) = {} //pool.put(buf)
 
   /**
     * Force the current buffer to be sent immediately
