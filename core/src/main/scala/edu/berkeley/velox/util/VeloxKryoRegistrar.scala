@@ -16,6 +16,7 @@ import edu.berkeley.velox.benchmark.datamodel.serializable.SerializableRow
 
 import com.esotericsoftware.minlog.Log;
 import com.esotericsoftware.minlog.Log._
+import com.typesafe.scalalogging.slf4j.Logging
 
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
@@ -142,7 +143,7 @@ object VeloxKryoRegistrar {
   }
 }
 
-class KryoSerializer(val kryo: Kryo) {
+class KryoSerializer(val kryo: Kryo) extends Logging {
 
   def serialize(x: Any, buffer: ByteBuffer): ByteBuffer = {
     val bout = new ByteBufferOutputStream(buffer)
@@ -154,8 +155,12 @@ class KryoSerializer(val kryo: Kryo) {
   }
 
   def deserialize(buffer: ByteBuffer): Any = {
-    val in = new VeloxByteBufferInput(buffer)
-    kryo.readClassAndObject(in)
+    try {
+      val in = new VeloxByteBufferInput(buffer)
+      kryo.readClassAndObject(in)
+    } catch {
+      case e: Exception => logger.error("ERROR IN DESERIALIZE", e)
+    }
   }
 
 }
