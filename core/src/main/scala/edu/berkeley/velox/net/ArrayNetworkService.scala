@@ -151,9 +151,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       sent = currentBuffer.write(bytes)
     }
 
-    logger.error(s"current buffer for $channel is $currentBuffer")
-
-
     poolLock.unlock()
   }
 
@@ -179,8 +176,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
         newBuf.write(bytes)
       else
         false
-
-    logger.error(s"current buffer for $channel is $newBuf")
 
     currentBuffer = newBuf
 
