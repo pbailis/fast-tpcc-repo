@@ -94,11 +94,7 @@ class SocketBuffer(
         buf.limit(writePos.get)
         buf.position(0)
 
-        // wrap the array and write it out
-        while(buf.hasRemaining) {
           channel.write(buf)
-          logger.error(s"buffer has $buf")
-        }
         pool.lastSent = System.currentTimeMillis
 
         // reset write position
