@@ -203,11 +203,20 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     var didsend = false
     if (currentBuffer == buf && buf.writePos.get > 4) {
 
-      logger.error(s"forcesending on $buf ${buf.buf} ${buf.writePos}")
+      logger.error(s"forcesending 1 on $buf ${buf.buf} ${buf.writePos}")
 
       writeBytes = buf.writePos.get()
+
+
       swap(null)
+
+      logger.error(s"forcesending 2 on $buf ${buf.buf} ${buf.writePos}")
+
       buf.send(true)
+
+      logger.error(s"forcesending 3 on $buf ${buf.buf} ${buf.writePos}")
+
+
       didsend = true
     }
     buf.rwlock.writeLock.unlock()
