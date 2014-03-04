@@ -197,7 +197,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     val buf = currentBuffer
     logger.error(s"forcesend on $buf ${buf.buf}")
 
-    val writeBytes = -1
+    var writeBytes = -1
 
     buf.rwlock.writeLock.lock()
     var didsend = false
