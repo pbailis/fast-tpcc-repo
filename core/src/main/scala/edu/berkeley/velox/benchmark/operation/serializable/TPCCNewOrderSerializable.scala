@@ -193,6 +193,8 @@ object TPCCNewOrderSerializable extends Logging {
               val C_CREDIT: String = txn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID), TPCCConstants.C_CREDIT_COL).asInstanceOf[String]
 
               txn.commit()
+
+              logger.error("committing!")
               p success new TPCCNewOrderResponse(W_ID, D_ID, C_ID, O_ID, OL_CNT, C_LAST, C_CREDIT, C_DISCOUNT, W_TAX, D_TAX, O_ENTRY_D, totalAmount, newOrderLines)
             }
             case Failure(t) => {

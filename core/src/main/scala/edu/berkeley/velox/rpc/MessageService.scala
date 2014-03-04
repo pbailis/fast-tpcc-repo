@@ -152,6 +152,7 @@ abstract class MessageService extends Logging {
         if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
           f onComplete {
             case Success(response) => {
+              logger.error(s"sending response $response")
               sendResponse(src, requestId, response)
             }
             case Failure(t) => logger.error(s"Error receiving message $t")
