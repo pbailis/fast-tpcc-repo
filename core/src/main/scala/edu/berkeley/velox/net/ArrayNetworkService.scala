@@ -38,10 +38,12 @@ class SocketBuffer(
     if (!rwlock.readLock.tryLock)
       return false
 
-    // ensure we're still looking at the right buffer
-    if (pool.currentBuffer != this) {
-      rwlock.readLock.unlock
-      return false
+    pool.synchronized {
+      // ensure we're still looking at the right buffer
+      if (pool.currentBuffer != this) {
+        rwlock.readLock.unlock
+        return false
+      }
     }
 
     val len = bytes.remaining
@@ -127,7 +129,6 @@ class SocketBuffer(
 }
 
 class SocketBufferPool(channel: SocketChannel) extends Logging {
-
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
@@ -163,19 +164,22 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   def swap(bytes: ByteBuffer):Boolean = {
     var newBuf = pool.poll
 
-    // TODO: Should probably have a limit on the number of buffers we create
-    if (newBuf == null)
-      newBuf = new SocketBuffer(channel,this)
+    this.synchronized {
+      // TODO: Should probably have a limit on the number of buffers we create
+      if (newBuf == null)
+        newBuf = new SocketBuffer(channel,this)
 
-    val ret =
-      if (bytes != null)
-        newBuf.write(bytes)
-      else
-        false
+      val ret =
+        if (bytes != null)
+          newBuf.write(bytes)
+        else
+          false
 
-    currentBuffer = newBuf
+      currentBuffer = newBuf
 
-    ret
+      ret
+    }
+
   }
 
   def returnBuffer(buf: SocketBuffer) = pool.put(buf)
@@ -193,7 +197,6 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
       buf.send(true)
       returnBuffer(buf)
     } else {
-      logger.error(s"not sending buffer! ${buf.writePos}")
       lastSent = System.currentTimeMillis()
     }
     buf.rwlock.writeLock.unlock()
