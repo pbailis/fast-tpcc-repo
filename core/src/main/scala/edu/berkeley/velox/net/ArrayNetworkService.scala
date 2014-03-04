@@ -144,9 +144,11 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
 
   def send(bytes: ByteBuffer) {
     var sent = false
+    poolLock.lock()
     while(!sent) {
       sent = currentBuffer.write(bytes)
     }
+    poolLock.unlock()
   }
 
   /** Swap the active buffer.  This should only be called by a thread
@@ -187,6 +189,8 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
+    poolLock.lock()
+
     val buf = currentBuffer
     buf.rwlock.writeLock.lock()
     var didsend = false
@@ -199,6 +203,8 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     if (didsend)
       returnBuffer(buf)
     sweeping = false
+    poolLock.unlock()
+
   }
 }
 
