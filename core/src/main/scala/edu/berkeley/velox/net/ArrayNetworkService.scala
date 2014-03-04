@@ -215,7 +215,7 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     if (didsend)
       returnBuffer(buf)
 
-    logger.error(s"finished forcesend on $buf ${buf.buf} $didsend $writeBytes")
+    //logger.error(s"finished forcesend on $buf ${buf.buf} $didsend $writeBytes")
 
     sweeping = false
   }
