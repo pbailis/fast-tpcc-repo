@@ -23,8 +23,6 @@ class SocketBuffer(
 
   val writePos = new AtomicInteger(4)
 
-  @volatile var needsend = false
-
   val rwlock = new ReentrantReadWriteLock()
 
 
@@ -38,12 +36,10 @@ class SocketBuffer(
     if (!rwlock.readLock.tryLock)
       return false
 
-    pool.synchronized {
-      // ensure we're still looking at the right buffer
-      if (pool.currentBuffer != this) {
-        rwlock.readLock.unlock
-        return false
-      }
+    // ensure we're still looking at the right buffer
+    if (pool.currentBuffer != this) {
+      rwlock.readLock.unlock
+      return false
     }
 
     val len = bytes.remaining
@@ -60,13 +56,11 @@ class SocketBuffer(
       else {
         writePos.getAndAdd(-len)
 
-        needsend = true
         // can't upgrade to write lock, so unlock
         rwlock.readLock.unlock
         rwlock.writeLock.lock
         // recheck in case someone else got it
-        if (pool.currentBuffer == this && needsend) {
-          needsend = false
+        if (pool.currentBuffer == this) {
           val r = pool.swap(bytes)
           send(false)
           rwlock.writeLock.unlock
@@ -164,21 +158,19 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   def swap(bytes: ByteBuffer):Boolean = {
     var newBuf = pool.poll
 
-    this.synchronized {
-      // TODO: Should probably have a limit on the number of buffers we create
-      if (newBuf == null)
-        newBuf = new SocketBuffer(channel,this)
+    // TODO: Should probably have a limit on the number of buffers we create
+    if (newBuf == null)
+      newBuf = new SocketBuffer(channel,this)
 
-      val ret =
-        if (bytes != null)
-          newBuf.write(bytes)
-        else
-          false
+    val ret =
+      if (bytes != null)
+        newBuf.write(bytes)
+      else
+        false
 
-      currentBuffer = newBuf
+    currentBuffer = newBuf
 
-      ret
-    }
+    ret
 
   }
 
@@ -189,20 +181,18 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     */
   def forceSend() {
     val buf = currentBuffer
-    buf.needsend = true
     buf.rwlock.writeLock.lock()
-    if (buf == currentBuffer && buf.needsend && buf.writePos.get > 4) {
-      buf.needsend = false
+    var didsend = false
+    if (currentBuffer == buf && buf.writePos.get > 4) {
       swap(null)
       buf.send(true)
-      returnBuffer(buf)
-    } else {
-      lastSent = System.currentTimeMillis()
+      didsend = true
     }
     buf.rwlock.writeLock.unlock()
+    if (didsend)
+      returnBuffer(buf)
     sweeping = false
   }
-
 }
 
 class Receiver (
