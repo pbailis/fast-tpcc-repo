@@ -50,9 +50,6 @@ class SocketBuffer(
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
-
-        println(s"wrote to $this buf is $buf writepos is $writePos")
-
         rwlock.readLock.unlock
         true
       }
@@ -236,6 +233,9 @@ class ReaderThread (
       var allocedBuffer = false
 
       if (read >= 4) {
+
+        logger.error(s"read $read from $channel")
+
         readBuffer.flip
 
         var len = readBuffer.getInt
