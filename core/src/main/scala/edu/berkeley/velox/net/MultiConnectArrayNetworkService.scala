@@ -54,7 +54,7 @@ class MultiConnectArrayNetworkService (
 
     if(!VeloxConfig.serializable) {
       this.executor =
-        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory())
+        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory("M-ANS"))
       } else {
       this.executor =
         Executors.newCachedThreadPool()
@@ -127,7 +127,7 @@ class MultiConnectArrayNetworkService (
     connections.get(partitionId).add(bufPool)
     logger.info(s"Adding connection from $partitionId")
     // start up a read thread
-    new ReaderThread(channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
+    new ReaderThread("M-ANS", channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
     connectionSemaphore.release
   }
 
