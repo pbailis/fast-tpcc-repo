@@ -96,7 +96,9 @@ class SocketBuffer(
         buf.position(0)
 
         // wrap the array and write it out
-        val wrote = channel.write(buf)
+        while(buf.hasRemaining) {
+          channel.write(buf)
+        }
         pool.lastSent = System.currentTimeMillis
 
         // reset write position
@@ -224,6 +226,8 @@ class ReaderThread(
   src: NetworkDestinationHandle,
   messageService: MessageService,
   remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") {
+
+  val readInput = channel.socket().getInputStream
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
