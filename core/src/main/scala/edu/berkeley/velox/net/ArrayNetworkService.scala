@@ -144,7 +144,7 @@ class ReaderThread(
 
       msgBuf.flip()
 
-      SendStats.bytesRecv.addAndGet(len)
+      SendStats.bytesRecv.addAndGet(len+4)
       SendStats.numRecv.incrementAndGet()
 
       executor.submit(new Receiver(msgBuf, src, messageService))
