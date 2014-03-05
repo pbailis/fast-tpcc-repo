@@ -24,8 +24,6 @@ import edu.berkeley.velox.benchmark.operation.DeferredIncrement
 
 
 class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage: StorageEngine, val messageService: InternalRPCService) extends Logging {
-  logger.error(s"creating txn $txId")
-
   def table(tableName: Int): Table = {
     return new Table(tableName, this)
   }
