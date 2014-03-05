@@ -15,6 +15,7 @@ import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
 import scala.collection.JavaConverters._
+import edu.berkeley.velox.util.KryoThreadLocal
 
 class SocketBuffer(
   channel: SocketChannel,
@@ -35,6 +36,7 @@ class SocketBuffer(
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
+    KryoThreadLocal.synchronized {
     if(true) {
       rwlock.writeLock().lock()
       writePos.getAndAdd(bytes.remaining())
@@ -42,6 +44,7 @@ class SocketBuffer(
       send()
       rwlock.writeLock().unlock()
       return true
+    }
     }
 
 
