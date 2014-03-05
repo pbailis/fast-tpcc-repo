@@ -21,6 +21,7 @@ object SendStats {
   val bytesSent = new AtomicLong
   val numRecv = new AtomicLong
   val bytesRecv = new AtomicLong
+  val tryBytesRecv = new AtomicLong
 }
 
 class SocketBuffer(
@@ -43,65 +44,23 @@ class SocketBuffer(
     */
   def write(bytes: ByteBuffer): Boolean = {
     KryoThreadLocal.synchronized {
-    if(true) {
       rwlock.writeLock().lock()
       val intBuf = ByteBuffer.allocate(4)
       val len = (bytes.remaining())
       intBuf.putInt(len)
       intBuf.flip()
-      channel.write(intBuf)
-      channel.write(bytes)
+      var wrote = 0
+      wrote += channel.write(intBuf)
+      wrote += channel.write(bytes)
       rwlock.writeLock().unlock()
+
+      assert(wrote == len+4)
 
       SendStats.bytesSent.addAndGet(len+4)
       SendStats.numSent.incrementAndGet()
 
       return true
     }
-    }
-
-
-    if (!rwlock.readLock.tryLock)
-      return false
-
-    // ensure we're still looking at the right buffer
-    if (pool.currentBuffer != this) {
-      rwlock.readLock.unlock
-      return false
-    }
-
-    val len = bytes.remaining
-
-    val writeOffset = writePos.getAndAdd(len)
-    val ret =
-      if (writeOffset + len <= buf.limit) {
-        val dup = buf.duplicate
-        dup.position(writeOffset)
-        dup.put(bytes)
-        rwlock.readLock.unlock
-        true
-      }
-      else {
-        writePos.getAndAdd(-len)
-
-        // can't upgrade to write lock, so unlock
-        rwlock.readLock.unlock
-        rwlock.writeLock.lock
-        // recheck in case someone else got it
-        if (pool.currentBuffer == this) {
-          send
-          val r = pool.swap(bytes)
-          rwlock.writeLock.unlock
-          pool.returnBuffer(this)
-          r
-        }
-        else {
-          rwlock.writeLock.unlock
-          false
-        }
-      }
-
-    ret
   }
 
   /**
@@ -260,6 +219,7 @@ class ReaderThread(
       channel.read(intBuf)
       intBuf.flip()
       val len = intBuf.getInt()
+      SendStats.tryBytesRecv.incrementAndGet()
       var readBytes = 0
 
       val msgBuf = ByteBuffer.allocate(len)
@@ -399,7 +359,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   new Thread(new Runnable {
     override def run() {
       while (true) {
-        logger.error(s"${SendStats.numSent} ${SendStats.bytesSent} ${SendStats.numRecv} ${SendStats.bytesRecv}")
+        logger.error(s"S ${SendStats.numSent} ${SendStats.bytesSent} R ${SendStats.numRecv} ${SendStats.bytesRecv} ${SendStats.tryBytesRecv}")
         Thread.sleep(1000)
       }
     }
