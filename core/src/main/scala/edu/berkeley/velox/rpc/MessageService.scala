@@ -123,7 +123,7 @@ abstract class MessageService extends Logging {
   N bytes: serialized message
  */
   def serializeMessage(requestId: RequestId, msg: Any, isRequest: Boolean): ByteBuffer = {
-    VeloxKryoRegistrar.synchronized {
+    logger.error(s"serializing message $msg")
     val buffer = ByteBuffer.allocate(16384)
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
@@ -133,8 +133,9 @@ abstract class MessageService extends Logging {
     val result = kryo.serialize(msg,buffer)
     //VeloxKryoRegistrar.returnKryo(kryo)
     result.flip
+    logger.error(s"serialized message $msg")
+
     result
-    }
   }
 
   def deserializeMessage(bytes: ByteBuffer): (Any, RequestId, Boolean) = {
