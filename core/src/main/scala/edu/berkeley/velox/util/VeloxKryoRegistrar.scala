@@ -20,10 +20,6 @@ import com.esotericsoftware.minlog.Log._
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
   */
-class VeloxByteBufferInput(buffer:ByteBuffer) extends ByteBufferInput {
-  setBuffer(buffer,buffer.position,buffer.remaining)
-}
-
 object KryoThreadLocal {
   val kryoTL = new ThreadLocal[KryoSerializer]() {
     override def initialValue = VeloxKryoRegistrar.makeKryo()
