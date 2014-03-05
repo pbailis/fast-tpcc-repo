@@ -219,6 +219,9 @@ class ReaderThread(
       channel.read(intBuf)
       intBuf.flip()
       val len = intBuf.getInt()
+
+      assert(len != 0)
+
       SendStats.tryBytesRecv.incrementAndGet()
       var readBytes = 0
 
