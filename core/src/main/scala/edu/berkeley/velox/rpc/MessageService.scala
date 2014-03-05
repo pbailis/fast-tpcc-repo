@@ -74,7 +74,6 @@ abstract class MessageService extends Logging {
    * @return
    */
   def send[R](dst: NetworkDestinationHandle, msg: Request[R]): Future[R] = {
-    this.synchronized {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
@@ -86,10 +85,13 @@ abstract class MessageService extends Logging {
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
     } else {
-      networkService.send(dst, serializeMessage(reqId, msg, isRequest=true))
+
+      val serialized = serializeMessage(reqId, msg, isRequest=true)
+      this.synchronized {
+      networkService.send(dst, serialized)
+      }
     }
     p.future
-    }
   }
 
   def sendAny[R](msg: Request[R]): Future[R] = {
