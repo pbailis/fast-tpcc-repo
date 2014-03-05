@@ -5,14 +5,16 @@ import edu.berkeley.velox.NetworkDestinationHandle
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.MessageService
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
-import java.net.InetSocketAddress
+import java.net.{SocketOptions, InetSocketAddress}
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
+import scala.collection.JavaConverters._
 
 class SocketBuffer(
   channel: SocketChannel,
@@ -22,8 +24,6 @@ class SocketBuffer(
   buf.position(4)
 
   val writePos = new AtomicInteger(4)
-
-  @volatile var needsend = false
 
   val rwlock = new ReentrantReadWriteLock()
 
@@ -58,15 +58,13 @@ class SocketBuffer(
       else {
         writePos.getAndAdd(-len)
 
-        needsend = true
         // can't upgrade to write lock, so unlock
         rwlock.readLock.unlock
         rwlock.writeLock.lock
         // recheck in case someone else got it
-        if (pool.currentBuffer == this && needsend) {
-          needsend = false
+        if (pool.currentBuffer == this) {
           val r = pool.swap(bytes)
-          send(false)
+          send
           rwlock.writeLock.unlock
           pool.returnBuffer(this)
           r
@@ -86,8 +84,9 @@ class SocketBuffer(
     * The write lock MUST be held before calling this method
     *
     */
-  def send(forced: Boolean) {
+  def send() {
     try {
+
       if (writePos.get > 4) {
         buf.position(0)
 
@@ -126,12 +125,13 @@ class SocketBuffer(
 
 }
 
-class SocketBufferPool(channel: SocketChannel) extends Logging {
+class SocketBufferPool(channel: SocketChannel)  {
 
   val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
-  val sweeping = new AtomicBoolean()
+
+  val isForceSending = new AtomicBoolean(false)
 
   // Create an runnable that calls forceSend so we
   // don't have to create a new object every time
@@ -140,11 +140,10 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
   }
 
   def needSend(): Boolean = {
-    if(currentBuffer.writePos.get > 4 && (System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) {
-      return sweeping.compareAndSet(false, true)
-    }
-
-    return false
+    if ( (currentBuffer.writePos.get > 4) &&
+         ((System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) ) {
+      isForceSending.compareAndSet(false,true)
+    } else false
   }
 
   def send(bytes: ByteBuffer) {
@@ -184,44 +183,51 @@ class SocketBufferPool(channel: SocketChannel) extends Logging {
     */
   def forceSend() {
     val buf = currentBuffer
-    buf.needsend = true
     buf.rwlock.writeLock.lock()
-    if (buf == currentBuffer && buf.needsend && buf.writePos.get > 4) {
-      buf.needsend = false
+    var didsend = false
+    if (currentBuffer == buf && buf.writePos.get > 4) {
       swap(null)
-      buf.send(true)
-      returnBuffer(buf)
-    } else {
-      lastSent = System.currentTimeMillis()
+      buf.send
+      didsend = true
     }
     buf.rwlock.writeLock.unlock()
-    sweeping.set(false)
+    if (didsend)
+      returnBuffer(buf)
+    isForceSending.set(false)
   }
 
 }
 
-class Receiver (
+class Receiver(
   bytes: ByteBuffer,
   src: NetworkDestinationHandle,
   messageService: MessageService) extends Runnable with Logging {
 
   def run() = try {
-      while(bytes.remaining != 0) {
+    while(bytes.remaining != 0) {
+      try {
         messageService.receiveRemoteMessage(src,bytes)
+      } catch {
+        case e: Exception => logger.error("Error receiving message", e)
       }
-   } catch {
-     case t: Throwable => {
-       logger.error(s"Error receiving message: ${t.getMessage}",t)
-     }
+    }
+  } catch {
+    case t: Throwable => {
+      logger.error(s"Error receiving message: ${t.getMessage}",t)
+    }
   }
+
 }
 
-class ReaderThread (
+class ReaderThread(
+  name: String,
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader from ${remoteAddr}") with Logging {
+  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") {
+
+  val readInput = channel.socket().getInputStream
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
@@ -277,40 +283,49 @@ class ReaderThread (
 
 class SendSweeper(
   connections: ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool],
-  executor: ExecutorService) extends Runnable {
+  executor: ExecutorService) extends Runnable with Logging {
 
   def run() {
     while(true) {
       if(VeloxConfig.sweepTime > 0)
         Thread.sleep(VeloxConfig.sweepTime)
-      val cit = connections.keySet.iterator
-      while (cit.hasNext) {
-        val sp = connections.get(cit.next)
-        if (sp.needSend)
-          executor.submit(sp.forceRunner)
+
+      try {
+        val cit = connections.keySet.iterator
+        while (cit.hasNext) {
+          val sp = connections.get(cit.next)
+          if (sp.needSend)
+            executor.submit(sp.forceRunner)
+        }
       }
+      catch { // TODO: Should we stop the sweeper, or pause?
+        case t: Throwable => logger.error("Error send sweeping",t)
+      }
+
     }
   }
+
 }
 
-class ArrayNetworkThreadFactory extends ThreadFactory {
+class ArrayNetworkThreadFactory(val name: String) extends ThreadFactory {
 
   val defaultFactory = Executors.defaultThreadFactory
-  var threadIdx = 0
+  var threadIdx = new AtomicInteger(0)
 
   override
   def newThread(r: Runnable):Thread = {
     val t = defaultFactory.newThread(r)
-    t.setName(s"ArrayNetworkServiceThread-$threadIdx")
-    threadIdx+=1
+    val tid = threadIdx.getAndIncrement()
+    t.setName(s"ArrayNetworkServiceThread-$name-$tid")
     t
   }
 }
 
-class ArrayNetworkService(
-  val performIDHandshake: Boolean = false,
+class ArrayNetworkService(val performIDHandshake: Boolean = false,
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
+
+  val name = "ANS"
 
   var executor: ExecutorService = null
 
@@ -322,7 +337,7 @@ class ArrayNetworkService(
 
     if(!VeloxConfig.serializable) {
       this.executor =
-        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory())
+        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory("ANS"))
       } else {
       this.executor =
         Executors.newCachedThreadPool()
@@ -330,6 +345,7 @@ class ArrayNetworkService(
 
     this.executor
   }
+
 
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
@@ -344,7 +360,7 @@ class ArrayNetworkService(
   }
 
   def start() {
-    new Thread(new SendSweeper(connections,executor)).start
+    new Thread(new SendSweeper(connections,executor), s"Sweeper-").start
   }
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
@@ -389,7 +405,7 @@ class ArrayNetworkService(
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
-      new ReaderThread(channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
+      new ReaderThread(name, channel, executor, partitionId, messageService, channel.getRemoteAddress.toString).start
       connectionSemaphore.release
     }
   }
@@ -399,7 +415,7 @@ class ArrayNetworkService(
     logger.info("Listening on: "+port)
     serverChannel.socket.bind(new InetSocketAddress(port))
 
-    new Thread {
+    val connectionListener = new Thread {
       override def run() {
         // Grab references to memebers in the parent class
         val connections = ArrayNetworkService.this.connections
@@ -423,7 +439,9 @@ class ArrayNetworkService(
           _registerConnection(connectionId, clientChannel)
         }
       }
-    }.start()
+    }
+    connectionListener.setName(s"ConnectionListener-${name}")
+    connectionListener.start()
   }
 
   override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
@@ -438,7 +456,8 @@ class ArrayNetworkService(
     }
 
     val connArray = connections.keySet.toArray
-    send(connArray(Random.nextInt(connArray.length)).asInstanceOf[NetworkDestinationHandle], buffer)
+    val recvr = Random.nextInt(connArray.length)
+    send(connArray(recvr).asInstanceOf[NetworkDestinationHandle], buffer)
   }
 
   override def disconnect(which: NetworkDestinationHandle) {
