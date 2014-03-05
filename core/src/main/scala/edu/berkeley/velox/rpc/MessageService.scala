@@ -87,9 +87,10 @@ abstract class MessageService extends Logging {
     } else {
 
       var serialized:ByteBuffer = null
-      this.synchronized {
 
       serialized = serializeMessage(reqId, msg, isRequest=true)
+
+      this.synchronized {
 
         networkService.send(dst, serialized)
       }
