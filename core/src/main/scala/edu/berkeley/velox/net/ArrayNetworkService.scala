@@ -209,7 +209,6 @@ class Receiver(
       try {
         val numBytes = bytes.getInt()
         bytes.limit(bytes.position()+numBytes)
-        logger.error(s"receiving ${bytes}")
         messageService.receiveRemoteMessage(src,bytes)
         bytes.limit(realLimit)
       } catch {
