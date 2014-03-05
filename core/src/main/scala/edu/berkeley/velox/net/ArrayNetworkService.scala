@@ -63,8 +63,8 @@ class SocketBuffer(
         rwlock.writeLock.lock
         // recheck in case someone else got it
         if (pool.currentBuffer == this) {
-          val r = pool.swap(bytes)
           send
+          val r = pool.swap(bytes)
           rwlock.writeLock.unlock
           pool.returnBuffer(this)
           r
@@ -187,8 +187,8 @@ class SocketBufferPool(channel: SocketChannel)  {
     buf.rwlock.writeLock.lock()
     var didsend = false
     if (currentBuffer == buf && buf.writePos.get > 4) {
-      swap(null)
       buf.send
+      swap(null)
       didsend = true
     }
     buf.rwlock.writeLock.unlock()
