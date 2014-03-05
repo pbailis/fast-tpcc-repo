@@ -245,11 +245,15 @@ class ReaderThread(
       channel.read(intBuf)
       intBuf.flip()
       val len = intBuf.getInt()
+      logger.error(s"got $len, now reading!")
       var readBytes = 0
 
       val msgBuf = ByteBuffer.allocate(len)
       while(readBytes != len) {
         readBytes += channel.read(msgBuf)
+
+        logger.error(s"readbytes is $readBytes len is $len!")
+
       }
 
       msgBuf.flip()
