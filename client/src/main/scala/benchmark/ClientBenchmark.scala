@@ -133,6 +133,7 @@ object ClientBenchmark {
 
                 opsDone.incrementAndGet
                 requestSem.release
+                println(s"requestSem is ${requestSem.availablePermits()}")
               }
               case Failure(t) => println("An error has occured: " + t.getMessage)
             }
