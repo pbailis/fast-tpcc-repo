@@ -25,10 +25,16 @@ class VeloxByteBufferInput(buffer:ByteBuffer) extends ByteBufferInput {
 }
 
 object KryoThreadLocal {
+  object kryoTL {
+    def get() = VeloxKryoRegistrar.makeKryo()
+  }
+
+  /*
   val kryoTL = new ThreadLocal[KryoSerializer]() {
     override protected
     def initialValue(): KryoSerializer = VeloxKryoRegistrar.makeKryo()
   }
+  */
 }
 
 object VeloxKryoRegistrar {
@@ -143,10 +149,11 @@ object VeloxKryoRegistrar {
 }
 
 class KryoSerializer(val kryo: Kryo) {
+  val bout = new ByteBufferOutputStream()
+  val out = new Output(bout)
 
   def serialize(x: Any, buffer: ByteBuffer): ByteBuffer = {
-    val bout = new ByteBufferOutputStream(buffer)
-    val out = new Output(bout)
+    bout.setByteBuffer(buffer)
     kryo.writeClassAndObject(out, x)
     out.flush()
     bout.flush()
