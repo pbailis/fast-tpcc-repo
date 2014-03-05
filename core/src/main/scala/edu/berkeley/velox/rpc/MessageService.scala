@@ -13,6 +13,7 @@ import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.util.{VeloxKryoRegistrar,KryoThreadLocal}
 import edu.berkeley.velox.conf.VeloxConfig
+import edu.berkeley.velox.benchmark.operation.TPCCNewOrderResponse
 
 //import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -204,7 +205,7 @@ abstract class MessageService extends Logging {
       return
     } else {
       val req = requestMap.remove(requestID.asInstanceOf[RequestId])
-      req success None
+      req success new TPCCNewOrderResponse(false)
       return
     }
     /*
