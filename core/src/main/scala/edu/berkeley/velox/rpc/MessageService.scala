@@ -83,6 +83,13 @@ abstract class MessageService extends Logging {
       requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
     }
 
+    val toSend = ByteBuffer.allocate(8)
+    toSend.putInt(reqId)
+    toSend.putInt(IS_REQUEST)
+    toSend.flip()
+    networkService.send(dst, toSend)
+
+    /*
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
     } else {
@@ -96,6 +103,7 @@ abstract class MessageService extends Logging {
         networkService.send(dst, serialized)
 
     }
+    */
     p.future
   }
 
@@ -183,8 +191,24 @@ abstract class MessageService extends Logging {
     }
   }
 
+  val IS_REQUEST = 0
+  val IS_RESPONSE = 1
+
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
+    val requestID = bytes.getInt()
+    if(bytes.getInt() == IS_REQUEST) {
+      bytes.position(4)
+      bytes.putInt(IS_RESPONSE)
+      bytes.flip()
+      networkService.send(src, bytes)
+      return
+    } else {
+      requestMap.remove(requestID) success None
+      return
+    }
+    /*
+
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
     if(isRequest) {
         recvRequest_(src, requestId, msg)
@@ -192,6 +216,7 @@ abstract class MessageService extends Logging {
       // receive the response message
       requestMap.remove(requestId) success msg
     }
+    */
   }
 
   def sendLocalRequest(requestId: RequestId, msg: Any) {
