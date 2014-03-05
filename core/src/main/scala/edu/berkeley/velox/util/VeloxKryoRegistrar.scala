@@ -50,6 +50,7 @@ object VeloxKryoRegistrar {
     val kryo = instantiator.newKryo()
     val classLoader = Thread.currentThread.getContextClassLoader
     // Disable reference tracking
+    /*
     // @todo make this a conf option
     kryo.setReferences( false )
     kryo.setRegistrationRequired(true)
@@ -132,6 +133,7 @@ object VeloxKryoRegistrar {
     // Register important base types
     kryo.register(classOf[Request[_]])
     // Register all of chills classes
+    */
     new AllScalaRegistrar().apply(kryo)
     kryo.setClassLoader(classLoader)
     new KryoSerializer(kryo)
