@@ -141,7 +141,7 @@ if __name__ == "__main__":
         terminate_cluster(region, cluster_id)
 
     if args.wh_bench:
-        for it in range(0, 1):
+        for it in range(3, 6):
             for wh in [1, 2, 4, 8]:
                 for config in ["ca", "serializable"]:
                     runid = "whbench-WH%d-%s-IT%d" % (wh, config, it)
@@ -155,11 +155,12 @@ if __name__ == "__main__":
                         args.sweep_time = 0
                         clients = 1200
                     else:
+                        args.serializable = False
                         clients = 100000
                         args.sweep_time = 200
                         
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
-                    sleep(15)
+                    sleep(20)
                     run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time+1,
                                            args.profile, args.profile_depth,
                                            parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable, extra_args=extra_args)
@@ -169,9 +170,9 @@ if __name__ == "__main__":
 
 
     if args.client_sweep:
-        for it in range(0, 1):
-            for clients in [1, 16, 64, 256]:#1, 10, 100, 1000, 10000]:
-                for config in ["serializable"]:#["ca", "serializable"]:
+        for it in range(4, 7):
+            for clients in [1, 16, 64, 256, 512]:#1, 10, 100, 1000, 10000]:
+                for config in ["serializable", "ca"]:
                     runid = "client_sweep-CLIENTS%d-%s-IT%d" % (clients, config, it)
                     assign_hosts(region, cluster)
                     
@@ -183,8 +184,11 @@ if __name__ == "__main__":
                         args.sweep_time = 0
 
                     else:
-                        clients = 100000
-                        args.sweep_time = 200
+                        args.serializable=False
+                        if clients < 128:
+                            args.sweep_time = 0
+                        else:
+                            args.sweep_time = 4
                         
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
                     sleep(15)
@@ -196,7 +200,7 @@ if __name__ == "__main__":
                     pprint("THE CRANKSHAW has completed!")
 
     if args.remote_bench:
-       for it in range(0, 1):
+       for it in range(1, 3):
            for remote in [0, .25, .5, .75, 1]:
                for config in ["ca", "serializable"]:
                    runid = "remotebench-PCT%f-%s-IT%d" % (remote, config, it)
@@ -244,7 +248,7 @@ if __name__ == "__main__":
         sleep(5)
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=100, timeout=120, ops=10000, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
+                               parallelism=16, timeout=12000, ops=100000, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
                                )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
