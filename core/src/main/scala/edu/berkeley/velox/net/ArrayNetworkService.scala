@@ -39,18 +39,11 @@ class SocketBuffer(
     KryoThreadLocal.synchronized {
     if(true) {
       rwlock.writeLock().lock()
-      buf.put(bytes)
-      val wrote = buf.position-4
-      buf.position(0)
-      buf.putInt(wrote)
-      buf.limit(wrote+4)
-      // wrap the array and write it out
-      val bytesWrote = channel.write(buf)
-
-              // reset write position
-      buf.clear
-      buf.position(4)
-
+      val intBuf = ByteBuffer.allocate(4)
+      intBuf.putInt(bytes.remaining())
+      intBuf.flip()
+      channel.write(intBuf)
+      channel.write(bytes)
       rwlock.writeLock().unlock()
       return true
     }
