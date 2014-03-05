@@ -487,11 +487,9 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   }
 
   override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
-    this.synchronized {
     val sockBufPool = connections.get(dst)
     // TODO: Something if buffer is null
     sockBufPool.send(buffer)
-    }
   }
 
   override def sendAny(buffer: ByteBuffer) {
