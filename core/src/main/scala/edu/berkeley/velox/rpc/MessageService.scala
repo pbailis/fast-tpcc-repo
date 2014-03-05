@@ -14,7 +14,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.util.{VeloxKryoRegistrar,KryoThreadLocal}
 import edu.berkeley.velox.conf.VeloxConfig
 
-import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+//import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import scala.concurrent.ExecutionContext.Implicits.global
 
 class MessageWrapper(private val encRequestId: Long, val body: Any) {
   def isRequest: Boolean = encRequestId < 0
