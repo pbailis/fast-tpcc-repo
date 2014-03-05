@@ -283,7 +283,8 @@ class SendSweeper(
 
   def run() {
     while(true) {
-      Thread.sleep(VeloxConfig.sweepTime)
+      if(VeloxConfig.sweepTime > 0)
+        Thread.sleep(VeloxConfig.sweepTime)
 
       try {
         val cit = connections.keySet.iterator
