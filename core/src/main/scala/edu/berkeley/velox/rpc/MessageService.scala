@@ -149,6 +149,7 @@ abstract class MessageService extends Logging {
       val h = handlers.get(key)
       assert(h != null)
       try {
+        this.synchronized {
         val f= h.receive(src, msg.asInstanceOf[Request[Any]])
 
         if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
@@ -159,6 +160,9 @@ abstract class MessageService extends Logging {
             case Failure(t) => logger.error(s"Error receiving message $t")
           }
         }
+
+        }
+
       }  catch {
         case e: Exception => {
           logger.error("Handler exception", e)
@@ -176,9 +180,7 @@ abstract class MessageService extends Logging {
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
     if(isRequest) {
-      this.synchronized {
         recvRequest_(src, requestId, msg)
-      }
     } else {
       // receive the response message
       requestMap.remove(requestId) success msg
