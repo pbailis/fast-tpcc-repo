@@ -121,7 +121,7 @@ object ClientBenchmark {
         val rand = new Random
         override def run() = {
           while (!finished) {
-            requestSem.acquireUninterruptibly()
+            requestSem.acquire()
 
             val request = singleNewOrder(client, chance_remote, serializable, pct_test)
             request.future onComplete {
