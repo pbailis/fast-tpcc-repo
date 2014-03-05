@@ -80,15 +80,8 @@ abstract class MessageService extends Logging {
     val p = Promise[R]
 
     if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
-      logger.error(s"putting request $reqId into requestmap!")
-
       requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
-    } else {
-      logger.error(s"did not put in requests $reqId!")
     }
-
-    logger.error(s"requestmap is $requestMap")
-
     val toSend = ByteBuffer.allocate(8)
     toSend.putInt(reqId)
     toSend.putInt(IS_REQUEST)
@@ -210,7 +203,6 @@ abstract class MessageService extends Logging {
       networkService.send(src, bytes)
       return
     } else {
-      logger.error(s"got request $requestID from $src")
       val req = requestMap.remove(requestID.asInstanceOf[RequestId])
       req success None
       return
