@@ -11,7 +11,7 @@ import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
 import scala.collection.JavaConverters._
@@ -129,6 +129,8 @@ class SocketBufferPool(channel: SocketChannel)  {
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
 
+  val poolLock = new ReentrantLock()
+
   val isForceSending = new AtomicBoolean(false)
 
   // Create an runnable that calls forceSend so we
@@ -146,9 +148,11 @@ class SocketBufferPool(channel: SocketChannel)  {
 
   def send(bytes: ByteBuffer) {
     var sent = false
+    poolLock.lock()
     while(!sent) {
       sent = currentBuffer.write(bytes)
     }
+    poolLock.unlock()
   }
 
   /** Swap the active buffer.  This should only be called by a thread
@@ -182,6 +186,8 @@ class SocketBufferPool(channel: SocketChannel)  {
     * Force the current buffer to be sent immediately
     */
   def forceSend() {
+    poolLock.lock()
+
     val buf = currentBuffer
     buf.rwlock.writeLock.lock()
     var didsend = false
@@ -194,6 +200,8 @@ class SocketBufferPool(channel: SocketChannel)  {
     if (didsend)
       returnBuffer(buf)
     isForceSending.set(false)
+    poolLock.unlock()
+
   }
 
 }
