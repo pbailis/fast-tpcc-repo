@@ -11,9 +11,9 @@ VELOX_FRONTEND_PORT_START = 9000
 
 VELOX_BASE_DIR="/home/ubuntu/velox"
 
-HEAP_SIZE_GB_START = 200
+HEAP_SIZE_GB_START = 240
 HEAP_SIZE_GB = 240
-CLIENT_HEAP_SIZE_GB_START = 80
+CLIENT_HEAP_SIZE_GB_START = 240
 CLIENT_HEAP_SIZE_GB = 240
 
 VELOX_JAR_LOCATION = "assembly/target/scala-2.10/velox-assembly-0.1.jar"
@@ -27,7 +27,8 @@ VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 AMIs = {'us-west-2': 'ami-8885e5b8',
         'us-east-1': 'ami-b7dbe3de'}
 
-gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
+#gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
+gcstr = "  -XX:+UseParallelGC "
 
 def run_cmd(hosts, cmd, user="ubuntu", time=1000):
     cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
