@@ -41,7 +41,7 @@ class SocketBuffer(
       buf.put(bytes)
       send()
       rwlock.writeLock().unlock()
-      return
+      return true
     }
 
 
