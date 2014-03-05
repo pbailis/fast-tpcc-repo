@@ -7,7 +7,7 @@ import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{Future, future}
-import edu.berkeley.velox.util.NonThreadedExecutionContext._
+import scala.concurrent.ExecutionContext.Implicits.global
 import edu.berkeley.velox.storage.StorageEngine
 import edu.berkeley.velox.benchmark.operation._
 import edu.berkeley.benchmark.tpcc.TPCCNewOrder
