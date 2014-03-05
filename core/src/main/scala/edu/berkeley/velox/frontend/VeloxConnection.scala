@@ -37,6 +37,10 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_p
   }
 
   def newOrder(request: TPCCNewOrderRequest): Future[TPCCNewOrderResponse] = {
-    ms.send(warehouseToServer(request.W_ID), request)
+    try {
+      ms.send(warehouseToServer(request.W_ID), request)
+    } catch {
+      case t: Throwable => { logger.error(s"error in newOrder", t) }
+    }
   }
 }
