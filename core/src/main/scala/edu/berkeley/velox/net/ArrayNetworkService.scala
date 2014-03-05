@@ -404,7 +404,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
         Thread.sleep(1000)
       }
     }
-  })
+  }).start()
 
 
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
