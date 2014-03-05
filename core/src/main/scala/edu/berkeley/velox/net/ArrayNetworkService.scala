@@ -268,7 +268,7 @@ class ReaderThread(
         }
         else {
 
-          while (readBuffer.remaining >= len) { // read enough
+          while (len != -1 && readBuffer.remaining >= len) { // read enough
             if (len > VeloxConfig.bufferSize) {
               println(s"OHH NO LEN TO BIG $len")
             }
