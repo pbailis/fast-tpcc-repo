@@ -84,6 +84,8 @@ object TPCCNewOrder extends Logging {
 
     readFuture onComplete {
       case Success(t) => {
+        logger.error(s"completed read ${readTxn.txId}")
+
         var totalAmount: Double = 0
         var newOrderLines = new util.ArrayList[TPCCNewOrderLineResult]()
 
@@ -143,6 +145,8 @@ object TPCCNewOrder extends Logging {
         }
 
         if (aborted) {
+          logger.error(s"aborted ${readTxn.txId}")
+
           p.success(new TPCCNewOrderResponse(false))
         } else {
           writeTxn.table(TPCCConstants.ORDER_TABLE).put(PrimaryKey.pkey(W_ID, D_ID, shadow_O_ID), Row.column(TPCCConstants.O_ID, 1))
@@ -151,6 +155,9 @@ object TPCCNewOrder extends Logging {
 
           writeFuture onComplete {
             case Success(_) => {
+
+              logger.error(s"completed write ${readTxn.txId}")
+
               val O_ID = writeTxn.deferredIncrementResponse
               val C_DISCOUNT = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.CUSTOMER_TABLE, W_ID, D_ID, C_ID), TPCCConstants.C_DISCOUNT_COL).asInstanceOf[Double]
               val W_TAX = readTxn.getQueryResult(PrimaryKey.pkeyWithTable(TPCCConstants.WAREHOUSE_TABLE, W_ID), TPCCConstants.W_TAX_COL).asInstanceOf[Double]
