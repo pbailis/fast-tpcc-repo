@@ -250,12 +250,7 @@ class ReaderThread(
     while(true) {
       var read = readBuffer.position
 
-      logger.error(s"reading1 $read}")
-
       read += channel.read(readBuffer)
-
-      logger.error(s"reading2 $read}")
-
 
       var allocedBuffer = false
 
@@ -273,7 +268,7 @@ class ReaderThread(
         }
         else {
 
-          while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
+          while (readBuffer.remaining >= len) { // read enough
             if (len > VeloxConfig.bufferSize) {
               println(s"OHH NO LEN TO BIG $len")
             }
@@ -286,7 +281,7 @@ class ReaderThread(
             msgBuf.flip
             executor.submit(new Receiver(msgBuf,src,messageService))
 
-            if (readBuffer.remaining >= 4)
+            if (readBuffer.remaining > 4)
               len = readBuffer.getInt
             else
               len = -1 // indicate we can't put the whole int
