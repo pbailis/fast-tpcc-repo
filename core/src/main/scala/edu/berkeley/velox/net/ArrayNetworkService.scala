@@ -265,12 +265,7 @@ class ReaderThread(
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
-          logger.error(s"perfect read 1 $readBuffer $len}")
-
-
           executor.submit(new Receiver(readBuffer,src,messageService))
-
-          logger.error(s"perfect read 2 $readBuffer $len}")
 
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
@@ -283,9 +278,6 @@ class ReaderThread(
               println(s"OHH NO LEN TO BIG $len")
             }
 
-            logger.error(s"read enough imperfect 1 $readBuffer $len}")
-
-
             val msgBuf = ByteBuffer.allocate(len)
             val oldLim = readBuffer.limit
             readBuffer.limit(readBuffer.position+len)
@@ -293,9 +285,6 @@ class ReaderThread(
             readBuffer.limit(oldLim)
             msgBuf.flip
             executor.submit(new Receiver(msgBuf,src,messageService))
-
-            logger.error(s"read enough imperfect 2 $readBuffer $len}")
-
 
             if (readBuffer.remaining >= 4)
               len = readBuffer.getInt
@@ -308,9 +297,6 @@ class ReaderThread(
           readBuffer.position(readBuffer.position-4)
           readBuffer.putInt(len)
           readBuffer.position(readBuffer.position-4)
-
-          logger.error(s"read enough imperfect 3 $readBuffer $len}")
-
         }
 
         if (!allocedBuffer) // compact on a new buffer is bad
