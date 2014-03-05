@@ -243,13 +243,19 @@ class ReaderThread(
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") {
+  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") with Logging {
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
     while(true) {
       var read = readBuffer.position
+
+      logger.error(s"reading1 $read}")
+
       read += channel.read(readBuffer)
+
+      logger.error(s"reading2 $read}")
+
 
       var allocedBuffer = false
 
@@ -259,7 +265,13 @@ class ReaderThread(
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
+          logger.error(s"perfect read 1 $readBuffer $len}")
+
+
           executor.submit(new Receiver(readBuffer,src,messageService))
+
+          logger.error(s"perfect read 2 $readBuffer $len}")
+
           readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
           allocedBuffer = true
           len = -1 // prevent attempt to copy len below
@@ -270,6 +282,10 @@ class ReaderThread(
             if (len > VeloxConfig.bufferSize) {
               println(s"OHH NO LEN TO BIG $len")
             }
+
+            logger.error(s"read enough imperfect 1 $readBuffer $len}")
+
+
             val msgBuf = ByteBuffer.allocate(len)
             val oldLim = readBuffer.limit
             readBuffer.limit(readBuffer.position+len)
@@ -277,6 +293,10 @@ class ReaderThread(
             readBuffer.limit(oldLim)
             msgBuf.flip
             executor.submit(new Receiver(msgBuf,src,messageService))
+
+            logger.error(s"read enough imperfect 2 $readBuffer $len}")
+
+
             if (readBuffer.remaining >= 4)
               len = readBuffer.getInt
             else
@@ -288,6 +308,9 @@ class ReaderThread(
           readBuffer.position(readBuffer.position-4)
           readBuffer.putInt(len)
           readBuffer.position(readBuffer.position-4)
+
+          logger.error(s"read enough imperfect 3 $readBuffer $len}")
+
         }
 
         if (!allocedBuffer) // compact on a new buffer is bad
