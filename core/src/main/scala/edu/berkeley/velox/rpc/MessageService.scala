@@ -74,6 +74,7 @@ abstract class MessageService extends Logging {
    * @return
    */
   def send[R](dst: NetworkDestinationHandle, msg: Request[R]): Future[R] = {
+    this.synchronized {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
@@ -88,6 +89,7 @@ abstract class MessageService extends Logging {
       networkService.send(dst, serializeMessage(reqId, msg, isRequest=true))
     }
     p.future
+    }
   }
 
   def sendAny[R](msg: Request[R]): Future[R] = {
@@ -149,7 +151,6 @@ abstract class MessageService extends Logging {
       val h = handlers.get(key)
       assert(h != null)
       try {
-        this.synchronized {
         val f= h.receive(src, msg.asInstanceOf[Request[Any]])
 
         if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
@@ -160,9 +161,6 @@ abstract class MessageService extends Logging {
             case Failure(t) => logger.error(s"Error receiving message $t")
           }
         }
-
-        }
-
       }  catch {
         case e: Exception => {
           logger.error("Handler exception", e)
