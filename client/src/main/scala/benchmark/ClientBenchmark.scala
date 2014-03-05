@@ -123,8 +123,6 @@ object ClientBenchmark {
           while (!finished) {
             requestSem.acquire()
 
-            println(s"sending ${requestSem.availablePermits()}")
-
             val request = singleNewOrder(client, chance_remote, serializable, pct_test)
             request.future onComplete {
               case Success(value) => {
