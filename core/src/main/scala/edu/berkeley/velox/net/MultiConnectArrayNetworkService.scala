@@ -102,7 +102,7 @@ class MultiConnectArrayNetworkService (
     connections.get(partitionId).add(bufPool)
     logger.info(s"Adding connection from $partitionId")
     // start up a read thread
-    new ReaderThread("ANS", channel,executor,partitionId,messageService,channel.getRemoteAddress.toString).start
+    new ReaderThread("ANS", channel,executor,partitionId,messageService,channel.socket().getRemoteAddress.toString).start
     connectionSemaphore.release
   }
 

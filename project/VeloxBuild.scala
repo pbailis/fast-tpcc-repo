@@ -6,8 +6,8 @@ import AssemblyKeys._
 import scala.util.Properties
 
 object VeloxBuild extends Build {
-  val SCALAC_JVM_VERSION = "jvm-1.7"
-  val JAVAC_JVM_VERSION = "1.7"
+  val SCALAC_JVM_VERSION = "jvm-1.6"
+  val JAVAC_JVM_VERSION = "1.6"
 
   lazy val root = Project(
     "root",

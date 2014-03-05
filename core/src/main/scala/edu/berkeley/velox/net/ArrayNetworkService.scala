@@ -73,7 +73,7 @@ class SocketBuffer(
   def id(): Int = System.identityHashCode(this)
 
   def printStatus() {
-    val builder = new StringBuilder(s"${id} [${channel.getLocalAddress.toString} <-> ${channel.getRemoteAddress.toString}] - ")
+    val builder = new StringBuilder(s"${id} [${channel.socket().getLocalAddress.toString} <-> ${channel.socket().getRemoteAddress.toString}] - ")
     builder append s" pos: ${writePos.get}"
     println(builder.result)
   }
@@ -343,7 +343,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
-      new ReaderThread(name, channel, executor, partitionId, messageService, channel.getRemoteAddress.toString).start
+      new ReaderThread(name, channel, executor, partitionId, messageService, channel.socket().getRemoteAddress.toString).start
       connectionSemaphore.release
     }
   }
