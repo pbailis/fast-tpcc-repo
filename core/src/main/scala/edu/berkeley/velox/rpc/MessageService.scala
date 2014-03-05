@@ -174,13 +174,13 @@ abstract class MessageService extends Logging {
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
     this.synchronized {
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
+    }
 
     if(isRequest) {
       recvRequest_(src, requestId, msg)
     } else {
       // receive the response message
       requestMap.remove(requestId) success msg
-    }
     }
   }
 
