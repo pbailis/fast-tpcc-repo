@@ -247,10 +247,20 @@ class ReaderThread(
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
+    var missing = -1
     while(true) {
+      if(missing != -1) {
+        logger.error(s"missing $missing bytes! $readBuffer")
+      }
+
       var read = readBuffer.position
 
       read += channel.read(readBuffer)
+
+      if(missing != -1) {
+        logger.error(s"was missing $missing bytes! $read $readBuffer")
+      }
+
 
       var allocedBuffer = false
 
@@ -289,9 +299,13 @@ class ReaderThread(
         }
 
         if (len != -1) {
+          missing = len
+
           readBuffer.position(readBuffer.position-4)
           readBuffer.putInt(len)
           readBuffer.position(readBuffer.position-4)
+        } else {
+          missing = -1
         }
 
         if (!allocedBuffer) // compact on a new buffer is bad
