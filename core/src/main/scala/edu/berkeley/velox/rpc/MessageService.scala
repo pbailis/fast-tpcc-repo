@@ -93,9 +93,7 @@ abstract class MessageService extends Logging {
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
 
-    if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
       requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
-    }
 
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
