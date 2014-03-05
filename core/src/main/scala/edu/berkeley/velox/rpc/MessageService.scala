@@ -128,6 +128,7 @@ abstract class MessageService extends Logging {
   }
 
   def deserializeMessage(bytes: ByteBuffer): (Any, RequestId, Boolean) = {
+    this.synchronized {
     val headerLong = bytes.getLong()
     val isRequest = (headerLong >>> 63) == 1
     val requestId = headerLong & ~(1L << 63)
@@ -137,6 +138,7 @@ abstract class MessageService extends Logging {
     val msg = kryo.deserialize(bytes)
     //VeloxKryoRegistrar.returnKryo(kryo)
     (msg, requestId, isRequest)
+    }
   }
 
   // doesn't block, but does set up a handler that will deliver the message when it's ready
@@ -172,10 +174,7 @@ abstract class MessageService extends Logging {
 
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
   def receiveRemoteMessage(src: NetworkDestinationHandle, bytes: ByteBuffer) {
-    this.synchronized {
     val (msg, requestId, isRequest) = deserializeMessage(bytes)
-    }
-
     if(isRequest) {
       recvRequest_(src, requestId, msg)
     } else {
