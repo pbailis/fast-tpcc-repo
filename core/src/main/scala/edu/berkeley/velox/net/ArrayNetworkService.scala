@@ -61,7 +61,7 @@ class SocketBuffer(
       //wrote += channel.write(bytes)
       rwlock.writeLock().unlock()
 
-      assert(wrote == len+4)
+      //assert(wrote == len+4)
 
       SendStats.bytesSent.addAndGet(len+4)
       SendStats.numSent.incrementAndGet()
