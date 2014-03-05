@@ -35,6 +35,15 @@ class SocketBuffer(
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
+    if(true) {
+      rwlock.writeLock().lock()
+      writePos.getAndAdd(bytes.remaining())
+      buf.put(bytes)
+      send()
+      rwlock.writeLock().unlock()
+    }
+
+
     if (!rwlock.readLock.tryLock)
       return false
 
