@@ -204,11 +204,13 @@ class Receiver(
 
   def run() = try {
     val realLimit = bytes.limit()
+    var nextPosition = bytes.position()
 
     while(bytes.remaining != 0) {
       try {
         val numBytes = bytes.getInt()
-        bytes.limit(bytes.position()+numBytes)
+        nextPosition += numBytes
+        bytes.limit(nextPosition)
         messageService.receiveRemoteMessage(src,bytes)
         bytes.limit(realLimit)
       } catch {

@@ -9,6 +9,7 @@ import collection.JavaConversions._
 import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderResponse, TPCCNewOrderRequest, TPCCLoadRequest, TPCCLoadResponse}
 import edu.berkeley.velox.cluster.TPCCPartitioner
 import com.typesafe.scalalogging.slf4j.Logging
+import java.util.concurrent.Executors
 
 
 object VeloxConnection {
@@ -19,7 +20,7 @@ object VeloxConnection {
 
 class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_parallelism: Int=1) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
-  ms.networkService.setExecutor()
+  ms.networkService.setExecutor(Executors.newCachedThreadPool())
   ms.initialize()
 
   for(i <- 1 until connection_parallelism)
