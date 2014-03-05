@@ -203,13 +203,15 @@ class Receiver(
   messageService: MessageService) extends Runnable with Logging {
 
   def run() = try {
+    val realLimit = bytes.limit()
+
     while(bytes.remaining != 0) {
       try {
         val numBytes = bytes.getInt()
-        val oldLimit = bytes.limit()
         bytes.limit(bytes.position()+numBytes)
+        logger.error(s"receiving ${bytes}")
         messageService.receiveRemoteMessage(src,bytes)
-        bytes.limit(oldLimit)
+        bytes.limit(realLimit)
       } catch {
         case e: Exception => logger.error("Error receiving message", e)
       }
