@@ -155,9 +155,11 @@ class SocketBufferPool(channel: SocketChannel)  {
   }
 
   def send(bytes: ByteBuffer) {
+    this.synchronized {
     var sent = false
     while(!sent) {
       sent = currentBuffer.write(bytes)
+    }
     }
   }
 
