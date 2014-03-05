@@ -25,16 +25,10 @@ class VeloxByteBufferInput(buffer:ByteBuffer) extends ByteBufferInput {
 }
 
 object KryoThreadLocal {
-  object kryoTL {
-    def get() = VeloxKryoRegistrar.makeKryo()
-  }
-
-  /*
   val kryoTL = new ThreadLocal[KryoSerializer]() {
     override protected
     def initialValue(): KryoSerializer = VeloxKryoRegistrar.makeKryo()
   }
-  */
 }
 
 object VeloxKryoRegistrar {
