@@ -160,6 +160,9 @@ class SocketBufferPool(channel: SocketChannel)  {
     * @return true if requested bytes written successfully into new buffer
     */
   def swap(bytes: ByteBuffer):Boolean = {
+    if(true)
+      return false
+
     var newBuf = pool.poll
 
     // TODO: Should probably have a limit on the number of buffers we create
