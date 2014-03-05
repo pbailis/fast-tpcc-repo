@@ -1,7 +1,7 @@
 package edu.berkeley.velox.rpc
 
 import edu.berkeley.velox.net.NetworkService
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 import java.util.concurrent.{Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
 import scala.concurrent.{Future, Promise}
@@ -23,6 +23,11 @@ class MessageWrapper(private val encRequestId: Long, val body: Any) {
   def requestId: Long = math.abs(encRequestId)
 }
 
+object MessageStats {
+  val numRecv = new AtomicLong
+  val numResponse = new AtomicLong
+}
+
 object MessageWrapper {
   def request(requestId: Long, body: Any) = {
     assert(requestId > 0)
@@ -40,6 +45,15 @@ abstract class MessageService extends Logging {
   var networkService: NetworkService = null
   val name: String
   var serviceID : Integer = -1
+
+  new Thread(new Runnable {
+    override def run() = {
+      while(true) {
+      logger.error(s"${MessageStats.numRecv} ${MessageStats.numResponse}")
+      Thread.sleep(1000)
+      }
+    }
+  }).start()
 
   val serializable = VeloxConfig.serializable
   val thread_handler = VeloxConfig.thread_handler
@@ -160,11 +174,14 @@ abstract class MessageService extends Logging {
       val h = handlers.get(key)
       assert(h != null)
       try {
+        MessageStats.numRecv.incrementAndGet()
+
         val f= h.receive(src, msg.asInstanceOf[Request[Any]])
 
         if(!serializable || !msg.isInstanceOf[OneWayRequest]) {
           f onComplete {
             case Success(response) => {
+              MessageStats.numResponse.incrementAndGet()
               sendResponse(src, requestId, response)
             }
             case Failure(t) => logger.error(s"Error receiving message $t")
