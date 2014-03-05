@@ -52,6 +52,10 @@ class SocketBuffer(
       intBuf.putInt(len)
       intBuf.flip()
       var wrote = 0
+      //channel.socket().getOutputStream.write(intBuf.array())
+      //val byteArr = new Array[Byte](len)
+      //bytes.get(byteArr)
+      //channel.socket().getOutputStream.write(byteArr)
       wrote += channel.write(intBuf)
       wrote += channel.write(bytes)
       rwlock.writeLock().unlock()

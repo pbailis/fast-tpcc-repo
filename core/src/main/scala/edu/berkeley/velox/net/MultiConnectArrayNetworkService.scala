@@ -106,6 +106,8 @@ class MultiConnectArrayNetworkService (
     connectionSemaphore.release
   }
 
+  override def start() {}
+
   override def configureInboundListener(port: Integer) {
     val serverChannel = ServerSocketChannel.open()
     logger.info("Listening on: "+port)
