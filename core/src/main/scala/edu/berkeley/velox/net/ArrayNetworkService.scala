@@ -166,11 +166,7 @@ class SocketBufferPool(channel: SocketChannel)  {
     if (newBuf == null)
       newBuf = new SocketBuffer(channel,this)
 
-    val ret =
-      if (bytes != null)
-        newBuf.write(bytes)
-      else
-        false
+    val ret = false
 
     currentBuffer = newBuf
 
