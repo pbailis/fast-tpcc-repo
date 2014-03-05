@@ -8,14 +8,21 @@ import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, Da
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
 import scala.collection.JavaConverters._
 import edu.berkeley.velox.util.KryoThreadLocal
+
+
+object SendStats {
+  val numSent = new AtomicLong
+  val bytesSent = new AtomicLong
+  val numRecv = new AtomicLong
+  val bytesRecv = new AtomicLong
+}
 
 class SocketBuffer(
   channel: SocketChannel,
@@ -40,11 +47,16 @@ class SocketBuffer(
     if(true) {
       rwlock.writeLock().lock()
       val intBuf = ByteBuffer.allocate(4)
-      intBuf.putInt(bytes.remaining())
+      val len = (bytes.remaining())
+      intBuf.putInt(len)
       intBuf.flip()
       channel.write(intBuf)
       channel.write(bytes)
       rwlock.writeLock().unlock()
+
+      SendStats.bytesSent.addAndGet(len+4)
+      SendStats.numSent.incrementAndGet()
+
       return true
     }
     }
@@ -253,10 +265,18 @@ class ReaderThread(
 
       val msgBuf = ByteBuffer.allocate(len)
       while(readBytes != len) {
-        readBytes += channel.read(msgBuf)
+        val read = channel.read(msgBuf)
+        if(read == -1) {
+          logger.error(s"read negative one!")
+        }
+        readBytes += read
       }
 
       msgBuf.flip()
+
+      SendStats.bytesRecv.addAndGet(len)
+      SendStats.numRecv.incrementAndGet()
+
       executor.submit(new Receiver(msgBuf, src, messageService))
 
       /*
@@ -376,6 +396,15 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
 
     this.executor
   }
+
+  new Thread(new Runnable {
+    override def run() {
+      while (true) {
+        logger.error(s"${SendStats.numSent} ${SendStats.bytesSent} ${SendStats.numRecv} ${SendStats.bytesRecv}")
+        Thread.sleep(1000)
+      }
+    }
+  })
 
 
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
