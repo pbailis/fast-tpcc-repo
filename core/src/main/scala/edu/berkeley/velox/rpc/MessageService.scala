@@ -86,8 +86,9 @@ abstract class MessageService extends Logging {
       sendLocalRequest(reqId, msg)
     } else {
 
-      val serialized = serializeMessage(reqId, msg, isRequest=true)
       this.synchronized {
+
+      val serialized = serializeMessage(reqId, msg, isRequest=true)
         networkService.send(dst, serialized)
       }
     }
