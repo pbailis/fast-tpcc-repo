@@ -130,6 +130,29 @@ class ReaderThread(
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
     var missing = -1
     while(true) {
+
+      val intBuf = new Array[Byte](4)
+      channel.socket().getInputStream.read(intBuf)
+      val len = ByteBuffer.wrap(intBuf).getInt()
+
+      SendStats.tryRecv.incrementAndGet()
+      SendStats.tryBytesRecv.addAndGet(len)
+
+
+      var readBytes = 0
+      val msgArr = new Array[Byte](len)
+       readBytes += channel.socket().getInputStream.read(msgArr)
+      assert(readBytes == len)
+
+      SendStats.bytesRecv.addAndGet(len+4)
+      SendStats.numRecv.incrementAndGet()
+
+      val msgBuf = ByteBuffer.wrap(msgArr)
+
+      executor.submit(new Receiver(msgBuf, src, messageService))
+
+      /*
+
       var intBuf = ByteBuffer.allocate(4)
       channel.read(intBuf)
       intBuf.flip()
@@ -157,6 +180,7 @@ class ReaderThread(
       SendStats.numRecv.incrementAndGet()
 
       executor.submit(new Receiver(msgBuf, src, messageService))
+      */
 
       /*
 
