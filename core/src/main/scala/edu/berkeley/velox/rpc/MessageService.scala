@@ -4,7 +4,7 @@ import edu.berkeley.velox.net.NetworkService
 import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 import java.util.concurrent.{Executors, ConcurrentHashMap}
 import edu.berkeley.velox.{RequestId, NetworkDestinationHandle}
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{Await, Future, Promise}
 import java.nio.ByteBuffer
 import util.{Success, Failure}
 import java.net.InetSocketAddress
@@ -14,8 +14,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.util.{VeloxKryoRegistrar,KryoThreadLocal}
 import edu.berkeley.velox.conf.VeloxConfig
 
-//import edu.berkeley.velox.util.NonThreadedExecutionContext.context
-import scala.concurrent.ExecutionContext.Implicits.global
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import scala.concurrent.duration.Duration
 
 class MessageWrapper(private val encRequestId: Long, val body: Any) {
   def isRequest: Boolean = encRequestId < 0
@@ -175,6 +175,11 @@ abstract class MessageService extends Logging {
         MessageStats.numRecv.incrementAndGet()
 
         val f= h.receive(src, msg.asInstanceOf[Request[Any]])
+
+        if(!f.isCompleted) {
+          logger.error(s"not completed! $f $msg")
+          Await.ready(f, Duration.Inf)
+        }
 
           f onComplete {
             case Success(response) => {

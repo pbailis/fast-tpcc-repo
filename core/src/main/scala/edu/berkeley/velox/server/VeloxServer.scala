@@ -7,7 +7,6 @@ import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{Future, future}
-import scala.concurrent.ExecutionContext.Implicits.global
 import edu.berkeley.velox.storage.StorageEngine
 import edu.berkeley.velox.benchmark.operation._
 import edu.berkeley.benchmark.tpcc.TPCCNewOrder
@@ -17,6 +16,7 @@ import edu.berkeley.velox.datamodel.{Row, PrimaryKey}
 import edu.berkeley.velox.benchmark.operation.serializable.TPCCNewOrderSerializable
 import java.util.Collections
 
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
 // Every server has a single instance of this class. It handles data edu.berkeley.velox.storage
 // and serves client requests. Data is stored in a concurrent hash map.
