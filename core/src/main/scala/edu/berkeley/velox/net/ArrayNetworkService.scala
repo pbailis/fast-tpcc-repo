@@ -145,7 +145,10 @@ class SocketBufferPool(channel: SocketChannel)  {
   }
 
   def send(bytes: ByteBuffer) {
-    while(!currentBuffer.write(bytes)) {}
+    var sent = false
+    while(!sent) {
+      sent = currentBuffer.write(bytes)
+    }
   }
 
   /** Swap the active buffer.  This should only be called by a thread
