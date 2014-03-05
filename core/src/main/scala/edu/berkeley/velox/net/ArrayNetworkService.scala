@@ -249,6 +249,22 @@ class ReaderThread(
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
     var missing = -1
     while(true) {
+      var intBuf = ByteBuffer.allocate(4)
+      channel.read(intBuf)
+      intBuf.flip()
+      val len = intBuf.getInt()
+      var readBytes = 0
+
+      val msgBuf = ByteBuffer.allocate(len)
+      while(readBytes != len) {
+        readBytes += channel.read(msgBuf)
+      }
+
+      msgBuf.flip()
+      executor.submit(new Receiver(msgBuf, src, messageService))
+
+      /*
+
       if(missing != -1) {
         logger.error(s"missing $missing bytes! $readBuffer")
       }
@@ -311,6 +327,7 @@ class ReaderThread(
         if (!allocedBuffer) // compact on a new buffer is bad
           readBuffer.compact
       }
+      */
     }
   }
 }
