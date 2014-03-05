@@ -155,11 +155,9 @@ class SocketBufferPool(channel: SocketChannel)  {
   }
 
   def send(bytes: ByteBuffer) {
-    this.synchronized {
     var sent = false
     while(!sent) {
       sent = currentBuffer.write(bytes)
-    }
     }
   }
 
@@ -489,9 +487,11 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   }
 
   override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
+    this.synchronized {
     val sockBufPool = connections.get(dst)
     // TODO: Something if buffer is null
     sockBufPool.send(buffer)
+    }
   }
 
   override def sendAny(buffer: ByteBuffer) {
