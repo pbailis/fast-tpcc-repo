@@ -40,7 +40,10 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_p
     try {
       ms.send(warehouseToServer(request.W_ID), request)
     } catch {
-      case t: Throwable => { logger.error(s"error in newOrder", t) }
+      case t: Throwable => {
+        logger.error(s"error in newOrder", t)
+        null
+      }
     }
   }
 }
