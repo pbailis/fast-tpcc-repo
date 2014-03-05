@@ -316,11 +316,11 @@ class ArrayNetworkThreadFactory(val name: String) extends ThreadFactory {
   }
 }
 
-class ArrayNetworkService(
-  val name: String,
-  val performIDHandshake: Boolean = false,
+class ArrayNetworkService(val performIDHandshake: Boolean = false,
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
+
+  val name = "ANS"
 
   var executor: ExecutorService = null
 
@@ -355,7 +355,7 @@ class ArrayNetworkService(
   }
 
   def start() {
-    new Thread(new SendSweeper(connections,executor), s"Sweeper-${name}").start
+    new Thread(new SendSweeper(connections,executor), s"Sweeper-").start
   }
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
