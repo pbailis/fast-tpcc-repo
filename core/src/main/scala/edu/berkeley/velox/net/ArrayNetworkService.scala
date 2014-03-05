@@ -21,7 +21,9 @@ object SendStats {
   val bytesSent = new AtomicLong
   val numRecv = new AtomicLong
   val bytesRecv = new AtomicLong
+  val tryRecv = new AtomicLong
   val tryBytesRecv = new AtomicLong
+
 }
 
 class SocketBuffer(
@@ -130,7 +132,9 @@ class ReaderThread(
 
       assert(len != 0)
 
-      SendStats.tryBytesRecv.incrementAndGet()
+      SendStats.tryRecv.incrementAndGet()
+      SendStats.tryBytesRecv.addAndGet(len)
+
       var readBytes = 0
 
       val msgBuf = ByteBuffer.allocate(len)
@@ -270,7 +274,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   new Thread(new Runnable {
     override def run() {
       while (true) {
-        logger.error(s"S ${SendStats.numSent} ${SendStats.bytesSent} R ${SendStats.numRecv} ${SendStats.bytesRecv} ${SendStats.tryBytesRecv}")
+        logger.error(s"S ${SendStats.numSent} ${SendStats.bytesSent} R ${SendStats.numRecv} ${SendStats.bytesRecv} T ${SendStats.tryRecv} ${SendStats.tryBytesRecv}")
         Thread.sleep(1000)
       }
     }
