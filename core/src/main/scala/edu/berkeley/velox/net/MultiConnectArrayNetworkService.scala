@@ -16,27 +16,6 @@ import scala.util.Random
 
 import java.util.ArrayList
 
-class MultiSendSweeper(
-  connections: ConcurrentHashMap[NetworkDestinationHandle, ArrayList[SocketBufferPool]],
-  executor: ExecutorService) extends Runnable {
-
-  def run() {
-    while(true) {
-      if(VeloxConfig.sweepTime > 0)
-        Thread.sleep(VeloxConfig.sweepTime)
-      val cit = connections.keySet.iterator
-      while (cit.hasNext) {
-        val bufit = connections.get(cit.next()).iterator
-
-        while(bufit.hasNext) {
-          val sp = bufit.next()
-          if (sp.needSend)
-                   executor.submit(sp.forceRunner)
-        }
-      }
-    }
-  }
-}
 
 
 class MultiConnectArrayNetworkService (
@@ -73,10 +52,6 @@ class MultiConnectArrayNetworkService (
 
   def blockForConnections(numConnections: Integer) {
     connectionSemaphore.acquireUninterruptibly(numConnections)
-  }
-
-  def start() {
-    new Thread(new MultiSendSweeper(connections,executor)).start
   }
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
