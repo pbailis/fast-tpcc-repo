@@ -5,7 +5,7 @@ import edu.berkeley.velox.NetworkDestinationHandle
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.MessageService
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
-import java.net.InetSocketAddress
+import java.net.{SocketOptions, InetSocketAddress}
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.atomic.AtomicBoolean
@@ -402,6 +402,8 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
     */
   def _registerConnection(partitionId: NetworkDestinationHandle, channel: SocketChannel) {
     val bufPool = new SocketBufferPool(channel)
+    channel.setOption(SocketOptions.SO_RCVBUF, 125829120)
+    channel.setOption(SocketOptions.SO_SNDBUF, 125829120)
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
@@ -412,6 +414,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
 
   override def configureInboundListener(port: Integer) {
     val serverChannel = ServerSocketChannel.open()
+    serverChannel.setOption(SocketOptions.SO_RCVBUF, 12582912)
     logger.info("Listening on: "+port)
     serverChannel.socket.bind(new InetSocketAddress(port))
 
