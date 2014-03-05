@@ -30,6 +30,10 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_p
     ((W_ID-1) % serverAddresses.size) +1
   }
 
+  def send(request: SequenceNumberReq): Future[Long] = {
+    ms.sendAny(request)
+  }
+
   def loadTPCC(W_ID: Int): Future[TPCCLoadResponse] = {
     val serverNo = warehouseToServer(W_ID)
     logger.info(s"Loading warehouse ${W_ID} on server ${serverNo}")

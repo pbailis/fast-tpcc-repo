@@ -15,6 +15,7 @@ import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderRequest, TPCCNewOrder
 import edu.berkeley.velox.benchmark.util.RandomGenerator
 import java.util._
 import java.util.concurrent.Semaphore
+import edu.berkeley.velox.server.SequenceNumberReq
 
 
 object ClientBenchmark {
@@ -114,6 +115,8 @@ object ClientBenchmark {
     val requestSem = new Semaphore(0)
 
 
+    val seqNo = new AtomicInteger()
+
     println(s"Starting $parallelism threads!")
 
     for (i <- 0 to parallelism) {
@@ -123,14 +126,9 @@ object ClientBenchmark {
           while (!finished) {
             requestSem.acquireUninterruptibly()
 
-            val request = singleNewOrder(client, chance_remote, serializable, pct_test)
-            request.future onComplete {
+            val request = client.send(new SequenceNumberReq(seqNo.incrementAndGet()))
+            request onComplete {
               case Success(value) => {
-                numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
-                if(!value.committed) {
-                 numAborts.incrementAndGet()
-                }
-
                 opsDone.incrementAndGet
                 requestSem.release
               }

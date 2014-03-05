@@ -50,6 +50,7 @@ class VeloxServer extends Logging {
 
   frontendServer.registerHandler(new TPCCLoadRequestHandler)
   frontendServer.registerHandler(new TPCCNewOrderRequestHandler)
+  frontendServer.registerHandler(new SequenceNumberHandler)
 
   frontendServer.initialize()
 
@@ -157,6 +158,14 @@ class VeloxServer extends Logging {
         }
       }
     }
+
+  class SequenceNumberHandler extends MessageHandler[Long, SequenceNumberReq] {
+    def receive(src: NetworkDestinationHandle, msg: SequenceNumberReq) {
+      future {
+        msg.reqId
+      }
+    }
+  }
 }
 
 object VeloxServer extends Logging {
@@ -167,3 +176,5 @@ object VeloxServer extends Logging {
     val kvserver = new VeloxServer
   }
 }
+
+class SequenceNumberReq(val reqId: Long) extends Request[Long]
