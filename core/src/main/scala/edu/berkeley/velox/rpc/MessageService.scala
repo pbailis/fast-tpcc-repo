@@ -211,7 +211,8 @@ abstract class MessageService extends Logging {
       return
     } else {
       logger.error(s"got request $requestID from $src")
-      requestMap.remove(requestID) success None
+      val req = requestMap.remove(requestID.asInstanceOf[RequestId])
+      req success None
       return
     }
     /*
