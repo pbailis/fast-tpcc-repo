@@ -204,6 +204,7 @@ abstract class MessageService extends Logging {
       networkService.send(src, bytes)
       return
     } else {
+      logger.error(s"got request $requestID from $src")
       requestMap.remove(requestID) success None
       return
     }
