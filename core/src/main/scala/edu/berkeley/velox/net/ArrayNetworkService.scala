@@ -4,7 +4,6 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.NetworkDestinationHandle
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.MessageService
-import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
 import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
@@ -429,15 +428,13 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
         val clientChannel = SocketChannel.open()
         clientChannel.connect(address)
         assert(clientChannel.isConnected)
-        val bos = new ByteArrayOutputStream()
-        val dos = new DataOutputStream(bos)
+
 
         if(performIDHandshake) {
-          dos.writeInt(serverID)
-          dos.flush()
-          val bytes = bos.toByteArray()
-          assert(bytes.size == 4)
-          clientChannel.socket.getOutputStream.write(bytes)
+          val shakeArray = ByteBuffer.allocate(4)
+          shakeArray.putInt(serverID)
+          shakeArray.flip()
+          clientChannel.write(shakeArray)
         }
         _registerConnection(handle, clientChannel)
         return;
@@ -487,11 +484,13 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
           // Get the bytes encoding the source partition Id
           var connectionId: NetworkDestinationHandle = -1;
           if(performIDHandshake) {
-            val bytes = new Array[Byte](4)
-            val bytesRead = clientChannel.socket.getInputStream.read(bytes)
-            assert(bytesRead == 4)
+            val shakeBuf = ByteBuffer.allocate(4)
+            while(shakeBuf.hasRemaining) {
+              val bytesRead = clientChannel.read(shakeBuf)
+            }
             // Read the partition id
-            connectionId = new DataInputStream(new ByteArrayInputStream(bytes)).readInt()
+            shakeBuf.rewind()
+            connectionId = shakeBuf.getInt()
           } else {
             connectionId = nextConnectionID.decrementAndGet();
           }
