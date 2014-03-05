@@ -44,13 +44,14 @@ class SocketBuffer(
       return false
     }
 
-    val len = bytes.remaining
+    val len = bytes.remaining+4
 
     val writeOffset = writePos.getAndAdd(len)
     val ret =
       if (writeOffset + len <= buf.limit) {
         val dup = buf.duplicate
         dup.position(writeOffset)
+        dup.putInt(bytes.remaining)
         dup.put(bytes)
         rwlock.readLock.unlock
         true
@@ -204,7 +205,11 @@ class Receiver(
   def run() = try {
     while(bytes.remaining != 0) {
       try {
+        val numBytes = bytes.getInt()
+        val oldLimit = bytes.limit()
+        bytes.limit(bytes.position()+numBytes)
         messageService.receiveRemoteMessage(src,bytes)
+        bytes.limit(oldLimit)
       } catch {
         case e: Exception => logger.error("Error receiving message", e)
       }
