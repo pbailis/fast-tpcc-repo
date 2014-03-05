@@ -16,6 +16,7 @@ import edu.berkeley.velox.benchmark.datamodel.serializable.SerializableRow
 
 import com.esotericsoftware.minlog.Log;
 import com.esotericsoftware.minlog.Log._
+import java.io.ByteArrayOutputStream
 
 /** A class that, when constructed with a ByteBuffer,
   * doesn't do COMPLETELY the wrong thing with it
@@ -138,15 +139,13 @@ object VeloxKryoRegistrar {
 }
 
 class KryoSerializer(val kryo: Kryo) {
-  val bout = new ByteBufferOutputStream()
-  val out = new Output(bout)
-
   def serialize(x: Any, buffer: ByteBuffer): ByteBuffer = {
-    bout.setByteBuffer(buffer)
+    val bout = new ByteArrayOutputStream()
+    val out  = new Output(bout)
     kryo.writeClassAndObject(out, x)
     out.flush()
     bout.flush()
-    buffer
+    buffer.put(bout.toByteArray)
   }
 
   def deserialize(buffer: ByteBuffer): Any = {
