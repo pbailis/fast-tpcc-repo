@@ -155,10 +155,7 @@ class SocketBufferPool(channel: SocketChannel)  {
   }
 
   def needSend(): Boolean = {
-    if ( (currentBuffer.writePos.get > 4) &&
-         ((System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) ) {
-      isForceSending.compareAndSet(false,true)
-    } else false
+    false
   }
 
   def send(bytes: ByteBuffer) {
@@ -336,22 +333,7 @@ class SendSweeper(
   executor: ExecutorService) extends Runnable with Logging {
 
   def run() {
-    while(true) {
-      Thread.sleep(VeloxConfig.sweepTime)
 
-      try {
-        val cit = connections.keySet.iterator
-        while (cit.hasNext) {
-          val sp = connections.get(cit.next)
-          if (sp.needSend)
-            executor.submit(sp.forceRunner)
-        }
-      }
-      catch { // TODO: Should we stop the sweeper, or pause?
-        case t: Throwable => logger.error("Error send sweeping",t)
-      }
-
-    }
   }
 
 }
