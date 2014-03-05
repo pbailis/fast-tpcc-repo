@@ -140,12 +140,12 @@ object VeloxKryoRegistrar {
 
 class KryoSerializer(val kryo: Kryo) {
   def serialize(x: Any, buffer: ByteBuffer): ByteBuffer = {
-    val bout = new ByteArrayOutputStream()
+    val bout = new ByteBufferBackedOutputStream(buffer)
     val out  = new Output(bout)
     kryo.writeClassAndObject(out, x)
     out.flush()
     bout.flush()
-    buffer.put(bout.toByteArray)
+    buffer
   }
 
   def deserialize(buffer: ByteBuffer): Any = {
