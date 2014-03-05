@@ -63,43 +63,6 @@ class SocketBuffer(
     }
   }
 
-  /**
-    * Send the current data
-    *
-    * The write lock MUST be held before calling this method
-    *
-    */
-  def send() {
-    try {
-
-      if (writePos.get > 4) {
-        buf.position(0)
-
-        // write out full message length (minus 4 for these bytes)
-        buf.putInt(writePos.get-4)
-        buf.limit(writePos.get)
-        buf.position(0)
-
-        // wrap the array and write it out
-        val wrote = channel.write(buf)
-        assert(wrote == writePos.get())
-
-        pool.lastSent = System.currentTimeMillis
-
-        // reset write position
-        buf.clear
-        buf.position(4)
-        writePos.set(4)
-      }
-    } catch {
-      case e: Exception => {
-        println("EXCEPTION HERE: "+e.getMessage)
-        e.printStackTrace
-        throw e
-      }
-    }
-  }
-
   def id(): Int = System.identityHashCode(this)
 
   def printStatus() {
@@ -111,18 +74,8 @@ class SocketBuffer(
 }
 
 class SocketBufferPool(channel: SocketChannel)  {
-
-  val pool = new LinkedBlockingQueue[SocketBuffer]()
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
-  @volatile var lastSent = 0l
 
-  val isForceSending = new AtomicBoolean(false)
-
-  // Create an runnable that calls forceSend so we
-  // don't have to create a new object every time
-  val forceRunner = new Runnable() {
-    def run() = forceSend()
-  }
 
   def needSend(): Boolean = {
     false
@@ -133,51 +86,6 @@ class SocketBufferPool(channel: SocketChannel)  {
     while(!sent) {
       sent = currentBuffer.write(bytes)
     }
-  }
-
-  /** Swap the active buffer.  This should only be called by a thread
-    * holding a write lock on currentBuffer
-    *
-    * @param bytes Data to write into the buffer that will be active after
-    *              this call, or null to write nothing
-    *
-    * @return true if requested bytes written successfully into new buffer
-    */
-  def swap(bytes: ByteBuffer):Boolean = {
-    if(true)
-      return false
-
-    var newBuf = pool.poll
-
-    // TODO: Should probably have a limit on the number of buffers we create
-    if (newBuf == null)
-      newBuf = new SocketBuffer(channel,this)
-
-    val ret = false
-
-    currentBuffer = newBuf
-
-    ret
-  }
-
-  def returnBuffer(buf: SocketBuffer) = pool.put(buf)
-
-  /**
-    * Force the current buffer to be sent immediately
-    */
-  def forceSend() {
-    val buf = currentBuffer
-    buf.rwlock.writeLock.lock()
-    var didsend = false
-    if (currentBuffer == buf && buf.writePos.get > 4) {
-      buf.send
-      swap(null)
-      didsend = true
-    }
-    buf.rwlock.writeLock.unlock()
-    if (didsend)
-      returnBuffer(buf)
-    isForceSending.set(false)
   }
 
 }
@@ -390,6 +298,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
       try {
         val clientChannel = SocketChannel.open()
         clientChannel.connect(address)
+        clientChannel.socket().setTcpNoDelay(true)
         assert(clientChannel.isConnected)
 
 
@@ -443,7 +352,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
         while (true) {
           // Accept the client socket
           val clientChannel: SocketChannel = serverChannel.accept
-          clientChannel.socket.setTcpNoDelay(tcpNoDelay)
+          clientChannel.socket.setTcpNoDelay(true)
           // Get the bytes encoding the source partition Id
           var connectionId: NetworkDestinationHandle = -1;
           if(performIDHandshake) {
