@@ -160,7 +160,7 @@ class VeloxServer extends Logging {
     }
 
   class SequenceNumberHandler extends MessageHandler[Long, SequenceNumberReq] {
-    def receive(src: NetworkDestinationHandle, msg: SequenceNumberReq) {
+    def receive(src: NetworkDestinationHandle, msg: SequenceNumberReq): Future[Long] = {
       future {
         msg.reqId
       }
