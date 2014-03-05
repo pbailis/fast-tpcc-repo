@@ -107,6 +107,8 @@ class SocketBuffer(
 
         // wrap the array and write it out
         val wrote = channel.write(buf)
+        assert(wrote == writePos.get())
+
         pool.lastSent = System.currentTimeMillis
 
         // reset write position
