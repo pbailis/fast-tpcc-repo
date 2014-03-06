@@ -108,8 +108,6 @@ object ClientBenchmark extends Logging {
     @volatile var finished = false
 
 
-    val seqNo = new AtomicInteger()
-
     new Thread(new Runnable {
       override def run() {
         while (true) {
@@ -117,7 +115,11 @@ object ClientBenchmark extends Logging {
           Thread.sleep(1000)
         }
       }
-    }).start()
+    }
+    ).start()
+
+    new ReaderThread(clientChannel).start()
+
 
     println(s"Starting $parallelism threads!")
 
@@ -141,6 +143,7 @@ object ClientBenchmark extends Logging {
             SendStats.bytesSent.addAndGet(8)
             SendStats.numSent.incrementAndGet()
             cchannel.flush()
+            opsDone.incrementAndGet()
             }
           }
         }
