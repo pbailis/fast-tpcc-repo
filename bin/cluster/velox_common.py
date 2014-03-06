@@ -11,7 +11,9 @@ VELOX_FRONTEND_PORT_START = 9000
 
 VELOX_BASE_DIR="/home/ubuntu/velox"
 
+HEAP_SIZE_GB_START = 240
 HEAP_SIZE_GB = 240
+CLIENT_HEAP_SIZE_GB_START = 240
 CLIENT_HEAP_SIZE_GB = 240
 
 VELOX_JAR_LOCATION = "assembly/target/scala-2.10/velox-assembly-0.1.jar"
@@ -25,6 +27,9 @@ VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 AMIs = {'us-west-2': 'ami-8885e5b8',
         'us-east-1': 'ami-b7dbe3de'}
 
+#gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
+gcstr = "  -XX:+UseParallelGC "
+
 def run_cmd(hosts, cmd, user="ubuntu", time=1000):
     cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
     print cmd
@@ -34,6 +39,8 @@ def run_cmd(hosts, cmd, user="ubuntu", time=1000):
 def run_cmd_single(host, cmd, user="ubuntu", time = None):
     cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
     print cmd
+    if time is not None:
+        cmd = "timeout "+str(time)+" "+cmd
     system(cmd)
 
 def run_cmd_single_bg(host, cmd, user="ubuntu", time = None):
@@ -105,8 +112,8 @@ def pprint(str):
 
 ## EC2 stuff
 
-def run_cmd_in_velox(hosts, cmd, user='ubuntu'):
-    run_cmd(hosts, "cd %s; %s" % (VELOX_BASE_DIR, cmd), user)
+def run_cmd_in_velox(hosts, cmd, user='ubuntu', time=1000):
+    run_cmd(hosts, "cd %s; %s" % (VELOX_BASE_DIR, cmd), user, time=time)
 
 class Cluster:
     def __init__(self, regionName, clusterID, numServers, numClients, serversPerMachine):
@@ -378,7 +385,7 @@ def rebuild_servers(remote, branch, deploy_key=None):
 
     pprint('Rebuilding clients and servers...')
     run_cmd_in_velox('all-hosts',
-                     ("rm *.log; git remote rm vremote; "
+                     ("rm *.log*; git remote rm vremote; "
                       "git remote add vremote %s; "
                       "git checkout master; "
                       "git branch -D veloxbranch; "
@@ -388,10 +395,12 @@ def rebuild_servers(remote, branch, deploy_key=None):
                       "sbt/sbt assembly; ") % (remote, branch, branch))
     pprint('Rebuilt to %s/%s!' % (remote, branch))
 
-def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, thread_handlers= False, outbound_conn_degree=1, **kwargs):
-    HEADER = "pkill -9 java; pkill -9 java; cd /home/ubuntu/velox/; sleep 10; rm *.log;"
+netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; sudo sysctl -w net.ipv4.tcp_wmem='4096 655360 125829120' > /dev/null; sudo sysctl -w net.ipv4.tcp_rmem='4096 655360 125829120' > /dev/null;  sudo sysctl -w net.core.rmem_max=125829120 > /dev/null; sudo sysctl -w net.core.wmem_max=125829120 >/dev/null;"
 
-    netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; "
+def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, thread_handlers= False, outbound_conn_degree=1, **kwargs):
+    HEADER = "sudo pkill -9 java; pkill -9 java; cd /home/ubuntu/velox/; sleep 10; rm *.log*;"
+
+
 
     HEADER+= netCmd
 
@@ -400,12 +409,12 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
+    baseCmd = HEADER+"java %s "+gcstr+" -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
                         pstr,
-                        HEAP_SIZE_GB,
+                        HEAP_SIZE_GB_START,
                         HEAP_SIZE_GB,
                         VELOX_JAR_LOCATION,
                         VELOX_SERVER_CLASS,
@@ -433,7 +442,7 @@ def start_servers_local(numservers, network_service, buffer_size, sweep_time, pr
 
     serverConfigStr = ",".join(["localhost:"+str(VELOX_INTERNAL_PORT_START+id) for id in range(0, numservers)])
 
-    baseCmd = "java %s -XX:+UseParallelGC -Xms128m -Xmx512m -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1> /tmp/server-%d.log 2>&1 &"
+    baseCmd = "java %s "+gcstr+" -Xms128m -Xmx512m -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d 1> /tmp/server-%d.log 2>&1 &"
 
 
     for sid in range(0, numservers):
@@ -475,15 +484,15 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         hprof += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
-    cmd = ("pkill -9 java; sleep 2; "
+    cmd = (netCmd+"sudo pkill -9 java;  pkill -9 java; sleep 5; "
            "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
-          (hprof, CLIENT_HEAP_SIZE_GB, CLIENT_HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
+          (hprof, CLIENT_HEAP_SIZE_GB_START, CLIENT_HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
 
     load_cmd = cmd.replace("--run", "--load").replace("--serializable", "")
-    run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd)
+    run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd, time=240)
 
-    run_cmd_in_velox("all-clients", cmd)
+    run_cmd_in_velox("all-clients", cmd, time=180)
 
 def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, numservers)])
