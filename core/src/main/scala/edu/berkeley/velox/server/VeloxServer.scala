@@ -95,7 +95,7 @@ class ServerHandlerThread(
 
 
       val cos = channel.getOutputStream
-      cos.write(len)
+      VeloxServer.writeInt(channel, len)
       cos.write(msgArr)
       cos.flush()
 
