@@ -107,6 +107,15 @@ object ClientBenchmark {
 
     val seqNo = new AtomicInteger()
 
+    new Thread(new Runnable {
+      override def run() {
+        while (true) {
+          logger.error(s"S ${SendStats.numSent} ${SendStats.bytesSent} R ${SendStats.numRecv} ${SendStats.bytesRecv} T ${SendStats.tryRecv} ${SendStats.tryBytesRecv}")
+          Thread.sleep(1000)
+        }
+      }
+    }).start()
+
     println(s"Starting $parallelism threads!")
 
     for(i <- 0 to numops) {

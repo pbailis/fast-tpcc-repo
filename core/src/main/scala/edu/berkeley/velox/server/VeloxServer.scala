@@ -26,24 +26,33 @@ object VeloxServer extends Logging {
   def main(args: Array[String]) {
     logger.info("Initializing Server")
     VeloxConfig.initialize(args)
+
+    new Thread(new Runnable {
+      override def run() {
+        while (true) {
+          logger.error(s"S ${SendStats.numSent} ${SendStats.bytesSent} R ${SendStats.numRecv} ${SendStats.bytesRecv} T ${SendStats.tryRecv} ${SendStats.tryBytesRecv}")
+          Thread.sleep(1000)
+        }
+      }
+    }).start()
+
     // initialize network service and message service
     val serverChannel = new ServerSocket(VeloxConfig.externalServerPort)
 
-    val connectionListener = new Thread {
-      override def run() {
-        // Grab references to memebers in the parent class
-      // Loop waiting for inbound connections
-      while (true) {
-        // Accept the client socket
-        val clientChannel = serverChannel.accept()
-        clientChannel.setTcpNoDelay(true)
-        // Get the bytes encoding the source partition Id
-        new ServerHandlerThread(clientChannel).start()
+    while (true) {
+      // Accept the client socket
+      val clientChannel = serverChannel.accept()
+      logger.error(s"got connection!")
+      clientChannel.setTcpNoDelay(true)
+      // Get the bytes encoding the source partition Id
+      new ServerHandlerThread(clientChannel).start()
 
-      }
-      }
     }
+
+
   }
+
+
 
   def getInt(socket: Socket): Int =  {
      val intArr = new Array[Byte](4)
