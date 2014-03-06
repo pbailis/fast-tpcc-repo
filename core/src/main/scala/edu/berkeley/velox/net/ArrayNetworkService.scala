@@ -30,14 +30,6 @@ class SocketBuffer(
   channel: SocketChannel,
   pool: SocketBufferPool) extends Logging {
 
-  var buf = ByteBuffer.allocate(VeloxConfig.bufferSize)
-  buf.position(4)
-
-  val writePos = new AtomicInteger(4)
-
-  val rwlock = new ReentrantReadWriteLock()
-
-
   /** Write bytes into this buffer
     *
     * @param bytes The bytes to write
@@ -45,36 +37,30 @@ class SocketBuffer(
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
-    KryoThreadLocal.synchronized {
-      rwlock.writeLock().lock()
-      val intBuf = ByteBuffer.allocate(4)
-      val len = (bytes.remaining())
+    val len = (bytes.remaining())
+      val intBuf = ByteBuffer.allocate(4+len)
       intBuf.putInt(len)
+      intBuf.put(bytes)
       intBuf.flip()
-      var wrote = 0
       //channel.socket().getOutputStream.write(intBuf.array())
       //val byteArr = new Array[Byte](len)
       //bytes.get(byteArr)
       //channel.socket().getOutputStream.write(byteArr)
       //channel.socket().getOutputStream.flush()
-      wrote += channel.write(intBuf)
-      wrote += channel.write(bytes)
-      rwlock.writeLock().unlock()
+      val wrote = channel.write(bytes)
 
-      //assert(wrote == len+4)
+      assert(wrote == len+4)
 
       SendStats.bytesSent.addAndGet(len+4)
       SendStats.numSent.incrementAndGet()
 
       return true
-    }
   }
 
   def id(): Int = System.identityHashCode(this)
 
   def printStatus() {
     val builder = new StringBuilder(s"${id} [${channel.socket().getLocalAddress.toString} <-> ${channel.socket().getRemoteSocketAddress.toString}] - ")
-    builder append s" pos: ${writePos.get}"
     println(builder.result)
   }
 
