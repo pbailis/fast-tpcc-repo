@@ -21,7 +21,7 @@ object ANSHelper {
     var read = 0
     val input = socket.getInputStream
     while(read != 4) {
-      input.read(intArr, read, 4)
+      read = input.read(intArr, read, 4)
     }
     ByteBuffer.wrap(intArr).getInt()
   }
