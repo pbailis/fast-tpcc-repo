@@ -9,7 +9,7 @@ import java.net.InetSocketAddress
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicBoolean,AtomicInteger}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
@@ -24,21 +24,28 @@ class SocketBuffer(
 
   val writePos = new AtomicInteger(4)
 
+  val lastPos = new AtomicInteger(0)
+
   val rwlock = new ReentrantReadWriteLock()
 
 
   /** Write bytes into this buffer
     *
     * @param bytes The bytes to write
+    * @param isSwapper Only to be set to true by the swap method
+    *                  to bypass the currentBuffer check
     *
     * @return true if data was written successfully, false otherwise
     */
-  def write(bytes: ByteBuffer): Boolean = {
-    if (!rwlock.readLock.tryLock)
+  def write(bytes: ByteBuffer, isSwapper: Boolean = false): Boolean = {
+    if (!rwlock.readLock.tryLock) {
+      if (isSwapper)
+        logger.warn("returning false on the swapper because can't get read lock (this is probably okay)")
       return false
+    }
 
     // ensure we're still looking at the right buffer
-    if (pool.currentBuffer != this) {
+    if (!isSwapper && pool.currentBuffer != this) {
       rwlock.readLock.unlock
       return false
     }
@@ -46,17 +53,30 @@ class SocketBuffer(
     val len = bytes.remaining
 
     val writeOffset = writePos.getAndAdd(len)
+    val endPos = writeOffset+len
     val ret =
-      if (writeOffset + len <= buf.limit) {
+      if (endPos <= buf.limit) {
         val dup = buf.duplicate
         dup.position(writeOffset)
         dup.put(bytes)
+
+        // We loop here and compareAndSet to make sure
+        // that the value we compare against hasn't been
+        // changed.  This prevents setting lastPos back
+        // to something smaller than it should be
+        var lpSet = false
+        while (!lpSet) {
+          val cur = lastPos.get
+          if (endPos > cur)
+            lpSet = lastPos.compareAndSet(cur,endPos)
+          else
+            lpSet = true
+        }
+
         rwlock.readLock.unlock
         true
       }
       else {
-        writePos.getAndAdd(-len)
-
         // can't upgrade to write lock, so unlock
         rwlock.readLock.unlock
         rwlock.writeLock.lock
@@ -69,6 +89,8 @@ class SocketBuffer(
           r
         }
         else {
+          if (isSwapper)
+            logger.error("Swapper trying to write more bytes than buffer size")
           rwlock.writeLock.unlock
           false
         }
@@ -84,24 +106,27 @@ class SocketBuffer(
     *
     */
   def send() {
+    assert(rwlock.writeLock.isHeldByCurrentThread)
     try {
 
-      if (writePos.get > 4) {
+      if (lastPos.get > 4) {
         buf.position(0)
 
         // write out full message length (minus 4 for these bytes)
-        buf.putInt(writePos.get-4)
-        buf.limit(writePos.get)
+        buf.putInt(lastPos.get-4)
+        buf.limit(lastPos.get)
         buf.position(0)
 
         // wrap the array and write it out
         val wrote = channel.write(buf)
+        assert(wrote == lastPos.get)
         pool.lastSent = System.currentTimeMillis
 
         // reset write position
         buf.clear
         buf.position(4)
         writePos.set(4)
+        lastPos.set(0)
       }
     } catch {
       case e: Exception => {
@@ -128,6 +153,8 @@ class SocketBufferPool(channel: SocketChannel)  {
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
 
+  val isForceSending = new AtomicBoolean(false)
+
   // Create an runnable that calls forceSend so we
   // don't have to create a new object every time
   val forceRunner = new Runnable() {
@@ -135,8 +162,10 @@ class SocketBufferPool(channel: SocketChannel)  {
   }
 
   def needSend(): Boolean = {
-    (currentBuffer.writePos.get > 4) &&
-    ((System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime)
+    if ( (currentBuffer.writePos.get > 4) &&
+         ((System.currentTimeMillis - lastSent) > VeloxConfig.sweepTime) ) {
+      isForceSending.compareAndSet(false,true)
+    } else false
   }
 
   def send(bytes: ByteBuffer) {
@@ -160,7 +189,7 @@ class SocketBufferPool(channel: SocketChannel)  {
 
     val ret =
       if (bytes != null)
-        newBuf.write(bytes)
+        newBuf.write(bytes,true)
       else
         false
 
@@ -186,6 +215,7 @@ class SocketBufferPool(channel: SocketChannel)  {
     buf.rwlock.writeLock.unlock()
     if (didsend)
       returnBuffer(buf)
+    isForceSending.set(false)
   }
 
 }
