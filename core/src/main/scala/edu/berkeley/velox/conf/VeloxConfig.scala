@@ -1,6 +1,6 @@
 package edu.berkeley.velox.conf
 
-import edu.berkeley.velox.net.{MultiConnectArrayNetworkService, NetworkService, ArrayNetworkService}
+import edu.berkeley.velox.net.{NetworkService, ArrayNetworkService}
 import java.net.InetSocketAddress
 import edu.berkeley.velox.NetworkDestinationHandle
 import com.typesafe.scalalogging.slf4j.Logging
@@ -71,10 +71,7 @@ object VeloxConfig extends Logging {
     println("Getting network service")
     networkService match {
       case "array" => {
-        if(outbound_conn_degree == 1)
           new ArrayNetworkService(performIDHandshake,tcpNoDelay,serverID)
-        else
-          new MultiConnectArrayNetworkService(performIDHandshake, tcpNoDelay, serverID)
       }
       case _ => throw new Exception(s"Invalid network service type $networkService")
     }

@@ -4,9 +4,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.NetworkDestinationHandle
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.MessageService
-import java.net.InetSocketAddress
+import java.net.{ServerSocket, Socket, InetSocketAddress}
 import java.nio.ByteBuffer
-import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
@@ -15,6 +14,24 @@ import scala.util.Random
 import scala.collection.JavaConverters._
 import edu.berkeley.velox.util.KryoThreadLocal
 
+object ANSHelper {
+
+  def getInt(socket: Socket): Int =  {
+    val intArr = new Array[Byte](4)
+    var read = 0
+    val input = socket.getInputStream
+    while(read != 4) {
+      input.read(intArr, read, 4)
+    }
+    ByteBuffer.wrap(intArr).getInt()
+  }
+
+  def writeInt(socket: Socket, i: Int) {
+    val intArr = ByteBuffer.wrap(new Array[Byte](4)).putInt(i).array()
+    socket.getOutputStream.write(intArr)
+    socket.getOutputStream.flush()
+  }
+}
 
 object SendStats {
   val numSent = new AtomicLong
@@ -27,7 +44,7 @@ object SendStats {
 }
 
 class SocketBuffer(
-  channel: SocketChannel,
+  channel: Socket,
   pool: SocketBufferPool) extends Logging {
 
   /** Write bytes into this buffer
@@ -37,36 +54,30 @@ class SocketBuffer(
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer): Boolean = {
+    channel.synchronized {
     val len = (bytes.remaining())
-      val intBuf = ByteBuffer.allocate(4+len)
-      intBuf.putInt(len)
-      intBuf.put(bytes)
-      intBuf.flip()
-      //channel.socket().getOutputStream.write(intBuf.array())
-      //val byteArr = new Array[Byte](len)
-      //bytes.get(byteArr)
-      //channel.socket().getOutputStream.write(byteArr)
-      //channel.socket().getOutputStream.flush()
-      val wrote = channel.write(intBuf)
+    val intBuf = ByteBuffer.allocate(4+len)
+    intBuf.putInt(len)
+    intBuf.put(bytes)
+    intBuf.flip()
 
-      assert(wrote == len+4)
+    val wrote = channel.getOutputStream.write(intBuf.array())
+    channel.getOutputStream.flush()
 
-      SendStats.bytesSent.addAndGet(len+4)
-      SendStats.numSent.incrementAndGet()
+    assert(wrote == len+4)
+
+    SendStats.bytesSent.addAndGet(len+4)
+    SendStats.numSent.incrementAndGet()
 
       return true
+    }
   }
 
   def id(): Int = System.identityHashCode(this)
 
-  def printStatus() {
-    val builder = new StringBuilder(s"${id} [${channel.socket().getLocalAddress.toString} <-> ${channel.socket().getRemoteSocketAddress.toString}] - ")
-    println(builder.result)
-  }
-
 }
 
-class SocketBufferPool(channel: SocketChannel)  {
+class SocketBufferPool(channel: Socket)  {
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
 
 
@@ -106,7 +117,7 @@ class Receiver(
 
 class ReaderThread(
   name: String,
-  channel: SocketChannel,
+  channel: Socket,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
@@ -117,9 +128,7 @@ class ReaderThread(
     var missing = -1
     while(true) {
 
-      val intBuf = new Array[Byte](4)
-      channel.socket().getInputStream.read(intBuf)
-      val len = ByteBuffer.wrap(intBuf).getInt()
+      val len = ANSHelper.getInt(channel)
 
       SendStats.tryRecv.incrementAndGet()
       SendStats.tryBytesRecv.addAndGet(len)
@@ -127,7 +136,9 @@ class ReaderThread(
 
       var readBytes = 0
       val msgArr = new Array[Byte](len)
-       readBytes += channel.socket().getInputStream.read(msgArr)
+      while(readBytes != len) {
+        readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
+      }
       assert(readBytes == len)
 
       SendStats.bytesRecv.addAndGet(len+4)
@@ -137,102 +148,6 @@ class ReaderThread(
 
       executor.submit(new Receiver(msgBuf, src, messageService))
 
-      /*
-
-      var intBuf = ByteBuffer.allocate(4)
-      channel.read(intBuf)
-      intBuf.flip()
-      val len = intBuf.getInt()
-
-      assert(len != 0)
-
-      SendStats.tryRecv.incrementAndGet()
-      SendStats.tryBytesRecv.addAndGet(len)
-
-      var readBytes = 0
-
-      val msgBuf = ByteBuffer.allocate(len)
-      while(readBytes != len) {
-        val read = channel.read(msgBuf)
-        if(read == -1) {
-          logger.error(s"read negative one!")
-        }
-        readBytes += read
-      }
-
-      msgBuf.flip()
-
-      SendStats.bytesRecv.addAndGet(len+4)
-      SendStats.numRecv.incrementAndGet()
-
-      executor.submit(new Receiver(msgBuf, src, messageService))
-      */
-
-      /*
-
-      if(missing != -1) {
-        logger.error(s"missing $missing bytes! $readBuffer")
-      }
-
-      var read = readBuffer.position
-
-      read += channel.read(readBuffer)
-
-      if(missing != -1) {
-        logger.error(s"was missing $missing bytes! $read $readBuffer")
-      }
-
-
-      var allocedBuffer = false
-
-      if (read >= 4) {
-        readBuffer.flip
-
-        var len = readBuffer.getInt
-
-        if (readBuffer.remaining == len) { // perfect read
-          executor.submit(new Receiver(readBuffer,src,messageService))
-
-          readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
-          allocedBuffer = true
-          len = -1 // prevent attempt to copy len below
-        }
-        else {
-
-          while (len != -1 && readBuffer.remaining >= len) { // read enough
-            if (len > VeloxConfig.bufferSize) {
-              println(s"OHH NO LEN TO BIG $len")
-            }
-
-            val msgBuf = ByteBuffer.allocate(len)
-            val oldLim = readBuffer.limit
-            readBuffer.limit(readBuffer.position+len)
-            msgBuf.put(readBuffer)
-            readBuffer.limit(oldLim)
-            msgBuf.flip
-            executor.submit(new Receiver(msgBuf,src,messageService))
-
-            if (readBuffer.remaining > 4)
-              len = readBuffer.getInt
-            else
-              len = -1 // indicate we can't put the whole int
-          }
-        }
-
-        if (len != -1) {
-          missing = len
-
-          readBuffer.position(readBuffer.position-4)
-          readBuffer.putInt(len)
-          readBuffer.position(readBuffer.position-4)
-        } else {
-          missing = -1
-        }
-
-        if (!allocedBuffer) // compact on a new buffer is bad
-          readBuffer.compact
-      }
-      */
     }
   }
 }
@@ -268,6 +183,8 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   val name = "ANS"
 
   var executor: ExecutorService = null
+
+
 
   def setExecutor(toSet: ExecutorService = null): ExecutorService = {
     if(toSet != null) {
@@ -315,17 +232,14 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
     while(true) {
       try {
-        val clientChannel = SocketChannel.open()
+        val clientChannel = new Socket
         clientChannel.connect(address)
-        clientChannel.socket().setTcpNoDelay(true)
+        clientChannel.setTcpNoDelay(true)
         assert(clientChannel.isConnected)
 
 
         if(performIDHandshake) {
-          val shakeArray = ByteBuffer.allocate(4)
-          shakeArray.putInt(serverID)
-          shakeArray.flip()
-          clientChannel.write(shakeArray)
+          ANSHelper.writeInt(clientChannel, serverID)
         }
         _registerConnection(handle, clientChannel)
         return;
@@ -348,20 +262,19 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
     * This will start a thread to read from the channel
     * and allow sends to this channel through the service
     */
-  def _registerConnection(partitionId: NetworkDestinationHandle, channel: SocketChannel) {
+  def _registerConnection(partitionId: NetworkDestinationHandle, channel: Socket) {
     val bufPool = new SocketBufferPool(channel)
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
-      new ReaderThread(name, channel, executor, partitionId, messageService, channel.socket().getRemoteSocketAddress.toString).start
+      new ReaderThread(name, channel, executor, partitionId, messageService, channel.getRemoteSocketAddress.toString).start
       connectionSemaphore.release
     }
   }
 
   override def configureInboundListener(port: Integer) {
-    val serverChannel = ServerSocketChannel.open()
+    val serverChannel = new ServerSocket(port)
     logger.info("Listening on: "+port)
-    serverChannel.socket.bind(new InetSocketAddress(port))
 
     val connectionListener = new Thread {
       override def run() {
@@ -370,18 +283,13 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
         // Loop waiting for inbound connections
         while (true) {
           // Accept the client socket
-          val clientChannel: SocketChannel = serverChannel.accept
-          clientChannel.socket.setTcpNoDelay(true)
+          val clientChannel = serverChannel.accept()
+          clientChannel.setTcpNoDelay(true)
           // Get the bytes encoding the source partition Id
           var connectionId: NetworkDestinationHandle = -1;
           if(performIDHandshake) {
-            val shakeBuf = ByteBuffer.allocate(4)
-            while(shakeBuf.hasRemaining) {
-              val bytesRead = clientChannel.read(shakeBuf)
-            }
-            // Read the partition id
-            shakeBuf.rewind()
-            connectionId = shakeBuf.getInt()
+
+            connectionId = ANSHelper.getInt(clientChannel)
           } else {
             connectionId = nextConnectionID.decrementAndGet();
           }
@@ -418,5 +326,4 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
 
     connections.remove(which)
   }
-
 }
