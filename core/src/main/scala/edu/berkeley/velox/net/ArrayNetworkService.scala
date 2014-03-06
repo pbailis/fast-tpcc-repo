@@ -61,10 +61,8 @@ class SocketBuffer(
     intBuf.put(bytes)
     intBuf.flip()
 
-    val wrote = channel.getOutputStream.write(intBuf.array())
+    channel.getOutputStream.write(intBuf.array())
     channel.getOutputStream.flush()
-
-    assert(wrote == len+4)
 
     SendStats.bytesSent.addAndGet(len+4)
     SendStats.numSent.incrementAndGet()
