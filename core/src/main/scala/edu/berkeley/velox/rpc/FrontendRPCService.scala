@@ -16,7 +16,7 @@ class FrontendRPCService(partitionId: NetworkDestinationHandle) extends MessageS
   networkService.setMessageService(this)
   
   override def initialize() {
-    logger.info(s"${VeloxConfig.serverIpAddress} starting frontend RPC on port ${VeloxConfig.externalServerPort}")
+    logger.warn(s"${VeloxConfig.serverIpAddress} starting frontend RPC on port ${VeloxConfig.externalServerPort}")
 
     configureInboundListener(VeloxConfig.externalServerPort)
     networkService.start()

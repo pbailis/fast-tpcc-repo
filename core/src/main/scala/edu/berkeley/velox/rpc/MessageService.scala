@@ -92,13 +92,24 @@ abstract class MessageService extends Logging {
 
   def sendAll[R](msg: Request[R]): Seq[Future[R]] = {
    val ret = networkService.getConnections map { c =>
+     val p = Promise[R]
+      val reqId = nextRequestId.getAndIncrement()
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+      networkService.send(c, serializeMessage(reqId, msg, isRequest=true))
+      p.future
+    }
+    ret.toArray :+ send(serviceID, msg)
+  }
+
+  def sendAllRemote[R](msg: Request[R]): Seq[Future[R]] = {
+    val ret = networkService.getConnections map { c =>
       val p = Promise[R]
       val reqId = nextRequestId.getAndIncrement()
       requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
       networkService.send(c, serializeMessage(reqId, msg, isRequest=true))
       p.future
     }
-     ret.toArray :+ send(serviceID, msg)
+    ret.toSeq
   }
 
   private def sendResponse(dst: NetworkDestinationHandle, requestId: RequestId, response: Any) {
@@ -143,7 +154,7 @@ abstract class MessageService extends Logging {
   // doesn't block, but does set up a handler that will deliver the message when it's ready
   private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any): Unit = {
     val key = msg.getClass().hashCode()
-    assert(handlers.containsKey(key))
+    assert(handlers.containsKey(key), {println(s"Assert failed: handlers does not contain ${msg.getClass.getName}")})
     val h = handlers.get(key)
 
     assert(h != null)

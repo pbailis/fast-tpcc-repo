@@ -2,7 +2,7 @@ package edu.berkeley.velox.storage
 
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox._
-import edu.berkeley.velox.catalog.Catalog
+import edu.berkeley.velox.catalog.ServerCatalog
 import edu.berkeley.velox.datamodel._
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.JavaConverters._
@@ -15,7 +15,7 @@ class HashMapStorageManager extends StorageManager with Logging {
   // no error handling.
   val dbs = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, Table]]()
 
-  Catalog.registerStorageManager(this,true)
+  ServerCatalog.registerStorageManager(this,true)
 
   /**
    * Create a new database. Nop if db already exists.
@@ -51,7 +51,7 @@ class HashMapStorageManager extends StorageManager with Logging {
     var i = 0
     insertSet.getRows foreach {
       r => {
-        table.insert(Catalog.extractPrimaryKey(databaseName, tableName, r), r)
+        table.insert(ServerCatalog.extractPrimaryKey(databaseName, tableName, r), r)
         i+=1
       }
     }
@@ -65,7 +65,7 @@ class HashMapStorageManager extends StorageManager with Logging {
       case Some(p) => {
         p match {
           case eqp: EqualityPredicate =>
-            Catalog.isPrimaryKeyFor(databaseName,
+            ServerCatalog.isPrimaryKeyFor(databaseName,
                                     tableName,
                                     eqp.column)
           case _ => false

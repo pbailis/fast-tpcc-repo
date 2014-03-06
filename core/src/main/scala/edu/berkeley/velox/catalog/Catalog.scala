@@ -1,46 +1,25 @@
 package edu.berkeley.velox.catalog
 
-import edu.berkeley.velox.server.ZKClient
-import edu.berkeley.velox.storage.StorageManager
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.datamodel._
-import edu.berkeley.velox.datamodel.PrimaryKey
-import edu.berkeley.velox.datamodel.Schema
 import scala.collection.immutable.HashMap
+import edu.berkeley.velox.datamodel._
+import scala.Some
+import scala.Some
+import edu.berkeley.velox.storage.StorageManager
+import scala.Some
+import edu.berkeley.velox.server.ServerZookeeperConnection
+import scala.Some
+import scala.Some
+import edu.berkeley.velox.datamodel.PrimaryKey
+import scala.Some
+import edu.berkeley.velox.datamodel.ColumnLabel
+import edu.berkeley.velox.frontend.ClientZookeeperConnection
 
-object Catalog extends Logging {
+trait Catalog extends Logging {
+
 
   @volatile
-  private var schemas = new HashMap[DatabaseName, HashMap[TableName, Schema]]
-
-  @volatile
-  private var storageManagers: List[StorageManager] = Nil
-
-  /**
-    *  Register a storage manager with the catalog.  After registration the
-    *  storage manager will be informed of all relevant updates to the Catalog.
-    *
-    *  @param manager The storage manager to register
-    *  @param notifyExisting if true, the manager will be notified of currently
-    *                        existing objects in the catalog
-    */
-  def registerStorageManager(manager: StorageManager, notifyExisting: Boolean = false) {
-    storageManagers.synchronized {
-      storageManagers ::= manager
-    }
-    if (notifyExisting) {
-      schemas.synchronized {
-        schemas.foreach {
-          case (dbname,tables) => {
-            manager.createDatabase(dbname)
-            tables.foreach {
-              case (tablename,schema) => manager.createTable(dbname,tablename)
-            }
-          }
-        }
-      }
-    }
-  }
+  protected var schemas = new HashMap[DatabaseName, HashMap[TableName, Schema]]
 
   def getSchema(db: DatabaseName, table: TableName): Schema = {
     schemas.get(db) match {
@@ -58,63 +37,11 @@ object Catalog extends Logging {
     schemas.keySet
   }
 
-  def createDatabase(dbName: DatabaseName): Boolean = {
-    logger.info(s"Creating database $dbName")
-    ZKClient.createDatabase(dbName)
-  }
-
-  def createTable(dbName: DatabaseName, tableName: TableName, schema: Schema): Boolean = {
-    logger.info(s"Creating table $dbName:$tableName")
-    ZKClient.createTable(dbName, tableName, schema)
-  }
-
-  /**
-   * Create a new database instance
-   * @param db The name of the database
-   * @return true if the database was created, false if it already existed
-   */
-  def _createDatabaseTrigger(db: DatabaseName): Boolean = {
-    if (schemas.contains(db)) false
-    else {
-      schemas.synchronized {
-        schemas += ((db, new HashMap[TableName, Schema]))
-      }
-      storageManagers foreach (_.createDatabase(db))
-      true
-    }
-  }
 
   def listLocalTables(db: DatabaseName): Set[TableName] = {
     schemas.get(db) match {
       case Some(tm) => tm.keySet
       case None => null
-    }
-  }
-
-  def _createTableTrigger(db: DatabaseName, table: TableName, schema: Schema): Unit = {
-    val tm = schemas.getOrElse(db,throw new IllegalStateException(s"Trying to add table $table to database $db which doesn't exist"))
-    if (tm.contains(table)) {
-      val existing = tm(table)
-      if (!schema.equals(existing))
-        throw new IllegalStateException(s"Trying to modify schema for $table. Not supported!")
-      else
-        logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
-    }
-    else {
-      schemas.synchronized {
-        // recheck for race condition
-        if (tm.contains(table)) {
-          val existing = tm(table)
-          if (!schema.equals(existing))
-            throw new IllegalStateException(s"Trying to modify schema for $table. Not supported!")
-          else
-            logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
-        } else {
-          val newMap = tm + ((table,schema))
-          schemas += ((db,newMap))
-        }
-      }
-      storageManagers foreach (_.createTable(db,table))
     }
   }
 
@@ -136,9 +63,9 @@ object Catalog extends Logging {
       false
     } else if (checkTableExistsLocal(db, table)) {
       true
-    } else if (ZKClient.checkTableExistsZookeeper(db, table)) {
+    } else if (ServerZookeeperConnection.checkTableExistsZookeeper(db, table)) {
       // add to local schema if table exists in zookeeper but not locally
-      val schema = ZKClient.getSchemaFor(db,table)
+      val schema = ServerZookeeperConnection.getSchemaFor(db,table)
       _createTableTrigger(db,table,schema)
       true
     } else {
@@ -168,5 +95,68 @@ object Catalog extends Logging {
     )
 
     new PrimaryKey(ret)
+  }
+
+  def initializeSchemaFromZK() = {
+    val dbs = ClientZookeeperConnection.listZookeeperDBs()
+    logger.error("Initializing schema from zookeeper")
+    dbs.foreach{  db =>
+      _createDatabaseTrigger(db)
+      logger.error(s"created database trigger for $db, client tables are ${ClientZookeeperConnection.listZookeeperTables(db)}")
+      ClientZookeeperConnection.listZookeeperTables(db).map {
+        case (k, v) =>
+          logger.error("init schema success")
+          _createTableTrigger(db, k, v)
+      }
+    }
+  }
+
+  /**
+   * Create a new database instance
+   * @param db The name of the database
+   * @return true if the database was created, false if it already existed
+   */
+  def _createDatabaseTrigger(db: DatabaseName): Boolean = {
+    if (schemas.contains(db)) false
+    else {
+      schemas.synchronized {
+        schemas += ((db, new HashMap[TableName, Schema]))
+      }
+//      storageManagers foreach (_.createDatabase(db))
+      true
+    }
+  }
+
+  def _createTableTrigger(db: DatabaseName, table: TableName, schema: Schema): Boolean = {
+    val tm = schemas.getOrElse(db,throw new IllegalStateException(s"Trying to add table $table to database $db which doesn't exist"))
+    if (tm.contains(table)) {
+      val existing = tm(table)
+      if (!schema.equals(existing)) {
+        throw new IllegalStateException(s"Trying to modify schema for $table. Not supported!")
+      }
+      else {
+        logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
+      }
+      false
+    }
+    else {
+      schemas.synchronized {
+        // recheck for race condition
+        if (tm.contains(table)) {
+          val existing = tm(table)
+          if (!schema.equals(existing)) {
+            throw new IllegalStateException(s"Trying to modify schema for $table. Not supported!")
+          }
+          else {
+            logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
+            false
+          }
+        } else {
+          val newMap = tm + ((table,schema))
+          schemas += ((db,newMap))
+        }
+      }
+      true
+    }
   }
 }
