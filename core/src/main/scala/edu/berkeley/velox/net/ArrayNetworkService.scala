@@ -47,7 +47,7 @@ class SocketBuffer(
       //bytes.get(byteArr)
       //channel.socket().getOutputStream.write(byteArr)
       //channel.socket().getOutputStream.flush()
-      val wrote = channel.write(bytes)
+      val wrote = channel.write(intBuf)
 
       assert(wrote == len+4)
 
