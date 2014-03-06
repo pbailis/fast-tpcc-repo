@@ -13,35 +13,14 @@ import scala.collection.mutable.StringBuilder
 import scala.util.Random
 import scala.collection.JavaConverters._
 import edu.berkeley.velox.util.KryoThreadLocal
+import edu.berkeley.velox.server.SendStats
 
 object ANSHelper {
 
-  def getInt(socket: Socket): Int =  {
-    val intArr = new Array[Byte](4)
-    var read = 0
-    val input = socket.getInputStream
-    while(read != 4) {
-      read = input.read(intArr, read, 4)
-    }
-    ByteBuffer.wrap(intArr).getInt()
-  }
-
-  def writeInt(socket: Socket, i: Int) {
-    val intArr = ByteBuffer.wrap(new Array[Byte](4)).putInt(i).array()
-    socket.getOutputStream.write(intArr)
-    socket.getOutputStream.flush()
-  }
-}
-
-object SendStats {
-  val numSent = new AtomicLong
-  val bytesSent = new AtomicLong
-  val numRecv = new AtomicLong
-  val bytesRecv = new AtomicLong
-  val tryRecv = new AtomicLong
-  val tryBytesRecv = new AtomicLong
 
 }
+
+
 
 class SocketBuffer(
   channel: Socket,
@@ -71,9 +50,6 @@ class SocketBuffer(
       return true
     }
   }
-
-  def id(): Int = System.identityHashCode(this)
-
 }
 
 class SocketBufferPool(channel: Socket)  {
@@ -85,10 +61,7 @@ class SocketBufferPool(channel: Socket)  {
   }
 
   def send(bytes: ByteBuffer) {
-    var sent = false
-    while(!sent) {
-      sent = currentBuffer.write(bytes)
-    }
+     currentBuffer.write(bytes)
   }
 
 }
@@ -114,66 +87,8 @@ class Receiver(
 
 }
 
-class ReaderThread(
-  name: String,
-  channel: Socket,
-  executor: ExecutorService,
-  src: NetworkDestinationHandle,
-  messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") with Logging {
-
-  override def run() {
-    var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
-    var missing = -1
-    while(true) {
-
-      val len = ANSHelper.getInt(channel)
-
-      SendStats.tryRecv.incrementAndGet()
-      SendStats.tryBytesRecv.addAndGet(len)
 
 
-      var readBytes = 0
-      val msgArr = new Array[Byte](len)
-      while(readBytes != len) {
-        readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
-      }
-      assert(readBytes == len)
-
-      SendStats.bytesRecv.addAndGet(len+4)
-      SendStats.numRecv.incrementAndGet()
-
-      val msgBuf = ByteBuffer.wrap(msgArr)
-
-      executor.submit(new Receiver(msgBuf, src, messageService))
-
-    }
-  }
-}
-
-class SendSweeper(
-  connections: ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool],
-  executor: ExecutorService) extends Runnable with Logging {
-
-  def run() {
-
-  }
-
-}
-
-class ArrayNetworkThreadFactory(val name: String) extends ThreadFactory {
-
-  val defaultFactory = Executors.defaultThreadFactory
-  var threadIdx = new AtomicInteger(0)
-
-  override
-  def newThread(r: Runnable):Thread = {
-    val t = defaultFactory.newThread(r)
-    val tid = threadIdx.getAndIncrement()
-    t.setName(s"ArrayNetworkServiceThread-$name-$tid")
-    t
-  }
-}
 
 class ArrayNetworkService(val performIDHandshake: Boolean = false,
   val tcpNoDelay: Boolean = true,
@@ -225,7 +140,6 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
   }
 
   def start() {
-    new Thread(new SendSweeper(connections,executor), s"Sweeper-").start
   }
 
   override def connect(handle: NetworkDestinationHandle, address: InetSocketAddress) {
@@ -238,7 +152,6 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
 
 
         if(performIDHandshake) {
-          ANSHelper.writeInt(clientChannel, serverID)
         }
         _registerConnection(handle, clientChannel)
         return;
@@ -266,7 +179,6 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
       logger.info(s"Adding connection from $partitionId")
       // start up a read thread
-      new ReaderThread(name, channel, executor, partitionId, messageService, channel.getRemoteSocketAddress.toString).start
       connectionSemaphore.release
     }
   }
@@ -288,7 +200,6 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
           var connectionId: NetworkDestinationHandle = -1;
           if(performIDHandshake) {
 
-            connectionId = ANSHelper.getInt(clientChannel)
           } else {
             connectionId = nextConnectionID.decrementAndGet();
           }

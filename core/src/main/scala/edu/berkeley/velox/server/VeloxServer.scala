@@ -17,45 +17,91 @@ import edu.berkeley.velox.benchmark.operation.serializable.TPCCNewOrderSerializa
 import java.util.Collections
 
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import java.net.{Socket, ServerSocket}
+import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicLong
 
-// Every server has a single instance of this class. It handles data edu.berkeley.velox.storage
-// and serves client requests. Data is stored in a concurrent hash map.
-// As requests come in and are served, the hashmap is accessed concurrently
-// by the thread executing the message handlers (and the handlers have a
-// reference to the map. For now, the server is oblivious to the keyrange
-// it owns. It depends on the routing service to route only the correct
-// keys to it.
-
-class VeloxServer extends Logging {
-  // create the message service first, register handlers, then start the network
-  val frontendServer = new FrontendRPCService
-  frontendServer.networkService.setExecutor()
-
-  frontendServer.registerHandler(new SequenceNumberHandler)
-
-  frontendServer.initialize()
-
-  /*
-   * Handlers for front-end requests.
-   */
-
-
-  class SequenceNumberHandler extends MessageHandler[Long, SequenceNumberReq] {
-    def receive(src: NetworkDestinationHandle, msg: SequenceNumberReq): Future[Long] = {
-      future {
-        msg.reqId
-      }
-    }
-  }
-}
 
 object VeloxServer extends Logging {
   def main(args: Array[String]) {
     logger.info("Initializing Server")
     VeloxConfig.initialize(args)
     // initialize network service and message service
-    new VeloxServer
+    val serverChannel = new ServerSocket(VeloxConfig.externalServerPort)
+
+    val connectionListener = new Thread {
+      override def run() {
+        // Grab references to memebers in the parent class
+      // Loop waiting for inbound connections
+      while (true) {
+        // Accept the client socket
+        val clientChannel = serverChannel.accept()
+        clientChannel.setTcpNoDelay(true)
+        // Get the bytes encoding the source partition Id
+        new ServerHandlerThread(clientChannel).start()
+
+      }
+      }
+    }
+  }
+
+  def getInt(socket: Socket): Int =  {
+     val intArr = new Array[Byte](4)
+     var read = 0
+     val input = socket.getInputStream
+     while(read != 4) {
+       read = input.read(intArr, read, 4)
+     }
+     ByteBuffer.wrap(intArr).getInt()
+   }
+
+   def writeInt(socket: Socket, i: Int) {
+     val intArr = ByteBuffer.wrap(new Array[Byte](4)).putInt(i).array()
+     socket.getOutputStream.write(intArr)
+     socket.getOutputStream.flush()
+   }
+}
+
+
+class ServerHandlerThread(
+  channel: Socket) extends Thread {
+  override def run() {
+    while(true) {
+
+      val len = VeloxServer.getInt(channel)
+
+      SendStats.tryRecv.incrementAndGet()
+      SendStats.tryBytesRecv.addAndGet(len)
+
+
+      var readBytes = 0
+      val msgArr = new Array[Byte](len)
+      while(readBytes != len) {
+        readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
+      }
+      assert(readBytes == len)
+
+      SendStats.bytesRecv.addAndGet(len+4)
+      SendStats.numRecv.incrementAndGet()
+
+
+      val cos = channel.getOutputStream
+      cos.write(len)
+      cos.write(msgArr)
+      cos.flush()
+
+      SendStats.bytesSent.addAndGet(4+msgArr.size)
+      SendStats.numSent.incrementAndGet()
+    }
   }
 }
 
-class SequenceNumberReq(val reqId: Long) extends Request[Long]
+object SendStats {
+  val numSent = new AtomicLong
+  val bytesSent = new AtomicLong
+  val numRecv = new AtomicLong
+  val bytesRecv = new AtomicLong
+  val tryRecv = new AtomicLong
+  val tryBytesRecv = new AtomicLong
+
+}

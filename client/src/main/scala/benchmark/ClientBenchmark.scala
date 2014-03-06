@@ -4,7 +4,7 @@ import edu.berkeley.velox.conf.VeloxConfig
 import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 import scala.util.Random
 import edu.berkeley.velox.frontend.VeloxConnection
-import java.net.InetSocketAddress
+import java.net.{Socket, InetSocketAddress}
 
 import scala.util.{Success, Failure}
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -14,14 +14,16 @@ import scala.concurrent.duration.Duration
 import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderRequest, TPCCNewOrderResponse}
 import edu.berkeley.velox.benchmark.util.RandomGenerator
 import java.util._
-import java.util.concurrent.Semaphore
-import edu.berkeley.velox.server.SequenceNumberReq
+import java.util.concurrent.{LinkedBlockingQueue, Semaphore}
+import edu.berkeley.velox.server.{SendStats, VeloxServer}
+import java.nio.ByteBuffer
 
 
 object ClientBenchmark {
   var totalWarehouses = -1
   val generator = new RandomGenerator
 
+  val freeNumbers = new LinkedBlockingQueue[Int]()
 
   def main(args: Array[String]) {
     val numAborts = new AtomicInteger()
@@ -96,48 +98,42 @@ object ClientBenchmark {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
 
-    val client = new VeloxConnection(clusterAddresses, connection_parallelism)
+    val clientChannel = new Socket
+    clientChannel.connect(clusterAddresses(0))
+    clientChannel.setTcpNoDelay(true)
 
-    totalWarehouses = clusterAddresses.size*warehouses_per_server
-
-    if(load) {
-      println(s"Loading $totalWarehouses warehouses...}")
-      val loadFuture = Future.sequence((1 to totalWarehouses).map(wh => client.loadTPCC(wh)))
-      Await.result(loadFuture, Duration.Inf)
-      println(s"...loaded ${totalWarehouses} warehouses")
-    }
-
-    if(!run) {
-      System.exit(0)
-    }
 
     @volatile var finished = false
-    val requestSem = new Semaphore(0)
 
 
     val seqNo = new AtomicInteger()
 
     println(s"Starting $parallelism threads!")
 
+    for(i <- 0 to numops) {
+      freeNumbers.add(i)
+    }
+
     for (i <- 0 to parallelism) {
       new Thread(new Runnable {
         val rand = new Random
         override def run() = {
           while (!finished) {
-            requestSem.acquireUninterruptibly()
+            val toSend = freeNumbers.poll()
 
-            val request = client.send(new SequenceNumberReq(seqNo.incrementAndGet()))
-            request onComplete {
-              case Success(value) => {
-                opsDone.incrementAndGet
-                requestSem.release
-              }
-              case Failure(t) => println("An error has occured: " + t.getMessage)
+            clientChannel.synchronized {
+            val cchannel = clientChannel.getOutputStream
+            val toSendBuf = ByteBuffer.allocate(8)
+            toSendBuf.putInt(4)
+            toSendBuf.putInt(toSend)
+            cchannel.write(toSendBuf.array())
+            SendStats.bytesSent.addAndGet(8)
+            SendStats.numSent.incrementAndGet()
+            cchannel.flush()
             }
           }
         }
-      }).start
-    }
+      }).start()
 
     if(status_time > 0) {
       new Thread(new Runnable {
@@ -155,7 +151,6 @@ object ClientBenchmark {
       }).start
     }
 
-    requestSem.release(numops)
     val ostart = System.nanoTime
 
     Thread.sleep(waitTimeSeconds * 1000)
@@ -172,48 +167,30 @@ object ClientBenchmark {
     System.exit(0)
   }
 
-  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, serializable: Boolean = false, pct_test: Boolean = false): OutstandingNewOrderRequest = {
-    val W_ID = generator.number(1, totalWarehouses)
-    val D_ID: Int = generator.number(1, 10)
-    val C_ID: Int = generator.NURand(1023, 1, 3000)
-    val OL_CNT: Int = generator.number(5, 15)
-    val rollback: Boolean = generator.nextDouble < .01
-    var warehouseIDs = new ArrayList[Int]()
+  class ReaderThread(
+    channel: Socket) extends Thread {
+    override def run() {
+      while(true) {
 
-    for(i <- 1 to OL_CNT) {
-      var O_W_ID = W_ID
-      if (totalWarehouses > 1) {
-        if(!pct_test && generator.nextDouble() < chance_remote) {
-          O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
+        val len = VeloxServer.getInt(channel)
 
+        SendStats.tryRecv.incrementAndGet()
+        SendStats.tryBytesRecv.addAndGet(len)
+
+
+        var readBytes = 0
+        val msgArr = new Array[Byte](len)
+        while(readBytes != len) {
+          readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
         }
-        // in the remote tests, we want to precisely control the number of remote txns, so we
-        // only make the first item have a remote id
-        else if(pct_test && i == 1 && generator.nextDouble() < chance_remote) {
-          O_W_ID = generator.numberExcluding(1, totalWarehouses, W_ID)
-        }
+        assert(readBytes == len)
+
+        SendStats.bytesRecv.addAndGet(len+4)
+        SendStats.numRecv.incrementAndGet()
+
+
+        freeNumbers.add(ByteBuffer.wrap(msgArr).getInt())
       }
-
-      warehouseIDs.add(O_W_ID)
     }
-
-    var OL_I_IDs = new ArrayList[Int]()
-    var OL_QUANTITY_LIST = new ArrayList[Int]()
-
-    for(ol_cnt <- 1 to OL_CNT) {
-      var OL_I_ID = generator.NURand(8191, 1, 100000)
-      if(rollback && ol_cnt == OL_CNT) {
-        OL_I_ID = -1
-      }
-
-      OL_I_IDs.add(OL_I_ID)
-      OL_QUANTITY_LIST.add(generator.number(1, 10))
-    }
-
-    return new OutstandingNewOrderRequest(conn.newOrder(new TPCCNewOrderRequest(W_ID, D_ID, C_ID, OL_I_IDs, warehouseIDs, OL_QUANTITY_LIST, serializable)),
-                                          System.currentTimeMillis())
   }
-
-  case class OutstandingNewOrderRequest(future: Future[TPCCNewOrderResponse], startTimeMs: Long)
-
 }
