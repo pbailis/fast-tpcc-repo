@@ -16,9 +16,10 @@ import java.util._
 import java.util.concurrent.{LinkedBlockingQueue, Semaphore}
 import edu.berkeley.velox.server.{SendStats, VeloxServer}
 import java.nio.ByteBuffer
+import com.typesafe.scalalogging.slf4j.Logging
 
 
-object ClientBenchmark {
+object ClientBenchmark extends Logging {
   var totalWarehouses = -1
   val generator = new RandomGenerator
 
@@ -100,6 +101,8 @@ object ClientBenchmark {
     val clientChannel = new Socket
     clientChannel.connect(clusterAddresses(0))
     clientChannel.setTcpNoDelay(true)
+
+    logger.error(s"clientchannel is $clientChannel")
 
 
     @volatile var finished = false
