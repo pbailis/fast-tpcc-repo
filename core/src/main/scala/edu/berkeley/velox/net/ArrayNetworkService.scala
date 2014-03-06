@@ -136,6 +136,7 @@ class ReaderThread(
       var readBytes = 0
       val msgArr = new Array[Byte](len)
       while(readBytes != len) {
+        logger.error(s"readbytes is $readBytes")
         readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
       }
       assert(readBytes == len)
