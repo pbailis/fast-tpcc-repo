@@ -57,6 +57,7 @@ class SocketBuffer(
       //bytes.get(byteArr)
       //channel.socket().getOutputStream.write(byteArr)
       //channel.socket().getOutputStream.flush()
+      logger.error(s"writing $len bytes!")
       wrote += channel.write(intBuf)
       wrote += channel.write(bytes)
       rwlock.writeLock().unlock()
