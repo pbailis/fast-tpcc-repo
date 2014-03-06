@@ -3,7 +3,6 @@ package edu.berkeley.velox.benchmark
 import edu.berkeley.velox.conf.VeloxConfig
 import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
 import scala.util.Random
-import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.{Socket, InetSocketAddress}
 
 import scala.util.{Success, Failure}
@@ -134,6 +133,7 @@ object ClientBenchmark {
           }
         }
       }).start()
+    }
 
     if(status_time > 0) {
       new Thread(new Runnable {
@@ -168,29 +168,31 @@ object ClientBenchmark {
   }
 
   class ReaderThread(
-    channel: Socket) extends Thread {
-    override def run() {
-      while(true) {
+      channel: Socket) extends Thread {
+      override def run() {
+        while(true) {
 
-        val len = VeloxServer.getInt(channel)
+          val len = VeloxServer.getInt(channel)
 
-        SendStats.tryRecv.incrementAndGet()
-        SendStats.tryBytesRecv.addAndGet(len)
+          SendStats.tryRecv.incrementAndGet()
+          SendStats.tryBytesRecv.addAndGet(len)
 
 
-        var readBytes = 0
-        val msgArr = new Array[Byte](len)
-        while(readBytes != len) {
-          readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
+          var readBytes = 0
+          val msgArr = new Array[Byte](len)
+          while(readBytes != len) {
+            readBytes += channel.getInputStream.read(msgArr, readBytes, len-readBytes)
+          }
+          assert(readBytes == len)
+
+          SendStats.bytesRecv.addAndGet(len+4)
+          SendStats.numRecv.incrementAndGet()
+
+
+          freeNumbers.add(ByteBuffer.wrap(msgArr).getInt())
         }
-        assert(readBytes == len)
-
-        SendStats.bytesRecv.addAndGet(len+4)
-        SendStats.numRecv.incrementAndGet()
-
-
-        freeNumbers.add(ByteBuffer.wrap(msgArr).getInt())
       }
     }
-  }
+
+
 }
