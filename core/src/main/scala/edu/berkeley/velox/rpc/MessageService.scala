@@ -16,6 +16,7 @@ import edu.berkeley.velox.conf.VeloxConfig
 
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import scala.concurrent.duration.Duration
+import edu.berkeley.velox.server.SequenceNumberReq
 
 class MessageWrapper(private val encRequestId: Long, val body: Any) {
   def isRequest: Boolean = encRequestId < 0
@@ -166,6 +167,8 @@ abstract class MessageService extends Logging {
 
   // doesn't block, but does set up a handler that will deliver the message when it's ready
   private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any, wrapped: Boolean = false): Unit = {
+    sendResponse(src, requestId, msg.asInstanceOf[SequenceNumberReq].reqId)
+    /*
     if((!serializable && !thread_handler) || wrapped) {
       val key = msg.getClass().hashCode()
       assert(handlers.containsKey(key))
@@ -199,6 +202,7 @@ abstract class MessageService extends Logging {
       })
 
     }
+    */
   }
 
   //create a new task for entire function since we don't want the TCP receiver stalling due to serialization
