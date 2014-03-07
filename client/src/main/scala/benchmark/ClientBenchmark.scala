@@ -120,7 +120,7 @@ object ClientBenchmark {
     for(i <- 0 to 7) {
       var picked = false
       while(!picked) {
-        val random_idx = Random.nextInt() % clusterAddresses.size
+        val random_idx = Math.abs(Random.nextInt()) % clusterAddresses.size
         val randomChoice = clusterAddresses(random_idx)
         if(randomChoice != null) {
           prunedClusterAddresses(i) = randomChoice
@@ -198,7 +198,7 @@ object ClientBenchmark {
   }
 
   def singleNewOrder(conn: VeloxConnection, chance_remote: Double, our_warehouses: Array[Int], serializable: Boolean = false, pct_test: Boolean = false): OutstandingNewOrderRequest = {
-    val W_ID = our_warehouses(Random.nextInt % our_warehouses.size)
+    val W_ID = our_warehouses(Math.abs(Random.nextInt()) % our_warehouses.size)
     val D_ID: Int = generator.number(1, 10)
     val C_ID: Int = generator.NURand(1023, 1, 3000)
     val OL_CNT: Int = generator.number(5, 15)
