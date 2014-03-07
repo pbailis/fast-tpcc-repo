@@ -131,6 +131,7 @@ object ClientBenchmark {
           picked = true
           our_warehouses(i) = random_idx
           whToServer.put(random_idx, i+1)
+          println(s"$random_idx goes to ${i+1}")
         }
       }
     }
