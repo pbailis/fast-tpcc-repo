@@ -54,7 +54,7 @@ class MultiConnectArrayNetworkService (
 
     if(!VeloxConfig.serializable) {
       this.executor =
-        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory("M-ANS"))
+        Executors.newFixedThreadPool(VeloxConfig.pool_threads,new ArrayNetworkThreadFactory("M-ANS"))
       } else {
       this.executor =
         Executors.newCachedThreadPool()

@@ -19,6 +19,7 @@ object VeloxConfig extends Logging {
   var serializable = false
   var thread_handler = false
   var outbound_conn_degree = 1
+  var pool_threads = 32
 
   var bufferSize = 16384*8
   var networkService = "array"
@@ -40,6 +41,8 @@ object VeloxConfig extends Logging {
     opt[Int]("bootstrap_time") foreach { p => bootstrapConnectionWaitSeconds = p } text("Time to wait for server connect bootstrap")
     opt[Int]('b', "buffer_size") foreach { p => bufferSize = p } text("Size (in bytes) to make the network buffer")
     opt[Int]("sweep_time") foreach { p => sweepTime = p } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
+    opt[Int]("pool_threads") foreach { p => pool_threads = p }
+
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[Boolean]("serializable") foreach { p => serializable = p }
     opt[Unit]("thread_handlers") foreach { p => thread_handler = true }
