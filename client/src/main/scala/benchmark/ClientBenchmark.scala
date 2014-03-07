@@ -129,7 +129,7 @@ object ClientBenchmark {
           prunedClusterAddresses(i) = randomChoice
           clusterAddresses(random_idx) = null
           picked = true
-          our_warehouses(i) = random_idx
+          our_warehouses(i) = random_idx+1
           whToServer.put(random_idx, i+1)
           println(s"$random_idx goes to ${i+1}")
         }
