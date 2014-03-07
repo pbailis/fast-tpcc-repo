@@ -3,7 +3,7 @@ from time import sleep
 from datetime import datetime
 from velox_common import *
 
-ITS = range(1, 4)
+ITS = range(4, 7)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Setup velox on EC2')
@@ -143,7 +143,7 @@ if __name__ == "__main__":
 
     if args.wh_bench:
         for it in ITS:
-            for wh in [1, 2, 4, 8]:
+            for wh in [1, 2, 4, 8, 16]:
                 for config in ["ca", "serializable"]:
                     runid = "whbench-WH%d-%s-IT%d" % (wh, config, it)
                     assign_hosts(region, cluster)
@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
     if args.client_sweep:
         for it in ITS:
-            for clients in [1, 16, 64, 256, 512]:#1, 10, 100, 1000, 10000]:
+            for clients in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]:#1, 16, 64, 256, 512]:#1, 10, 100, 1000, 10000]:
                 for config in ["serializable", "ca"]:
                     runid = "client_sweep-CLIENTS%d-%s-IT%d" % (clients, config, it)
                     assign_hosts(region, cluster)
@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
     if args.remote_bench:
        for it in ITS:
-           for remote in [0, .25, .5, .75, 1]:
+           for remote in [0, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1]:# .25, .5, .75, 1]:
                for config in ["ca", "serializable"]:
                    runid = "remotebench-PCT%f-%s-IT%d" % (remote, config, it)
                    assign_hosts(region, cluster)
