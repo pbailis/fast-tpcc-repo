@@ -122,6 +122,8 @@ object MicroBenchmark {
           while (!finished) {
             requestSem.acquireUninterruptibly()
 
+            val st = System.currentTimeMillis()
+
             if(cfree) {
               val startServer = Math.abs(Random.nextInt)
               var i = 0
@@ -136,13 +138,13 @@ object MicroBenchmark {
                 case Success(value) => {
                   opsDone.incrementAndGet()
                   requestSem.release
+                  numMs.addAndGet(System.currentTimeMillis()-st)
                 }
                 case Failure(t) => println("An error has occurred: "+t.getMessage)
               }
             } else if (twopl) {
               // to avoid deadlocks, we never wrap around
               val startServer: Int = (Math.abs(Random.nextInt) % (numServers-num_items+1))
-              val st = System.currentTimeMillis()
               var i = 0
               while(i < num_items) {
                 val f = client.send(startServer+i+1, new MicroTwoPLPutAndLock)
@@ -167,6 +169,8 @@ object MicroBenchmark {
                 case Success(value) => {
                     opsDone.incrementAndGet()
                     requestSem.release
+                    numMs.addAndGet(System.currentTimeMillis()-st)
+
                   }
                   case Failure(t) => println("An error has occurred: "+t.getMessage)
               }

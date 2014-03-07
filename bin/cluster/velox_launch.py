@@ -153,7 +153,7 @@ if __name__ == "__main__":
                     elif config == "twopl":
                         args.sweep_time = 0
                         ops = 1024
-                        parallelism = 256
+                        parallelism = 128
                         args.serializable = True
                         num_clients = 1
                     else:
