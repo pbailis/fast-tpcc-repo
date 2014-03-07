@@ -184,7 +184,7 @@ def get_instances(regionName, cluster_id):
     for i in instances:
         if cluster_id is None and len(i.tags) != 0:
             continue
-        hosts.append(Host(str(i.private_dns_name), str(i.public_dns_name), regionName, cluster_id, str(i.id), str(i.state), i.instance_type))
+        hosts.append(Host(str(i.public_dns_name), str(i.public_dns_name), regionName, cluster_id, str(i.id), str(i.state), i.instance_type))
 
     return hosts
 
