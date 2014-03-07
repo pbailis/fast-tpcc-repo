@@ -3,7 +3,7 @@ from time import sleep
 from datetime import datetime
 from velox_common import *
 
-ITS = range(4, 7)
+ITS = range(1, 4)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Setup velox on EC2')
@@ -157,7 +157,7 @@ if __name__ == "__main__":
                         clients = 1200
                     else:
                         args.serializable = False
-                        clients = 80000
+                        clients = 100000
                         args.sweep_time = 200
                         
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
     if args.client_sweep:
         for it in ITS:
-            for clients in [1, 2, 4, 8, 16, 32, 64, 128, 256, 512]:#1, 16, 64, 256, 512]:#1, 10, 100, 1000, 10000]:
+            for clients in [1, 4, 16, 64, 256, 1024]:#1, 16, 64, 256, 512]:#1, 10, 100, 1000, 10000]:
                 for config in ["serializable", "ca"]:
                     runid = "client_sweep-CLIENTS%d-%s-IT%d" % (clients, config, it)
                     assign_hosts(region, cluster)
@@ -199,7 +199,7 @@ if __name__ == "__main__":
 
     if args.remote_bench:
        for it in ITS:
-           for remote in [0, .05, .1, .2, .3, .4, .5, .6, .7, .8, .9, 1]:# .25, .5, .75, 1]:
+           for remote in [0, .05, .1, .25, .5, .75, 1]:# .25, .5, .75, 1]:
                for config in ["ca", "serializable"]:
                    runid = "remotebench-PCT%f-%s-IT%d" % (remote, config, it)
                    assign_hosts(region, cluster)
@@ -220,11 +220,11 @@ if __name__ == "__main__":
                    else:
                         args.serializable = False
                         args.sweep_time = 200
-                        clients = 80000
+                        clients = 100000
                         args.buffer_size = 131072*3
                         if remote > 0:
                             thread_handlers = False
-                            outbound_conn_degree = 2
+                            outbound_conn_degree = 1
                         else:
                             thread_handlers = False
                             outbound_conn_degree = 1
