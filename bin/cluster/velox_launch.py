@@ -157,7 +157,7 @@ if __name__ == "__main__":
                         clients = 1200
                     else:
                         args.serializable = False
-                        clients = 100000
+                        clients = 80000
                         args.sweep_time = 200
                         
                     start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
@@ -220,7 +220,7 @@ if __name__ == "__main__":
                    else:
                         args.serializable = False
                         args.sweep_time = 200
-                        clients = 100000
+                        clients = 80000
                         args.buffer_size = 131072*3
                         if remote > 0:
                             thread_handlers = False
