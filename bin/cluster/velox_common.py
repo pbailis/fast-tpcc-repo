@@ -27,7 +27,7 @@ VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 AMIs = {'us-west-2': 'ami-aa523d9a'}
 
 #gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
-gcstr = "  -XX:+UseParallelGC "
+gcstr = "  -XX:+UseParallelGC -XX:NewRatio=1 "#-XX:ParallelGCThreads=16 -XX:MaxGCPauseMillis=0 "
 
 def run_cmd(hosts, cmd, user="ec2-user", time=1000):
     cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
