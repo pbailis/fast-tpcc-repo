@@ -49,12 +49,14 @@ for d in listdir("output"):
     if clients not in conf_results[conf]:
         conf_results[conf][clients] = []
 
+
+    thru = 0
+
     for sd in listdir(bd1):
         sd_cur = bd1+'/'+sd
         if sd_cur.find("Cec2") == -1:
             continue
         
-        thru = 0
         f = open(sd_cur+'/client.log')
         
         for line in f:
@@ -63,7 +65,7 @@ for d in listdir("output"):
 
 
 
-        conf_results[conf][clients].append(thru)
+    conf_results[conf][clients].append(thru)
 
 for conf in conf_results:
     print conf
