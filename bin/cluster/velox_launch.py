@@ -25,7 +25,7 @@ if __name__ == "__main__":
     # launch options
     parser.add_argument('--no_spot', dest='no_spot', action='store_true',
                         help='Don\'t use spot instances, default off.')
-    parser.add_argument('--spot_price', dest="spot_price", type=float, default=1.5, help="Spot price")
+    parser.add_argument('--spot_price', dest="spot_price", type=float, default=3, help="Spot price")
     parser.add_argument('--instance_type', dest="instance_type", type=str, default="cr1.8xlarge",
                         help="EC2 instance type")
 
