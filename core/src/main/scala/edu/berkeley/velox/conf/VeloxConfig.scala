@@ -1,5 +1,6 @@
 package edu.berkeley.velox.conf
 
+import edu.berkeley.velox.storage.{HashMapStorageManager,StorageManager}
 import java.net.{InetAddress, InetSocketAddress}
 import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService,NIONetworkService}
 import edu.berkeley.velox.NetworkDestinationHandle
@@ -30,6 +31,8 @@ object VeloxConfig {
     else
       500
 
+  var storageManager = sys.env.getOrElse("VELOX_STORAGE_MANAGER","hashmap")
+
   def initialize(cmdLine: Array[String]): Boolean = {
     val ret = parser.parse(cmdLine)
     ret
@@ -44,6 +47,7 @@ object VeloxConfig {
     opt[Int]("sweep_time") foreach { p => sweepTime = p } text("Time the ArrayNetworkService send sweep thread should wait between sweeps")
     opt[Boolean]("tcp_nodelay") foreach { p => tcpNoDelay = p } text("Enable/disable TCP_NODELAY")
     opt[String]("network_service") foreach { p => networkService = p } text("Which network service to use [array/nio]")
+    opt[String]("storage_manager") foreach { p => storageManager = p } text("Which storage service to use [hashmap]")
     opt[String]("ip_address") foreach { p => serverIpAddress = p } text("IP address of this server. Used for Zookeeper registration")
     opt[Int]("num_servers") foreach { p => expectedNumInternalServers = p } text("Total number of velox servers in the cluster")
 
@@ -57,6 +61,13 @@ object VeloxConfig {
       case "array" => new ArrayNetworkService(name, performIDHandshake, tcpNoDelay, serverID)
       case "nio" => new NIONetworkService(name, performIDHandshake, tcpNoDelay, serverID)
       case _ => throw new Exception(s"Invalid network service type $networkService")
+    }
+  }
+
+  def getStorageManager(): StorageManager = {
+    storageManager match {
+      case "hashmap" => new HashMapStorageManager
+      case _ => throw new Exception(s"Invalid storage manager type $storageManager")
     }
   }
 }
