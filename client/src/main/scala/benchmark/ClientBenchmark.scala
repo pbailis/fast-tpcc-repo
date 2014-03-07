@@ -98,11 +98,13 @@ object ClientBenchmark {
       a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
     }
 
-    val client = new VeloxConnection(clusterAddresses, connection_parallelism)
+    var client: VeloxConnection = null
 
     totalWarehouses = clusterAddresses.size*warehouses_per_server
 
     if(load) {
+      client = new VeloxConnection(clusterAddresses, connection_parallelism)
+      totalWarehouses = clusterAddresses.size*warehouses_per_server
       println(s"Loading $totalWarehouses warehouses...}")
       val loadFuture = Future.sequence((1 to totalWarehouses).map(wh => client.loadTPCC(wh)))
       Await.result(loadFuture, Duration.Inf)
@@ -112,6 +114,24 @@ object ClientBenchmark {
     if(!run) {
       System.exit(0)
     }
+
+    val prunedClusterAddresses = new Array[InetSocketAddress](8)
+    for(i <- 0 to 7) {
+      var picked = false
+      while(!picked) {
+        val random_idx = Random.nextInt() % clusterAddresses.size
+        val randomChoice = clusterAddresses(random_idx)
+        if(randomChoice != null) {
+          prunedClusterAddresses(i) = randomChoice
+          clusterAddresses(random_idx) = null
+          picked = true
+        }
+      }
+    }
+
+    client = new VeloxConnection(prunedClusterAddresses, connection_parallelism)
+    totalWarehouses = 8
+
 
     @volatile var finished = false
     val requestSem = new Semaphore(0)
