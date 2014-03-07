@@ -49,12 +49,13 @@ for d in listdir("output"):
     if clients not in conf_results[conf]:
         conf_results[conf][clients] = []
 
+
+    thru = 0
     for sd in listdir(bd1):
         sd_cur = bd1+'/'+sd
         if sd_cur.find("Cec2") == -1:
             continue
         
-        thru = 0
         f = open(sd_cur+'/client.log')
         
         for line in f:
@@ -63,22 +64,25 @@ for d in listdir("output"):
 
 
 
-        conf_results[conf][clients].append(thru)
+    conf_results[conf][clients].append(thru)
 
 for conf in conf_results:
     print conf
     items = conf_results[conf].keys()
     items.sort()
 
-    plot(items, [avg(conf_results[conf][item]) for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
+
+    baseline = avg(conf_results[conf][0])
+    plot([i*100 for i in items], [avg(conf_results[conf][item])/baseline*100 for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
 
     for item in items:
         print conf, item, avg(conf_results[conf][item])
 
 
-xlabel("Proportion Distributed Transactions")
-ylabel("Throughput (txns/s)")
-yscale('log')
+xlabel("Percentage Distributed Transactions")
+ylabel("Relative Throughput (%)")
+#yscale('log')
+xticks([0, 25, 50, 75, 100])
 
 l = legend(loc="upper right", ncol=3, handlelength=2)
 l.draw_frame(False)
