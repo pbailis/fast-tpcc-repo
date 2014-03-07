@@ -15,6 +15,7 @@ import edu.berkeley.velox.benchmark.operation.{TPCCNewOrderRequest, TPCCNewOrder
 import edu.berkeley.velox.benchmark.util.RandomGenerator
 import java.util._
 import java.util.concurrent.Semaphore
+import java.util.HashMap
 
 
 object ClientBenchmark {
@@ -103,7 +104,7 @@ object ClientBenchmark {
     totalWarehouses = clusterAddresses.size*warehouses_per_server
 
     if(load) {
-      client = new VeloxConnection(clusterAddresses, connection_parallelism)
+      client = new VeloxConnection(clusterAddresses, connection_parallelism, null)
       totalWarehouses = clusterAddresses.size*warehouses_per_server
       println(s"Loading $totalWarehouses warehouses...}")
       val loadFuture = Future.sequence((1 to totalWarehouses).map(wh => client.loadTPCC(wh)))
@@ -117,6 +118,8 @@ object ClientBenchmark {
 
     val prunedClusterAddresses = new Array[InetSocketAddress](8)
     val our_warehouses = new Array[Int](8)
+    val whToServer = new java.util.HashMap[Int, Int]
+
     for(i <- 0 to 7) {
       var picked = false
       while(!picked) {
@@ -127,11 +130,12 @@ object ClientBenchmark {
           clusterAddresses(random_idx) = null
           picked = true
           our_warehouses(i) = random_idx
+          whToServer.put(random_idx, i)
         }
       }
     }
 
-    client = new VeloxConnection(prunedClusterAddresses, connection_parallelism)
+    client = new VeloxConnection(prunedClusterAddresses, connection_parallelism, whToServer)
 
     @volatile var finished = false
     val requestSem = new Semaphore(0)

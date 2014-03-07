@@ -12,12 +12,6 @@ import com.typesafe.scalalogging.slf4j.Logging
 import java.util.concurrent.Executors
 
 
-object VeloxConnection {
-  def makeConnection(addresses: java.lang.Iterable[InetSocketAddress]): VeloxConnection = {
-    return new VeloxConnection(addresses)
-  }
-}
-
 class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_parallelism: Int, whToServer: java.util.HashMap[Int, Int]) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
   ms.networkService.setExecutor(Executors.newCachedThreadPool())
