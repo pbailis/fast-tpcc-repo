@@ -30,20 +30,20 @@ AMIs = {'us-west-2': 'ami-10593620'}
 gcstr = "  -XX:+UseParallelGC "
 
 def run_cmd(hosts, cmd, user="ec2-user", time=1000):
-    cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
+    cmd = "ulimit -Sn unlimited; ulimit -Su unlimited; pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
     print cmd
     # print "You may need to install pssh (sudo pip install pssh)"
     system(cmd)
 
 def run_cmd_single(host, cmd, user="ec2-user", time = None):
-    cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
+    cmd = "ulimit -Sn unlimited; ulimit -Su unlimited; ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
     print cmd
-    #if time is not None:
-    #    cmd = "timeout "+str(time)+" "+cmd
+    if time is not None:
+        cmd = "timeout "+str(time)+" "+cmd
     system(cmd)
 
 def run_cmd_single_bg(host, cmd, user="ec2-user", time = None):
-    cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\" &" % (user, host, cmd)
+    cmd = "ulimit -Sn unlimited; ulimit -Su unlimited; ssh -o StrictHostKeyChecking=no %s@%s \"%s\" &" % (user, host, cmd)
     print cmd
     system(cmd)
 
@@ -397,7 +397,7 @@ def rebuild_servers(remote, branch, deploy_key=None):
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; sudo sysctl -w net.ipv4.tcp_wmem='4096 655360 125829120' > /dev/null; sudo sysctl -w net.ipv4.tcp_rmem='4096 655360 125829120' > /dev/null;  sudo sysctl -w net.core.rmem_max=125829120 > /dev/null; sudo sysctl -w net.core.wmem_max=125829120 >/dev/null;"
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, thread_handlers= False, outbound_conn_degree=1, **kwargs):
-    HEADER = "sudo pkill -9 java; pkill -9 java; cd /home/ec2-user/velox/; sleep 10; rm *.log*;"
+    HEADER = "ulimit -Sn unlimited; ulimit -Su unlimited; sudo pkill -9 java; pkill -9 java; cd /home/ec2-user/velox/; sleep 10; rm *.log*;"
 
 
 
@@ -408,7 +408,7 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
         pstr += "-agentpath:/home/ec2-user/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s "+gcstr+" -Xms%dG -Xmx%dG -cp %s %s --tcp_nodelay true -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
+    baseCmd = HEADER+"java %s "+gcstr+" -Xms%dG -Xmx%dG -cp %s %s --tcp_nodelay true --pool_threads 32 -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
@@ -483,8 +483,8 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
         hprof += "-agentpath:/home/ec2-user/yourkit/bin/linux-x86-64/libyjpagent.so"
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
-    cmd = (netCmd+"sudo pkill -9 java;  pkill -9 java; sleep 5; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s  --tcp_nodelay true --pool_threads 32 -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
+    cmd = (netCmd+"ulimit -Sn unlimited; ulimit -Su unlimited;" + "sudo pkill -9 java;  pkill -9 java; sleep 5; "
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s  --tcp_nodelay true -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
           (hprof, CLIENT_HEAP_SIZE_GB_START, CLIENT_HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
 
