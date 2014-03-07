@@ -277,7 +277,7 @@ class ReaderThread(
           var msgBuf = ProcessingBufferPool.pool.poll()// ByteBuffer.allocate(len)
 
           if(msgBuf == null || msgBuf.capacity() < len) {
-            msgBuf = ByteBuffer.allocate(len)
+            msgBuf = ByteBuffer.allocate(VeloxConfig.bufferSize)
           } else {
             msgBuf.clear()
           }
@@ -299,7 +299,7 @@ class ReaderThread(
             var msgBuf = ProcessingBufferPool.pool.poll()// ByteBuffer.allocate(len)
 
             if(msgBuf == null || msgBuf.capacity() < len) {
-              msgBuf = ByteBuffer.allocate(len)
+              msgBuf = ByteBuffer.allocate(VeloxConfig.bufferSize)
             } else {
               msgBuf.clear()
             }
