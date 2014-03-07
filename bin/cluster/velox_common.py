@@ -250,7 +250,7 @@ def terminate_cluster(region, tag, placement_group="velox"):
     #conn.delete_placement_group(placement_group)
 
 
-def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bid_price=3, placement_group="velox"):
+def provision_spot(regionName, num, instance_type, bid_price=3, placement_group="velox"):
     global AMIs
 
     setup_security_group(regionName)
@@ -275,7 +275,7 @@ def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bid_pri
                                                security_groups=[VELOX_SECURITY_GROUP])
     #                                           placement_group=placement_group)
 
-def provision_instances(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, placement_group="velox"):
+def provision_instances(regionName, num, instance_type, placement_group="velox"):
     global AMIs
 
     setup_security_group(regionName)
