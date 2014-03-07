@@ -130,7 +130,7 @@ object ClientBenchmark {
           clusterAddresses(random_idx) = null
           picked = true
           our_warehouses(i) = random_idx
-          whToServer.put(random_idx, i)
+          whToServer.put(random_idx, i+1)
         }
       }
     }
