@@ -178,7 +178,7 @@ if __name__ == "__main__":
                     sleep(10)
                     run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                            args.profile, args.profile_depth,
-                                           parallelism=parallelism, timeout=180, ops=ops, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable,
+                                           parallelism=parallelism, timeout=120, ops=ops, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable,
                                            extra_client_args=extra_args)
                     stop_velox_processes()
 

@@ -355,6 +355,7 @@ class ArrayNetworkService(
       try {
         val clientChannel = SocketChannel.open()
         clientChannel.connect(address)
+        clientChannel.socket.setTcpNoDelay(true)
         assert(clientChannel.isConnected)
         val bos = new ByteArrayOutputStream()
         val dos = new DataOutputStream(bos)
@@ -410,7 +411,7 @@ class ArrayNetworkService(
         while (true) {
           // Accept the client socket
           val clientChannel: SocketChannel = serverChannel.accept
-          clientChannel.socket.setTcpNoDelay(tcpNoDelay)
+          clientChannel.socket.setTcpNoDelay(true)
           // Get the bytes encoding the source partition Id
           var connectionId: NetworkDestinationHandle = -1;
           if(performIDHandshake) {
