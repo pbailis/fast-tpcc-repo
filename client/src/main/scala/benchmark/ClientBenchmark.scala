@@ -116,6 +116,7 @@ object ClientBenchmark {
     }
 
     val prunedClusterAddresses = new Array[InetSocketAddress](8)
+    val our_warehouses = new Array[Int](8)
     for(i <- 0 to 7) {
       var picked = false
       while(!picked) {
@@ -125,13 +126,12 @@ object ClientBenchmark {
           prunedClusterAddresses(i) = randomChoice
           clusterAddresses(random_idx) = null
           picked = true
+          our_warehouses(i) = random_idx
         }
       }
     }
 
     client = new VeloxConnection(prunedClusterAddresses, connection_parallelism)
-    totalWarehouses = 8
-
 
     @volatile var finished = false
     val requestSem = new Semaphore(0)
@@ -146,7 +146,7 @@ object ClientBenchmark {
           while (!finished) {
             requestSem.acquire()
 
-            val request = singleNewOrder(client, chance_remote, serializable, pct_test)
+            val request = singleNewOrder(client, chance_remote, our_warehouses, serializable, pct_test)
             request.future onComplete {
               case Success(value) => {
                 numMs.addAndGet(System.currentTimeMillis()-request.startTimeMs)
@@ -197,8 +197,8 @@ object ClientBenchmark {
     System.exit(0)
   }
 
-  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, serializable: Boolean = false, pct_test: Boolean = false): OutstandingNewOrderRequest = {
-    val W_ID = generator.number(1, totalWarehouses)
+  def singleNewOrder(conn: VeloxConnection, chance_remote: Double, our_warehouses: Array[Int], serializable: Boolean = false, pct_test: Boolean = false): OutstandingNewOrderRequest = {
+    val W_ID = our_warehouses(Random.nextInt % our_warehouses.size)
     val D_ID: Int = generator.number(1, 10)
     val C_ID: Int = generator.NURand(1023, 1, 3000)
     val OL_CNT: Int = generator.number(5, 15)
