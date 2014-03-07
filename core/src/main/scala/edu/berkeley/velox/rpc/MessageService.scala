@@ -118,6 +118,7 @@ abstract class MessageService extends Logging {
     var header = requestId & ~(1L << 63)
     if(isRequest) header |= (1L << 63)
     val kryo = KryoThreadLocal.kryoTL.get
+    kryo.buffer.clear()
     kryo.buffer.putLong(header)
     val result = kryo.serialize(msg)
     //VeloxKryoRegistrar.returnKryo(kryo)

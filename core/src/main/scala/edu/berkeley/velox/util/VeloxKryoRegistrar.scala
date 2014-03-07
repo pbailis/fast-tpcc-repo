@@ -149,7 +149,6 @@ class KryoSerializer(val kryo: Kryo) {
   val in = new ByteBufferInput()
 
   def serialize(x: Any): ByteBuffer = {
-    buffer.clear()
     kryo.writeClassAndObject(out, x)
     out.flush()
     bout.flush()
