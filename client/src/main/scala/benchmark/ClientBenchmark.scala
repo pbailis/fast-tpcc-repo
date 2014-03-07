@@ -62,6 +62,9 @@ object ClientBenchmark {
       opt[Int]("status_time") foreach {
         i => status_time = i
       }
+      opt[Boolean]("tcp_nodelay") foreach {
+        i => VeloxConfig.tcpNoDelay = i
+      }
       opt[Int]("connection_parallelism") foreach {
         i => connection_parallelism = i
       }
