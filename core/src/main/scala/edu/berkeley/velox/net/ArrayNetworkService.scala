@@ -38,11 +38,8 @@ class SocketBuffer(
     * @return true if data was written successfully, false otherwise
     */
   def write(bytes: ByteBuffer, isSwapper: Boolean = false): Boolean = {
-    if (!rwlock.readLock.tryLock) {
-      if (isSwapper)
-        logger.warn("returning false on the swapper because can't get read lock (this is probably okay)")
+    if (!rwlock.readLock.tryLock)
       return false
-    }
 
     // ensure we're still looking at the right buffer
     if (!isSwapper && pool.currentBuffer != this) {
@@ -90,7 +87,7 @@ class SocketBuffer(
         }
         else {
           if (isSwapper)
-            logger.error("Swapper trying to write more bytes than buffer size")
+            throw new Exception("Swapper trying to write more bytes than buffer size")
           rwlock.writeLock.unlock
           false
         }
@@ -153,6 +150,11 @@ class SocketBufferPool(channel: SocketChannel)  {
   @volatile var currentBuffer: SocketBuffer = new SocketBuffer(channel,this)
   @volatile var lastSent = 0l
 
+  // This bool gets set (in needSend) when the sweeper decides to force this
+  // buffer to be sent.  It is unset when the send is complete. (in forceSend)
+  // This protects against the case that the sweeper wants to send the buffer
+  // again before the previous send completed.  This can occur when running
+  // with a very low sweep time.
   val isForceSending = new AtomicBoolean(false)
 
   // Create an runnable that calls forceSend so we
@@ -247,7 +249,7 @@ class ReaderThread(
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") {
+  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") with Logging {
 
   override def run() {
     var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
@@ -272,7 +274,8 @@ class ReaderThread(
 
           while (readBuffer.remaining >= 4 && readBuffer.remaining >= len) { // read enough
             if (len > VeloxConfig.bufferSize) {
-              println(s"OHH NO LEN TO BIG $len")
+              logger.error(s"Indicated length of $len is bigger than buffer size ${VeloxConfig.bufferSize}")
+              throw new Exception("Len too big")
             }
             val msgBuf = ByteBuffer.allocate(len)
             val oldLim = readBuffer.limit
