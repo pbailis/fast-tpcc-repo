@@ -193,7 +193,7 @@ class ArrayNetworkService(val performIDHandshake: Boolean = false,
 
     if(!VeloxConfig.serializable) {
       this.executor =
-        Executors.newCachedThreadPool()//Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory("ANS"))
+        Executors.newFixedThreadPool(32,new ArrayNetworkThreadFactory("ANS"))
       } else {
       this.executor =
         Executors.newCachedThreadPool()
