@@ -20,7 +20,7 @@ class SocketBuffer(
   channel: SocketChannel,
   pool: SocketBufferPool) extends Logging {
 
-  var buf = ByteBuffer.allocate(VeloxConfig.bufferSize)
+  var buf = ByteBuffer.allocateDirect(VeloxConfig.bufferSize)
   buf.position(4)
 
   val writePos = new AtomicInteger(4)
@@ -232,6 +232,11 @@ class Receiver(
         case e: Exception => logger.error("Error receiving message", e)
       }
     }
+
+    if(bytes.capacity() > ProcessingBufferPool.minCapacity) {
+      bytes.clear()
+      ProcessingBufferPool.pool.add(bytes)
+    }
   } catch {
     case t: Throwable => {
       logger.error(s"Error receiving message: ${t.getMessage}",t)
@@ -240,23 +245,28 @@ class Receiver(
 
 }
 
+object ProcessingBufferPool {
+  val pool = new LinkedBlockingQueue[ByteBuffer]()
+  val minCapacity = VeloxConfig.bufferSize/2
+}
+
 class ReaderThread(
   name: String,
   channel: SocketChannel,
   executor: ExecutorService,
   src: NetworkDestinationHandle,
   messageService: MessageService,
-  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") {
+  remoteAddr: String) extends Thread(s"Reader-${name} from ${remoteAddr}") with Logging {
 
   val readInput = channel.socket().getInputStream
 
   override def run() {
-    var readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
+    val readBuffer = ByteBuffer.allocateDirect(VeloxConfig.bufferSize)
     while(true) {
       var read = readBuffer.position
       read += channel.read(readBuffer)
 
-      var allocedBuffer = false
+      var cleared = false
 
       if (read >= 4) {
         readBuffer.flip
@@ -264,9 +274,20 @@ class ReaderThread(
         var len = readBuffer.getInt
 
         if (readBuffer.remaining == len) { // perfect read
-          executor.submit(new Receiver(readBuffer,src,messageService))
-          readBuffer = ByteBuffer.allocate(VeloxConfig.bufferSize)
-          allocedBuffer = true
+          var msgBuf = ProcessingBufferPool.pool.poll()// ByteBuffer.allocate(len)
+
+          if(msgBuf == null || msgBuf.capacity() < len) {
+            msgBuf = ByteBuffer.allocate(len)
+          } else {
+            msgBuf.clear()
+          }
+          msgBuf.put(readBuffer)
+          msgBuf.flip()
+          executor.submit(new Receiver(msgBuf,src,messageService))
+
+          cleared = true
+          readBuffer.clear()
+
           len = -1 // prevent attempt to copy len below
         }
         else {
@@ -275,7 +296,14 @@ class ReaderThread(
             if (len > VeloxConfig.bufferSize) {
               println(s"OHH NO LEN TO BIG $len")
             }
-            val msgBuf = ByteBuffer.allocate(len)
+            var msgBuf = ProcessingBufferPool.pool.poll()// ByteBuffer.allocate(len)
+
+            if(msgBuf == null || msgBuf.capacity() < len) {
+              msgBuf = ByteBuffer.allocate(len)
+            } else {
+              msgBuf.clear()
+            }
+
             val oldLim = readBuffer.limit
             readBuffer.limit(readBuffer.position+len)
             msgBuf.put(readBuffer)
@@ -295,8 +323,9 @@ class ReaderThread(
           readBuffer.position(readBuffer.position-4)
         }
 
-        if (!allocedBuffer) // compact on a new buffer is bad
-          readBuffer.compact
+        if(!cleared) {
+          readBuffer.compact()
+        }
       }
     }
   }
