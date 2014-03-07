@@ -84,6 +84,8 @@ class MultiConnectArrayNetworkService (
       try {
         val clientChannel = SocketChannel.open()
         clientChannel.connect(address)
+        clientChannel.socket.setTcpNoDelay(tcpNoDelay)
+
         assert(clientChannel.isConnected)
         val bos = new ByteArrayOutputStream()
         val dos = new DataOutputStream(bos)
