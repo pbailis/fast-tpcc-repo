@@ -30,20 +30,20 @@ AMIs = {'us-west-2': 'ami-98533ca8'}
 gcstr = "  -XX:+UseParallelGC "
 
 def run_cmd(hosts, cmd, user="ec2-user", time=1000):
-    cmd = "ulimit -Sn 800000; ulimit -Su unlimited; pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
+    cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
     print cmd
     # print "You may need to install pssh (sudo pip install pssh)"
     system(cmd)
 
 def run_cmd_single(host, cmd, user="ec2-user", time = None):
-    cmd = "ulimit -Sn 800000; ulimit -Su unlimited; ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
+    cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
     print cmd
     if time is not None:
         cmd = "timeout "+str(time)+" "+cmd
     system(cmd)
 
 def run_cmd_single_bg(host, cmd, user="ec2-user", time = None):
-    cmd = "ulimit -Sn 800000; ulimit -Su unlimited; ssh -o StrictHostKeyChecking=no %s@%s \"%s\" &" % (user, host, cmd)
+    cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\" &" % (user, host, cmd)
     print cmd
     system(cmd)
 
