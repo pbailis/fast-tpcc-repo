@@ -9,7 +9,7 @@ KEY_NAME = "velox"
 VELOX_INTERNAL_PORT_START = 8080
 VELOX_FRONTEND_PORT_START = 9000
 
-VELOX_BASE_DIR="/home/ubuntu/velox"
+VELOX_BASE_DIR="/home/ec2-user/velox"
 
 HEAP_SIZE_GB_START = 240
 HEAP_SIZE_GB = 240
@@ -24,55 +24,54 @@ DEFAULT_INSTANCE_TYPE = "cr1.8xlarge"
 VELOX_SERVER_CLASS = "edu.berkeley.velox.server.VeloxServer"
 VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 
-AMIs = {'us-west-2': 'ami-8885e5b8',
-        'us-east-1': 'ami-b7dbe3de'}
+AMIs = {'us-west-2': 'ami-10593620'}
 
 #gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
 gcstr = "  -XX:+UseParallelGC "
 
-def run_cmd(hosts, cmd, user="ubuntu", time=1000):
+def run_cmd(hosts, cmd, user="ec2-user", time=1000):
     cmd = "pssh -i -t %d -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt \"%s\"" % (time, user, hosts, cmd)
     print cmd
     # print "You may need to install pssh (sudo pip install pssh)"
     system(cmd)
 
-def run_cmd_single(host, cmd, user="ubuntu", time = None):
+def run_cmd_single(host, cmd, user="ec2-user", time = None):
     cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\"" % (user, host, cmd)
     print cmd
-    if time is not None:
-        cmd = "timeout "+str(time)+" "+cmd
+    #if time is not None:
+    #    cmd = "timeout "+str(time)+" "+cmd
     system(cmd)
 
-def run_cmd_single_bg(host, cmd, user="ubuntu", time = None):
+def run_cmd_single_bg(host, cmd, user="ec2-user", time = None):
     cmd = "ssh -o StrictHostKeyChecking=no %s@%s \"%s\" &" % (user, host, cmd)
     print cmd
     system(cmd)
 
 
-def start_cmd_disown(host, cmd, user="ubuntu"):
+def start_cmd_disown(host, cmd, user="ec2-user"):
     run_cmd_single_bg(host, cmd+" & disown", user)
 
 
-def start_cmd_disown_nobg(host, cmd, user="ubuntu"):
+def start_cmd_disown_nobg(host, cmd, user="ec2-user"):
     run_cmd_single_bg(host, cmd+" disown", user)
 
-def run_process_single(host, cmd, user="ubuntu", stdout=None, stderr=None):
+def run_process_single(host, cmd, user="ec2-user", stdout=None, stderr=None):
     subprocess.call("ssh %s@%s \"%s\"" % (user, host, cmd),
                     stdout=stdout, stderr=stderr, shell=True)
 
-def upload_file(hosts, local_path, remote_path, user="ubuntu"):
+def upload_file(hosts, local_path, remote_path, user="ec2-user"):
     system("cp %s /tmp" % (local_path))
     script = local_path.split("/")[-1]
     system("pscp -O StrictHostKeyChecking=no -l %s -h hosts/%s.txt /tmp/%s %s" % (user, hosts, script, remote_path))
 
-def run_script(hosts, script, user="ubuntu"):
+def run_script(hosts, script, user="ec2-user"):
     upload_file(hosts, script.split(" ")[0], "/tmp", user)
     run_cmd(hosts, "bash /tmp/%s" % (script.split("/")[-1]), user)
 
-def fetch_file_single(host, remote, local, user="ubuntu"):
+def fetch_file_single(host, remote, local, user="ec2-user"):
     system("scp -o StrictHostKeyChecking=no %s@%s:%s %s" % (user, host, remote, local))
 
-def fetch_file_single_compressed(host, remote, local, user="ubuntu"):
+def fetch_file_single_compressed(host, remote, local, user="ec2-user"):
     print("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
 
     system("scp -C -o StrictHostKeyChecking=no %s@%s:%s '%s'" % (user, host, remote, local))
@@ -112,7 +111,7 @@ def pprint(str):
 
 ## EC2 stuff
 
-def run_cmd_in_velox(hosts, cmd, user='ubuntu', time=1000):
+def run_cmd_in_velox(hosts, cmd, user='ec2-user', time=1000):
     run_cmd(hosts, "cd %s; %s" % (VELOX_BASE_DIR, cmd), user, time=time)
 
 class Cluster:
@@ -375,13 +374,13 @@ def install_ykit(cluster):
     run_cmd("all-hosts", "mv yjp-2013-build-13072 yourkit")
     # master = cluster.clients[0].ip
     # run_cmd_single(master, "wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
-    # run_cmd("all-hosts", "scp ubuntu@%s:yjp-2013-build-13072-linux.tar.bz2 yjp-2013.tar.bz2" %  master)
+    # run_cmd("all-hosts", "scp ec2-user@%s:yjp-2013-build-13072-linux.tar.bz2 yjp-2013.tar.bz2" %  master)
     # run_cmd("all-hosts", "tar -xvf yjp-2013.tar.bz2")
 
 def rebuild_servers(remote, branch, deploy_key=None):
     if deploy_key:
-        upload_file("all-hosts", deploy_key, "/home/ubuntu/.ssh")
-        run_cmd("all-hosts", "rm /home/ubuntu/.ssh/config; echo 'IdentityFile /home/ubuntu/.ssh/%s' >> /home/ubuntu/.ssh/config; chmod go-r /home/ubuntu/.ssh/*" % (deploy_key.split("/")[-1]))
+        upload_file("all-hosts", deploy_key, "/home/ec2-user/.ssh")
+        run_cmd("all-hosts", "rm /home/ec2-user/.ssh/config; echo 'IdentityFile /home/ec2-user/.ssh/%s' >> /home/ec2-user/.ssh/config; chmod go-rw /home/ec2-user/.ssh/* /home/ec2-user/.ssh/config" % (deploy_key.split("/")[-1]))
 
     pprint('Rebuilding clients and servers...')
     run_cmd_in_velox('all-hosts',
@@ -398,7 +397,7 @@ def rebuild_servers(remote, branch, deploy_key=None):
 netCmd = "sudo sysctl net.ipv4.tcp_syncookies=1 > /dev/null; sudo sysctl net.core.netdev_max_backlog=250000 > /dev/null; sudo ifconfig eth0 txqueuelen 10000000; sudo sysctl net.core.netdev_max_backlog=10000000 > /dev/null; sudo sysctl net.ipv4.tcp_max_syn_backlog=1000000 > /dev/null; sudo sysctl -w net.ipv4.ip_local_port_range='1024 64000' > /dev/null; sudo sysctl -w net.ipv4.tcp_fin_timeout=2 > /dev/null; sudo sysctl -w net.ipv4.tcp_wmem='4096 655360 125829120' > /dev/null; sudo sysctl -w net.ipv4.tcp_rmem='4096 655360 125829120' > /dev/null;  sudo sysctl -w net.core.rmem_max=125829120 > /dev/null; sudo sysctl -w net.core.wmem_max=125829120 >/dev/null;"
 
 def start_servers(cluster, network_service, buffer_size, sweep_time, profile=False, profile_depth=2,  serializable = False, thread_handlers= False, outbound_conn_degree=1, **kwargs):
-    HEADER = "sudo pkill -9 java; pkill -9 java; cd /home/ubuntu/velox/; sleep 10; rm *.log*;"
+    HEADER = "sudo pkill -9 java; pkill -9 java; cd /home/ec2-user/velox/; sleep 10; rm *.log*;"
 
 
 
@@ -407,9 +406,9 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
     pstr = ""
     if profile:
         # pstr += "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.server.txt" % (profile_depth)
-        pstr += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
+        pstr += "-agentpath:/home/ec2-user/yourkit/bin/linux-x86-64/libyjpagent.so"
 
-    baseCmd = HEADER+"java %s "+gcstr+" -Xms%dG -Xmx%dG -cp %s %s -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
+    baseCmd = HEADER+"java %s "+gcstr+" -Xms%dG -Xmx%dG -cp %s %s --tcp_nodelay true -p %d -f %d --id %d -c %s --network_service %s --buffer_size %d --sweep_time %d %s %s  --outbound_conn_degree %d 1>server.log-%d 2>&1 & "
 
     for sid in range(0, cluster.numServers):
         serverCmd = baseCmd % (
@@ -481,11 +480,11 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
     hprof = ""
 
     if profile:
-        hprof += "-agentpath:/home/ubuntu/yourkit/bin/linux-x86-64/libyjpagent.so"
+        hprof += "-agentpath:/home/ec2-user/yourkit/bin/linux-x86-64/libyjpagent.so"
         #hprof = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % (profile_depth)
 
     cmd = (netCmd+"sudo pkill -9 java;  pkill -9 java; sleep 5; "
-           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
+           "java %s -XX:+UseParallelGC -Xms%dG -Xmx%dG -cp %s %s  --tcp_nodelay true --pool_threads 32 -m %s --parallelism %d --chance_remote %f --ops %d --timeout %d --network_service %s --buffer_size %d --sweep_time %d --connection_parallelism %d %s --run %s 2>&1 | tee client.log") %\
           (hprof, CLIENT_HEAP_SIZE_GB_START, CLIENT_HEAP_SIZE_GB, VELOX_JAR_LOCATION, VELOX_CLIENT_BENCH_CLASS, cluster.frontend_cluster_str,
            parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
 
@@ -531,7 +530,7 @@ def run_ycsb_local(numservers, workload="workloads/workloada", threads=64, readp
 
 def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, valuesize=1, recordcount=10000, request_distribution="zipfian", time=60, dorebuild=True):
     ycsb_cmd = (("pkill -9 java;"
-                 "cd /home/ubuntu/velox/external/ycsb; "
+                 "cd /home/ec2-user/velox/external/ycsb; "
                  "bin/ycsb run velox "
                  "-s "
                  "-P %s "
@@ -549,12 +548,12 @@ def run_ycsb(cluster, workload="workloads/workloada", threads=64, readprop=.5, v
 
     if dorebuild:
         pprint("Rebuilding YCSB")
-        run_cmd("all-clients", "cd /home/ubuntu/velox/external/ycsb; ./package-ycsb.sh")
+        run_cmd("all-clients", "cd /home/ec2-user/velox/external/ycsb; ./package-ycsb.sh")
         pprint("YCSB rebuilt!")
 
     pprint("Loading YCSB on single client...")
     load_cmd = ycsb_cmd.replace(" run ", " load ").replace("run_", "load_")
-    run_cmd_single(cluster.clients[0].ip, "cd /home/ubuntu/velox/external/ycsb; "+load_cmd)
+    run_cmd_single(cluster.clients[0].ip, "cd /home/ec2-user/velox/external/ycsb; "+load_cmd)
     pprint("YCSB loaded!")
 
     pprint("Running YCSB")
