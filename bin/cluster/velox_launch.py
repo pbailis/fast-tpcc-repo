@@ -176,7 +176,7 @@ if __name__ == "__main__":
     if args.scaleout:
         for it in ITS:
             for config in ["ca", "serializable"]:
-                runid = "scaleout-S%d-C%d-IT%d" % (wh, num_servers, num_clients)
+                runid = "scaleout-S%d-C%d-%s-IT%d" % (num_servers, num_clients, config, it)
                 assign_hosts(region, cluster)
 
                 args.output_dir = "output/"+runid
