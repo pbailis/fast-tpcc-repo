@@ -123,19 +123,21 @@ class Cluster:
         self.serversPerMachine = serversPerMachine
 
     def allocateHosts(self, hosts):
-        for h in hosts:
-            print h.instance_type
+
         cr1s = [h for h in hosts if h.instance_type.find("cr1") == -1]
         non_cr1s = [h for h in hosts if h not in cr1s]
 
         hosts = non_cr1s +cr1s
+
+        for h in hosts:
+            print h.instance_type
 
         for host in hosts:
             if len(self.clients) < self.numClients:
                 self.clients.append(host)
             elif len(self.servers) < self.numServers:
                 if host.instance_type.find('cr1') == -1:
-                    pprint("Host "+host+" had type "+host.instance_type+" so skipping in server assignment!")
+                    pprint("Host "+host+" had type "+str(host.instance_type)+" so skipping in server assignment!")
                     continue
 
                 for i in range(0, self.serversPerMachine):
@@ -343,7 +345,7 @@ def assign_hosts(region, cluster):
     hosts = get_instances(region, cluster.clusterID)
     pprint("Assigning %d hosts to %s:% s... " % (len(hosts), region, cluster.clusterID))
 
-    cluster.allocateHosts(hosts[:cluster.getNumHosts()])
+    cluster.allocateHosts(hosts)
     frontend_servers = []
     internal_servers = []
     sid = 0
