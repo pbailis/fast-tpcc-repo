@@ -164,7 +164,9 @@ abstract class MessageService extends Logging {
       recvRequest_(src, requestId, msg)
     } else {
       // receive the response message
-      requestMap.remove(requestId) success msg
+      val p = requestMap.remove(requestId)
+      if (p != null) p success msg
+      else logger.error(s"Invalid request id $requestId")
     }
   }
 
