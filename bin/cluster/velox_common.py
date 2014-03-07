@@ -22,7 +22,7 @@ VELOX_SECURITY_GROUP = "velox"
 VELOX_SERVER_CLASS = "edu.berkeley.velox.server.VeloxServer"
 VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 
-AMIs = {'us-west-2': 'ami-aa523d9a'}
+AMIs = {'us-west-2': 'ami-52bad562'}
 
 #gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
 gcstr = "  -XX:+UseParallelGC -XX:NewRatio=1 "#-XX:ParallelGCThreads=16 -XX:MaxGCPauseMillis=0 "
@@ -128,7 +128,7 @@ class Cluster:
         cr1s = [h for h in hosts if h.instance_type.find("cr1") == -1]
         non_cr1s = [h for h in hosts if h not in cr1s]
 
-        hosts = cr1s + non_cr1s
+        hosts = non_cr1s +cr1s
 
         for host in hosts:
             if len(self.clients) < self.numClients:
