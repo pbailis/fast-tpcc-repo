@@ -124,7 +124,7 @@ class Cluster:
 
     def allocateHosts(self, hosts):
 
-        cr1s = [h for h in hosts if h.instance_type.find("cr1") == -1]
+        cr1s = [h for h in hosts if h.instance_type.find("cr1") != -1]
         non_cr1s = [h for h in hosts if h not in cr1s]
 
         hosts = non_cr1s +cr1s
