@@ -66,6 +66,8 @@ if __name__ == "__main__":
                         help='Run THE CRANKSHAW TEST locally')
 
     parser.add_argument('--wh_bench', action='store_true')
+    parser.add_argument('--scaleout', action='store_true')
+
     parser.add_argument('--client_sweep', action='store_true')
     parser.add_argument('--remote_bench', action='store_true')
 
@@ -96,6 +98,7 @@ if __name__ == "__main__":
                         help='Run YCSB on EC2')
     parser.add_argument('--ycsb_bench_local', action='store_true',
                         help='Run YCSB locally')
+
 
     args, unknown = parser.parse_known_args()
 
@@ -169,6 +172,32 @@ if __name__ == "__main__":
                     fetch_logs(args.output_dir, runid, cluster)
                     pprint("THE CRANKSHAW has completed!")
 
+
+    if args.scaleout:
+        for it in ITS:
+            for config in ["ca", "serializable"]:
+                runid = "scaleout-S%d-C%d-IT%d" % (wh, num_servers, num_clients)
+                assign_hosts(region, cluster)
+
+                args.output_dir = "output/"+runid
+
+                if(config == "serializable"):
+                    args.serializable = True
+                    args.sweep_time = 0
+                    clients = 1200
+                else:
+                    args.serializable = False
+                    clients = 100000
+                    args.sweep_time = 200
+
+                start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+                sleep(20)
+                run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                       args.profile, args.profile_depth,
+                                       parallelism=16, timeout=120, ops=clients, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable)
+                stop_velox_processes()
+                fetch_logs(args.output_dir, runid, cluster)
+                pprint("THE CRANKSHAW has completed!")
 
     if args.client_sweep:
         for it in ITS:

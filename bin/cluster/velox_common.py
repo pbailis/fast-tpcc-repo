@@ -13,13 +13,11 @@ VELOX_BASE_DIR="/home/ec2-user/velox"
 
 HEAP_SIZE_GB_START = 240
 HEAP_SIZE_GB = 240
-CLIENT_HEAP_SIZE_GB_START = 240
-CLIENT_HEAP_SIZE_GB = 240
+CLIENT_HEAP_SIZE_GB_START = 60
+CLIENT_HEAP_SIZE_GB = 60
 
 VELOX_JAR_LOCATION = "assembly/target/scala-2.10/velox-assembly-0.1.jar"
 VELOX_SECURITY_GROUP = "velox"
-
-DEFAULT_INSTANCE_TYPE = "cr1.8xlarge"
 
 VELOX_SERVER_CLASS = "edu.berkeley.velox.server.VeloxServer"
 VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
@@ -252,7 +250,7 @@ def terminate_cluster(region, tag, placement_group="velox"):
     #conn.delete_placement_group(placement_group)
 
 
-def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bid_price=1.5, placement_group="velox"):
+def provision_spot(regionName, num, instance_type=DEFAULT_INSTANCE_TYPE, bid_price=3, placement_group="velox"):
     global AMIs
 
     setup_security_group(regionName)
