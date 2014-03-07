@@ -24,7 +24,7 @@ DEFAULT_INSTANCE_TYPE = "cr1.8xlarge"
 VELOX_SERVER_CLASS = "edu.berkeley.velox.server.VeloxServer"
 VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 
-AMIs = {'us-west-2': 'ami-10593620'}
+AMIs = {'us-west-2': 'ami-98533ca8'}
 
 #gcstr = " -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=90 -XX:NewRatio=1"
 gcstr = "  -XX:+UseParallelGC "
