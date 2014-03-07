@@ -155,8 +155,9 @@ class Cluster:
         return self.numServers + self.numClients
 
 class Host:
-    def __init__(self, ip, regionName, cluster_id, instanceid, status, instance_type):
+    def __init__(self, ip, public_ip, regionName, cluster_id, instanceid, status, instance_type):
         self.ip = ip
+        self.public_ip = public_ip
         self.regionName = regionName
         self.cluster_id = cluster_id
         self.instanceid = instanceid
@@ -183,7 +184,7 @@ def get_instances(regionName, cluster_id):
     for i in instances:
         if cluster_id is None and len(i.tags) != 0:
             continue
-        hosts.append(Host(str(i.public_dns_name), regionName, cluster_id, str(i.id), str(i.state), i.instance_type))
+        hosts.append(Host(str(i.private_dns_name), str(i.public_dns_name), regionName, cluster_id, str(i.id), str(i.state), i.instance_type))
 
     return hosts
 
@@ -430,7 +431,7 @@ def start_servers(cluster, network_service, buffer_size, sweep_time, profile=Fal
                         sid)
 
         server = cluster.servers[sid]
-        pprint("Starting velox server on [%s]" % server.ip)
+        pprint("Starting velox server on [%s]" % server.public_ip)
         start_cmd_disown_nobg(server.ip, serverCmd)
 
 def kill_velox_local():
@@ -489,6 +490,7 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
            parallelism, chance_remote, ops, timeout, network_service, buffer_size, sweep_time, connection_parallelism, "--serializable" if serializable else "", extra_args)
 
     load_cmd = cmd.replace("--run", "--load").replace("--serializable", "")
+    pprint("loading on "+cluster.clients[0].public_ip)
     run_cmd_single(cluster.clients[0].ip, "cd velox; "+load_cmd, time=240)
 
     run_cmd_in_velox("all-clients", cmd, time=180)
