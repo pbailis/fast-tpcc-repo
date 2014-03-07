@@ -70,15 +70,18 @@ for conf in conf_results:
     items = conf_results[conf].keys()
     items.sort()
 
-    plot(items, [avg(conf_results[conf][item]) for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
+
+    baseline = avg(conf_results[conf][0])
+    plot([i*100 for i in items], [avg(conf_results[conf][item])/baseline*100 for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
 
     for item in items:
         print conf, item, avg(conf_results[conf][item])
 
 
-xlabel("Proportion Distributed Transactions")
-ylabel("Throughput (txns/s)")
-yscale('log')
+xlabel("Percentage Distributed Transactions")
+ylabel("Relative Throughput (%)")
+#yscale('log')
+xticks([0, 25, 50, 75, 100])
 
 l = legend(loc="upper right", ncol=3, handlelength=2)
 l.draw_frame(False)

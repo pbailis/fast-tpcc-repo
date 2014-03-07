@@ -78,6 +78,7 @@ for conf in conf_results:
 
 xlabel("Number of Warehouses")
 ylabel("Throughput (txns/s)")
+xticks([1, 2, 4, 8, 16])
 
 l = legend(loc="upper right", ncol=3, handlelength=2)
 l.draw_frame(False)
