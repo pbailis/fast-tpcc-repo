@@ -18,7 +18,7 @@ object VeloxConnection {
   }
 }
 
-class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_parallelism: Int=1) extends Logging {
+class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_parallelism: Int, whToServer: java.util.HashMap[Int, Int]) extends Logging {
   val ms = new ClientRPCService(serverAddresses)
   ms.networkService.setExecutor(Executors.newCachedThreadPool())
   ms.initialize()
@@ -28,7 +28,10 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress], connection_p
 
 
   def warehouseToServer(W_ID: Int) = {
-    ((W_ID-1) % serverAddresses.size) +1
+    if(whToServer == null)
+      ((W_ID-1) % serverAddresses.size) +1
+    else
+      whToServer.get(W_ID)
   }
 
   def loadTPCC(W_ID: Int): Future[TPCCLoadResponse] = {
