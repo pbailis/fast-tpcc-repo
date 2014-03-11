@@ -36,6 +36,7 @@ object TPCCLoader extends Logging {
                 partitioner: TPCCPartitioner,
                 messageService: InternalRPCService,
                 storage: StorageEngine) {
+    logger.error(s"loading warehouse $w_id")
     val loadTxn = new Transaction(Timestamp.assignNewTimestamp(), partitioner, storage, messageService)
     val itemTable = loadTxn.table(TPCCConstants.ITEM_TABLE)
 
