@@ -85,12 +85,6 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
     storage.putAll(toPutLocal)
 
     if(!toPutRemote.isEmpty) {
-
-      val tpr_val_it = toPutRemote.values().iterator()
-      while(tpr_val_it.hasNext) {
-        tpr_val_it.next().transactionKeys = keyArr
-      }
-
       val writesByPartition = new util.HashMap[NetworkDestinationHandle, PreparePutAllRequest]
 
       val tpr_entry_it = toPutRemote.entrySet().iterator()
