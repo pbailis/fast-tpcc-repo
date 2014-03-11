@@ -107,7 +107,6 @@ object ClientBenchmark extends Logging {
     val TABLE_NAME = "table1"
     val ID_COL = "id"
     val STR_COL = "str"
-    ClientCatalog.initializeSchemaFromZK()
 
     if (load) {
 
