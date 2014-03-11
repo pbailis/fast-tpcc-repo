@@ -1,25 +1,56 @@
 package edu.berkeley.velox.catalog
 
 import com.typesafe.scalalogging.slf4j.Logging
-import scala.collection.immutable.HashMap
 import edu.berkeley.velox.datamodel._
-import scala.Some
-import scala.Some
+import edu.berkeley.velox.frontend.ClientZookeeperConnection
+import edu.berkeley.velox.server.ServerZookeeperConnection
+import edu.berkeley.velox.server.ZookeeperConnection
 import edu.berkeley.velox.storage.StorageManager
 import scala.Some
-import edu.berkeley.velox.server.ServerZookeeperConnection
-import scala.Some
-import scala.Some
-import edu.berkeley.velox.datamodel.PrimaryKey
-import scala.Some
-import edu.berkeley.velox.datamodel.ColumnLabel
-import edu.berkeley.velox.frontend.ClientZookeeperConnection
+import scala.collection.immutable.HashMap
 
-trait Catalog extends Logging {
-
+object Catalog extends Logging {
 
   @volatile
   protected var schemas = new HashMap[DatabaseName, HashMap[TableName, Schema]]
+
+  @volatile
+  private var storageManagers: List[StorageManager] = Nil
+
+  var zkCon: ZookeeperConnection = null
+
+  def initCatalog(isClient: Boolean) {
+    if (isClient)
+      zkCon = ClientZookeeperConnection
+    else
+      zkCon = ServerZookeeperConnection
+  }
+
+  /**
+   *  Register a storage manager with the catalog.  After registration the
+   *  storage manager will be informed of all relevant updates to the Catalog.
+   *
+   *  @param manager The storage manager to register
+   *  @param notifyExisting if true, the manager will be notified of currently
+   *                        existing objects in the catalog
+   */
+  def registerStorageManager(manager: StorageManager, notifyExisting: Boolean = false) {
+    storageManagers.synchronized {
+      storageManagers ::= manager
+    }
+    if (notifyExisting) {
+      schemas.synchronized {
+        schemas.foreach {
+          case (dbname,tables) => {
+            manager.createDatabase(dbname)
+            tables.foreach {
+              case (tablename,schema) => manager.createTable(dbname,tablename)
+            }
+          }
+        }
+      }
+    }
+  }
 
   def getSchema(db: DatabaseName, table: TableName): Schema = {
     schemas.get(db) match {
@@ -59,13 +90,14 @@ trait Catalog extends Logging {
      * db does not exist locally the table doesn't exist and can return false
      * immediately.
      */
+
     if (!checkDBExistsLocal(db)) {
       false
     } else if (checkTableExistsLocal(db, table)) {
       true
-    } else if (ServerZookeeperConnection.checkTableExistsZookeeper(db, table)) {
+    } else if (zkCon.checkTableExistsZookeeper(db, table)) {
       // add to local schema if table exists in zookeeper but not locally
-      val schema = ServerZookeeperConnection.getSchemaFor(db,table)
+      val schema = zkCon.getSchemaFor(db,table)
       _createTableTrigger(db,table,schema)
       true
     } else {
@@ -98,12 +130,12 @@ trait Catalog extends Logging {
   }
 
   def initializeSchemaFromZK() = {
-    val dbs = ClientZookeeperConnection.listZookeeperDBs()
+    val dbs = zkCon.listZookeeperDBs()
     logger.error("Initializing schema from zookeeper")
     dbs.foreach{  db =>
       _createDatabaseTrigger(db)
-      logger.error(s"created database trigger for $db, client tables are ${ClientZookeeperConnection.listZookeeperTables(db)}")
-      ClientZookeeperConnection.listZookeeperTables(db).map {
+      logger.error(s"created database trigger for $db, client tables are ${zkCon.listZookeeperTables(db)}")
+      zkCon.listZookeeperTables(db).map {
         case (k, v) =>
           logger.error("init schema success")
           _createTableTrigger(db, k, v)
@@ -122,6 +154,7 @@ trait Catalog extends Logging {
       schemas.synchronized {
         schemas += ((db, new HashMap[TableName, Schema]))
       }
+      storageManagers foreach (_.createDatabase(db))
       true
     }
   }
@@ -148,14 +181,28 @@ trait Catalog extends Logging {
           }
           else {
             logger.warn(s"Duplicate call to _createTableTrigger for $db->$table with same schema.  Ignoring")
-            false
+            return false
           }
         } else {
           val newMap = tm + ((table,schema))
           schemas += ((db,newMap))
         }
       }
+      storageManagers foreach (_.createTable(db,table))
       true
     }
+  }
+
+  def createDatabase(dbName: DatabaseName): Boolean = {
+    logger.info(s"Creating database $dbName")
+    // This call ensures sure the DB has been added to our local schema
+    _createDatabaseTrigger(dbName)
+    ClientZookeeperConnection.createDatabase(dbName)
+  }
+
+  def createTable(dbName: DatabaseName, tableName: TableName, schema: Schema): Boolean = {
+    logger.info(s"Creating table $dbName:$tableName")
+    _createTableTrigger(dbName, tableName, schema)
+    ClientZookeeperConnection.createTable(dbName, tableName, schema)
   }
 }

@@ -453,7 +453,7 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
                 'ip_addr': "localhost",
                 'swp_time': sweep_time,
                 'zk_port': ZOOKEEPER_PORT,
-                'num_servers': cluster.numServers}
+                'num_servers': num_servers}
 
     for sid in range(0, num_servers):
         if profile:
@@ -481,7 +481,8 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
               "--timeout %(timeout)d --network_service %(net_service)s --buffer_size %(buf_size)d "
               "--sweep_time %(sweep_time)d --latency %(latency)s "
               "-z localhost:%(zk_port)d "
-              "--num_servers %(num_servers)d")
+              "--num_servers %(num_servers)d "
+              "--run --load")
 
     cmd_args = {'pstr': pstr,
                 'jar_loc': VELOX_JAR_LOCATION,
