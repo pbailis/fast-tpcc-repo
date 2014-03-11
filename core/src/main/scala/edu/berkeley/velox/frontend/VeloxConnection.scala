@@ -2,8 +2,6 @@ package edu.berkeley.velox.frontend
 
 import edu.berkeley.velox.rpc.ClientRPCService
 import scala.concurrent._
-import java.net.InetSocketAddress
-import collection.JavaConversions._
 import edu.berkeley.velox.frontend.api._
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.datamodel.api.operation._
@@ -13,9 +11,7 @@ import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import edu.berkeley.velox.operations.database.response.InsertionResponse
 import edu.berkeley.velox._
 import scala.util.Failure
-import edu.berkeley.velox.operations.database.request.CreateDatabaseRequest
 import edu.berkeley.velox.datamodel.ColumnLabel
-import edu.berkeley.velox.operations.database.request.CreateTableRequest
 import scala.util.Success
 import edu.berkeley.velox.operations.database.request.InsertionRequest
 import edu.berkeley.velox.operations.database.request.QueryRequest
@@ -26,7 +22,6 @@ import scala.collection.JavaConverters._
 
 
 import java.util
-import edu.berkeley.velox.cluster.ClientRandomPartitioner
 
 object VeloxConnection {
   def makeConnection: VeloxConnection = {

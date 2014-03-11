@@ -122,7 +122,6 @@ trait Catalog extends Logging {
       schemas.synchronized {
         schemas += ((db, new HashMap[TableName, Schema]))
       }
-//      storageManagers foreach (_.createDatabase(db))
       true
     }
   }

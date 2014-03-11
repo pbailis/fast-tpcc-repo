@@ -15,10 +15,3 @@ class ServerRandomPartitioner extends Partitioner {
   }
 }
 
-
-class ClientRandomPartitioner extends Partitioner with Logging {
-  override def getMasterPartition(key: PrimaryKey): NetworkDestinationHandle = {
-    val index = Math.abs(key.hashCode() % ClientZookeeperConnection.getServersInGroup().size)
-    ClientZookeeperConnection.getServersInGroup().keys.toList(index)
-  }
-}

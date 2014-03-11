@@ -1,22 +1,18 @@
 package edu.berkeley.velox.frontend
 
-import edu.berkeley.velox.server.{ClientDBWatcher, ServerDBWatcher, ZookeeperConnection}
+import edu.berkeley.velox.server.ZookeeperConnection
 import edu.berkeley.velox.server.{ZookeeperConnectionUtils => ZKUtils}
 import org.apache.curator.framework.recipes.locks.InterProcessMutex
 import edu.berkeley.velox.datamodel.{Schema, TableName, DatabaseName}
 import edu.berkeley.velox.conf.VeloxConfig
-import org.apache.curator.framework.recipes.cache.{PathChildrenCacheEvent, PathChildrenCacheListener, PathChildrenCache}
-import org.apache.curator.framework.CuratorFramework
+import org.apache.curator.framework.recipes.cache.{PathChildrenCacheListener, PathChildrenCache}
 import java.util.{ArrayList => JArrayList}
 
 
 object ClientZookeeperConnection extends ZookeeperConnection {
 
-//  private val groupMembershipListeners: List[PathChildrenCacheListener] = JArrayList[PathChildrenCacheListener]
-
   private var cacheInitialized = false
   def addGroupMembershipListener(listener: PathChildrenCacheListener) {
-//    require(cacheInitialized)
     groupMembershipCache.getListenable.addListener(listener)
   }
 

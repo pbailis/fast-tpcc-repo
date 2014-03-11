@@ -11,7 +11,6 @@ import scala.language.postfixOps
 
 object ExampleDataModel {
   def main(args: Array[String]) {
-//    val conn = new VeloxConnection(Array(new InetSocketAddress("localhost", 1234)))
     val conn = new VeloxConnection
 
     val dbf = conn.createDatabase("peter-db")

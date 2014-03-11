@@ -43,12 +43,6 @@ class MyPathChildrenCacheListener(ms: ClientRPCService) extends PathChildrenCach
         logger.debug(s"Client adding connection to $handle in CHILD_ADDED case")
       case PathChildrenCacheEvent.Type.INITIALIZED => logger.debug("Group membership cache initialized")
       case other => logger.info(s"ChildEvent of type ${event.getType} detected")
-//      case PathChildrenCacheEvent.Type.INITIALIZED => {
-//        event.getInitialData.asScala.map {m =>
-//          addConnection(m.getData)
-//          logger.warn(s"Client adding connection to $m in INITIALIZED case")
-//        }
-//      }
     }
   }
 

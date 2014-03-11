@@ -34,102 +34,15 @@ class VeloxServer(storage: StorageManager,
   internalServer.initialize()
   logger.info("Internal server initialized")
 
-//  internalServer.registerHandler(new InternalQueryRequestHandler)
-//  internalServer.registerHandler(new InternalInsertionRequestHandler)
-
   // create the message service first, register handlers, then start the network
   val frontendServer = new FrontendRPCService(id)
 
-//  frontendServer.registerHandler(new FrontendCreateDatabaseRequestHandler)
-//  frontendServer.registerHandler(new FrontendCreateTableRequestHandler)
   frontendServer.registerHandler(new QueryRequestHandler)
   frontendServer.registerHandler(new InsertionRequestHandler)
 
   frontendServer.initialize()
   logger.warn("Frontend server initialized.")
 
-
-  /*
-   * Handlers for front-end requests.
-   */
-
-//  class FrontendCreateDatabaseRequestHandler extends MessageHandler[CreateDatabaseResponse, CreateDatabaseRequest] {
-//    def receive(src: NetworkDestinationHandle, msg: CreateDatabaseRequest): Future[CreateDatabaseResponse] = {
-//      future {
-//        ServerCatalog.createDatabase(msg.name)
-//        new CreateDatabaseResponse
-//      }
-//    }
-//  }
-//
-//  class FrontendCreateTableRequestHandler extends MessageHandler[CreateTableResponse, CreateTableRequest] {
-//    def receive(src: NetworkDestinationHandle, msg: CreateTableRequest): Future[CreateTableResponse] = {
-//      future {
-//        ServerCatalog.createTable(msg.database, msg.table, msg.schema)
-//        new CreateTableResponse
-//      }
-//    }
-//  }
-
-//  class FrontendInsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] {
-//    def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
-//      val p = Promise[InsertionResponse]
-//
-//      val requestsByPartition = new JHashMap[NetworkDestinationHandle, InsertSet]
-//
-//      msg.insertSet.getRows.foreach(
-//        r => {
-//          val pkey = ServerCatalog.extractPrimaryKey(msg.database, msg.table, r)
-//          val partition = partitioner.getMasterPartition(pkey)
-//          if(!requestsByPartition.containsKey(partition)) {
-//            requestsByPartition.put(partition, new InsertSet)
-//          }
-//
-//          requestsByPartition.get(partition).appendRow(r)
-//        }
-//      )
-//
-//      val insertFutures = new util.ArrayList[Future[InsertionResponse]](requestsByPartition.size)
-//
-//      val rbp_it = requestsByPartition.entrySet.iterator()
-//      while(rbp_it.hasNext) {
-//        val rbp = rbp_it.next()
-//        insertFutures.add(internalServer.send(rbp.getKey, new InsertionRequest(msg.database, msg.table, rbp.getValue)))
-//      }
-//
-//      val f = Future.sequence(insertFutures.asScala)
-//
-//      f onComplete {
-//        case Success(responses) =>
-//          p success new InsertionResponse
-//        case Failure(t) => {
-//          logger.error("Error processing insertion", t)
-//          p failure t
-//        }
-//      }
-//
-//      p.future
-//    }
-//  }
-//
-//  class FrontendQueryRequestHandler extends MessageHandler[QueryResponse, QueryRequest] {
-//    def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
-//      val p = Promise[QueryResponse]
-//      val f = Future.sequence(internalServer.sendAll(msg))
-//      f onComplete {
-//        case Success(responses) => {
-//          var ret = new ResultSet
-//          responses foreach { r => ret.merge(r.results) }
-//          p success new QueryResponse(ret)
-//        }
-//        case Failure(t) => {
-//          logger.error(s"Error processing query", t)
-//          p failure t
-//        }
-//      }
-//      p.future
-//    }
-//  }
 
   /*
    * Handlers for client requests

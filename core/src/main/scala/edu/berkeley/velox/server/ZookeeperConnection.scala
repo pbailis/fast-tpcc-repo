@@ -114,7 +114,6 @@ trait ZookeeperConnection extends Logging {
       }
     })
     // populate cache at initalization time
-//    groupMembershipCache.start(PathChildrenCache.StartMode.BUILD_INITIAL_CACHE)
     groupMembershipCache.start(startMode)
     _getCurrentServers()
   }

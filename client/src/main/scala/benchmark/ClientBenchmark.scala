@@ -42,12 +42,7 @@ object ClientBenchmark extends Logging {
     var useFutures = true
     var computeLatency = false
 
-    // var frontendCluster = ""
-
     val parser = new scopt.OptionParser[Unit]("velox") {
-      // opt[String]('m', "frontend_cluster") required() foreach {
-      //   i => frontendCluster = i
-      // } text ("Frontend cluster")
       opt[Int]("timeout") foreach {
         i => waitTimeSeconds = i
       } text ("Time (s) for benchmark")
@@ -96,12 +91,6 @@ object ClientBenchmark extends Logging {
     }
 
     parser.parse(args)
-
-
-
-    //    val clusterAddresses = frontendCluster.split(",").map {
-//      a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
-//    }
 
     // (num reqs, avg)
     var currentLatency = (0, 0.0)
