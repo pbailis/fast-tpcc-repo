@@ -22,4 +22,6 @@ class Database(val connection: VeloxConnection, val name: DatabaseName) {
   def registerTrigger(tableName: TableName, triggerClass: Class[_]) {
     connection.registerTrigger(name, tableName, triggerClass)
   }
+
+  override def toString(): String = name
 }
