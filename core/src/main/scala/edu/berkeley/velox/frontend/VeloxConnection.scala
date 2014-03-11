@@ -2,61 +2,60 @@ package edu.berkeley.velox.frontend
 
 import edu.berkeley.velox.rpc.ClientRPCService
 import scala.concurrent._
-import java.net.InetSocketAddress
-import collection.JavaConversions._
 import edu.berkeley.velox.frontend.api._
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.datamodel.api.operation._
-import edu.berkeley.velox.operations.database.request._
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel.DataModelConverters._
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
-import scala.util.Success
+import edu.berkeley.velox.operations.database.response.InsertionResponse
+import edu.berkeley.velox._
 import scala.util.Failure
+import edu.berkeley.velox.datamodel.ColumnLabel
+import scala.util.Success
+import edu.berkeley.velox.operations.database.request.InsertionRequest
+import edu.berkeley.velox.operations.database.request.QueryRequest
+import edu.berkeley.velox.datamodel.Query
+import edu.berkeley.velox.catalog.ClientCatalog
+import java.util.{HashMap => JHashMap}
+import scala.collection.JavaConverters._
+
+
+import java.util
 
 object VeloxConnection {
-  def makeConnection(addresses: java.lang.Iterable[InetSocketAddress]): VeloxConnection = {
-    return new VeloxConnection(addresses)
+  def makeConnection: VeloxConnection = {
+    new VeloxConnection
   }
 }
 
-class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logging {
-  val ms = new ClientRPCService(serverAddresses)
-  ms.initialize()
+class VeloxConnection extends Logging {
 
-  def database(name: DatabaseName) : Database = {
-    // TODO: check if exists?
+  val ms = new ClientRPCService
+  ms.initialize()
+  logger.warn("Client rpc service initialized")
+  val partitioner = new ClientRandomPartitioner
+
+  def database(name: DatabaseName): Database = {
     new Database(this, name)
   }
 
   def createDatabase(name: DatabaseName) : Future[Database] = {
-    val df = Promise[Database]
-
-    ms.sendAny(new CreateDatabaseRequest(name)) onComplete {
-      case Success(value) => df success new Database(this, name)
-      case Failure(t) => {
-        logger.error("Error creating database", t)
-        df failure t
-      }
+    future {
+      ClientCatalog.createDatabase(name)
+      new Database(this, name)
     }
-
-    df.future
   }
 
   def createTable(database: Database, tableName: TableName, schema: Schema) : Future[Table] = {
-    val df = Promise[Table]
-
-    ms.sendAny(new CreateTableRequest(database.name, tableName, schema)) onComplete {
-      case Success(value) => df success new Table(database, tableName)
-      case Failure(t) => {
-        logger.error("Error creating table", t)
-        df failure t
-      }
+    future {
+      ClientCatalog.createTable(database.name, tableName, schema)
+      new Table(database, tableName)
     }
-
-    df.future
   }
 
+
+  // Query creation/parsing/validation
   def select(names: ColumnLabel*) : QueryOperation = {
     new QueryOperation(null, names)
   }
@@ -65,31 +64,66 @@ class VeloxConnection(serverAddresses: Iterable[InetSocketAddress]) extends Logg
     new InsertionOperation(null, values)
   }
 
+  // Routing
   def execute(database: Database, table: Table, operation: Operation) : Future[ResultSet] = {
-    val resultSetPromise = Promise[ResultSet]
 
-    operation match {
+    val results: Future[ResultSet] = operation match {
       case s: QueryOperation => {
-        ms.sendAny(new QueryRequest(database.name, table.name, new Query(s.columns, s.predicate))) onComplete {
-          case Success(value) => resultSetPromise success value.results
-          case Failure(t) => {
-            logger.error("Error executing selection", t)
-            resultSetPromise failure t
-          }
-        }
+        executeQuery(new QueryRequest(database.name, table.name, new Query(s.columns, s.predicate)))
       }
-
       case i: InsertionOperation => {
-        ms.sendAny(new InsertionRequest(database.name, table.name, i.insertSet)) onComplete {
-          case Success(value) => resultSetPromise success new ResultSet
-          case Failure(t) => {
-            logger.error("Error executing insertion", t)
-            resultSetPromise failure t
-          }
-        }
+        executeInsert(new InsertionRequest(database.name, table.name, i.insertSet))
       }
     }
+    results
+  }
 
+  private def executeQuery(query: QueryRequest) : Future[ResultSet] = {
+    val resultSetPromise = Promise[ResultSet]
+    val f = Future.sequence(ms.sendAllRemote(query))
+    f onComplete {
+      case Success(responses) => {
+        val results = new ResultSet
+        responses foreach { r => results.merge(r.results) }
+        resultSetPromise success results
+      }
+      case Failure(t) => {
+        logger.error(s"Error processing query", t)
+        resultSetPromise failure t
+      }
+    }
+    resultSetPromise.future
+  }
+
+  private def executeInsert(insertion: InsertionRequest) : Future[ResultSet] = {
+    val resultSetPromise = Promise[ResultSet]
+    val requestsByPartition = new JHashMap[NetworkDestinationHandle, InsertSet]
+    insertion.insertSet.getRows.foreach(
+      r => {
+        val pkey = ClientCatalog.extractPrimaryKey(insertion.database, insertion.table, r)
+        val partition = partitioner.getMasterPartition(pkey)
+        if(!requestsByPartition.containsKey(partition)) {
+          requestsByPartition.put(partition, new InsertSet)
+        }
+        requestsByPartition.get(partition).appendRow(r)
+      }
+    )
+    val insertFutures = new util.ArrayList[Future[InsertionResponse]](requestsByPartition.size)
+    val rbp_it = requestsByPartition.entrySet.iterator()
+    while(rbp_it.hasNext) {
+      val rbp = rbp_it.next()
+      insertFutures.add(ms.send(rbp.getKey, new InsertionRequest(insertion.database, insertion.table, rbp.getValue)))
+    }
+    val f = Future.sequence(insertFutures.asScala)
+    f onComplete {
+      case Success(responses) =>
+        // Response is empty ResultSet
+        resultSetPromise success new ResultSet
+      case Failure(t) => {
+        logger.error("Error processing insertion", t)
+        resultSetPromise failure t
+      }
+    }
     resultSetPromise.future
   }
 }

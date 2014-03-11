@@ -5,7 +5,7 @@ import edu.berkeley.velox.NetworkDestinationHandle
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.MessageService
 import java.io.{ByteArrayInputStream, ByteArrayOutputStream, DataInputStream, DataOutputStream}
-import java.net.InetSocketAddress
+import java.net.{ConnectException, InetSocketAddress}
 import java.nio.ByteBuffer
 import java.nio.channels.{ServerSocketChannel, SocketChannel}
 import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors, LinkedBlockingQueue, Semaphore, ThreadFactory}
@@ -385,8 +385,14 @@ class ArrayNetworkService(
         _registerConnection(handle, clientChannel)
         return;
       } catch {
-        case e: Exception => logger.error("Error connecting to "+address, e)
-        Thread.sleep(500)
+        case e: ConnectException => {
+          logger.warn(s"Error connecting to $address - Trying again")
+          Thread.sleep(500)
+        }
+        case u: Exception => {
+          logger.error(s"Unexpected error connecting to $address", u)
+          Thread.sleep(500)
+        }
       }
     }
   }
@@ -406,10 +412,9 @@ class ArrayNetworkService(
   def _registerConnection(partitionId: NetworkDestinationHandle, channel: SocketChannel) {
     val bufPool = new SocketBufferPool(channel)
     if (connections.putIfAbsent(partitionId,bufPool) == null) {
-      logger.info(s"Adding connection from $partitionId")
       // start up a read thread
       new ReaderThread(name, channel, executor, partitionId, messageService, channel.getRemoteAddress.toString).start
-      connectionSemaphore.release
+      connectionSemaphore.release()
     }
   }
 
@@ -420,7 +425,7 @@ class ArrayNetworkService(
 
     val connectionListener = new Thread {
       override def run() {
-        // Grab references to memebers in the parent class
+        // Grab references to members in the parent class
         val connections = ArrayNetworkService.this.connections
         // Loop waiting for inbound connections
         while (true) {
@@ -428,7 +433,7 @@ class ArrayNetworkService(
           val clientChannel: SocketChannel = serverChannel.accept
           clientChannel.socket.setTcpNoDelay(tcpNoDelay)
           // Get the bytes encoding the source partition Id
-          var connectionId: NetworkDestinationHandle = -1;
+          var connectionId: NetworkDestinationHandle = -1
           if(performIDHandshake) {
             val bytes = new Array[Byte](4)
             val bytesRead = clientChannel.socket.getInputStream.read(bytes)
@@ -436,7 +441,7 @@ class ArrayNetworkService(
             // Read the partition id
             connectionId = new DataInputStream(new ByteArrayInputStream(bytes)).readInt()
           } else {
-            connectionId = nextConnectionID.decrementAndGet();
+            connectionId = nextConnectionID.decrementAndGet()
           }
           // register the connection, which will start a reader
           _registerConnection(connectionId, clientChannel)
@@ -449,8 +454,13 @@ class ArrayNetworkService(
 
   override def send(dst: NetworkDestinationHandle, buffer: ByteBuffer) {
     val sockBufPool = connections.get(dst)
-    // TODO: Something if buffer is null
-    sockBufPool.send(buffer)
+    try {
+      // TODO: Something if buffer is null
+      sockBufPool.send(buffer)
+      buffer.mark()
+    } catch {
+      case npe: NullPointerException => logger.error(s"Tried to send to $dst but got null buffer", npe)
+    }
   }
 
   override def sendAny(buffer: ByteBuffer) {

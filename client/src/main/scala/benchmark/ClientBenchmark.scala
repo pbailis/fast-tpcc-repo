@@ -10,6 +10,8 @@ import edu.berkeley.velox.frontend.VeloxConnection
 import java.net.InetSocketAddress
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import com.typesafe.scalalogging.slf4j.Logging
+import edu.berkeley.velox.catalog.ClientCatalog
 
 // this causes our futures to not thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
@@ -19,9 +21,10 @@ import java.util.UUID
 
 import scala.language.postfixOps
 
-object ClientBenchmark {
+object ClientBenchmark extends Logging {
 
   def main(args: Array[String]) {
+    VeloxConfig.initialize(args)
     val numPuts = new AtomicInteger()
     val numGets = new AtomicInteger()
 
@@ -33,16 +36,13 @@ object ClientBenchmark {
     var waitTimeSeconds = 20
     var pctReads = 0.5
     var status_time = 10
+    var run = false
+    var load = false
 
     var useFutures = true
     var computeLatency = false
 
-    var frontendCluster = ""
-
     val parser = new scopt.OptionParser[Unit]("velox") {
-      opt[String]('m', "frontend_cluster") required() foreach {
-        i => frontendCluster = i
-      } text ("Frontend cluster")
       opt[Int]("timeout") foreach {
         i => waitTimeSeconds = i
       } text ("Time (s) for benchmark")
@@ -70,6 +70,12 @@ object ClientBenchmark {
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
+      opt[Unit]("run") foreach {
+        i => run = true
+      } text ("run")
+      opt[Unit]("load") foreach {
+        i => load = true
+      } text ("laod")
     }
 
     val opsSent = new AtomicInteger(0)
@@ -79,16 +85,12 @@ object ClientBenchmark {
       val o = opsDone.incrementAndGet
       if (o == numops) {
         opsDone.synchronized {
-          opsDone.notify
+          opsDone.notify()
         }
       }
     }
 
     parser.parse(args)
-
-    val clusterAddresses = frontendCluster.split(",").map {
-      a => val addr = a.split(":"); new InetSocketAddress(addr(0), addr(1).toInt)
-    }
 
     // (num reqs, avg)
     var currentLatency = (0, 0.0)
@@ -100,30 +102,41 @@ object ClientBenchmark {
     }
 
     val ostart = System.nanoTime
-
-    val client = new VeloxConnection(clusterAddresses)
-    val DB_NAME = "client-benchmark-db" + UUID.randomUUID().toString
+    val client = new VeloxConnection
+    val DB_NAME = "client-benchmark-db"
     val TABLE_NAME = "table1"
     val ID_COL = "id"
     val STR_COL = "str"
-    val dbf = client.createDatabase(DB_NAME)
-    Await.ready(dbf, Duration.Inf)
-    println("database successfully added")
+    ClientCatalog.initializeSchemaFromZK()
 
-    val db = dbf.value.get.get
+    if (load) {
 
-    val tblf = db.createTable(TABLE_NAME,
-                              Schema.columns(ID_COL PRIMARY() INT,
-                                             STR_COL STRING))
-    Await.ready(tblf, Duration.Inf)
-    println("table successfully added")
+      val dbf = client.createDatabase(DB_NAME)
+      Await.ready(dbf, Duration.Inf)
+      logger.info("database successfully added")
 
-    val table = tblf.value.get.get
+      val db = dbf.value.get.get
 
+      val tblf = db.createTable(TABLE_NAME,
+        Schema.columns(ID_COL PRIMARY() INT,
+          STR_COL STRING))
+      Await.ready(tblf, Duration.Inf)
+      logger.info("table successfully added")
 
-    println(s"Starting $parallelism threads!")
+      val table = tblf.value.get.get
+      System.exit(0)
+    }
 
-  for (i <- 0 to parallelism) {
+   if (!run) {
+     logger.error("RUN FALSE")
+   }
+
+    logger.error(s"local dbs: ${ClientCatalog.listLocalDatabases}")
+    logger.error(s"local tables: ${ClientCatalog.listLocalTables(DB_NAME)}")
+
+    val table = client.database(DB_NAME).table(TABLE_NAME)
+    logger.info(s"Starting $parallelism threads!")
+    for (i <- 0 to parallelism) {
     new Thread(new Runnable {
       val rand = new Random
       override def run() = {
@@ -140,7 +153,7 @@ object ClientBenchmark {
                 numGets.incrementAndGet()
                 opDone
               }
-              case Failure(t) => println("An error has occured: " + t.getMessage)
+              case Failure(t) => logger.info("An error has occured: " + t.getMessage)
             }
           } else {
             val key = rand.nextInt(keyrange)
@@ -156,13 +169,13 @@ object ClientBenchmark {
                 numPuts.incrementAndGet()
                 opDone
               }
-              case Failure(t) => println("An error has occured: " + t.getMessage)
+              case Failure(t) => logger.info("An error has occured: " + t.getMessage)
             }
           }
           opsSent.incrementAndGet
         }
       }
-      println("Thread is done sending")
+      logger.info("Thread is done sending")
     }).start
   }
 
@@ -174,7 +187,7 @@ object ClientBenchmark {
             Thread.sleep(status_time*1000)
             val curTime = (System.nanoTime-ostart).toDouble/nanospersec
             val curThru = (numGets.get()+numPuts.get()).toDouble/curTime
-            println(s"STATUS @ ${curTime}s: $curThru ops/sec ($opsDone ops done)")
+            logger.info(s"STATUS @ ${curTime}s: $curThru ops/sec ($opsDone ops done)")
           }
         }
       }).start
@@ -193,9 +206,9 @@ object ClientBenchmark {
     val pthruput = nPuts.toDouble / gtime.toDouble
     val gthruput = nGets.toDouble / gtime.toDouble
     val totthruput = (nPuts + nGets).toDouble / gtime.toDouble
-    println(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
+    logger.info(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
     if (computeLatency)
-      println(s"Average latency ${currentLatency._2} milliseconds")
+      logger.info(s"Average latency ${currentLatency._2} milliseconds")
     System.exit(0)
   }
 

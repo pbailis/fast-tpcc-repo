@@ -11,9 +11,11 @@ import scala.language.postfixOps
 
 object ExampleDataModel {
   def main(args: Array[String]) {
-    val conn = new VeloxConnection(Array(new InetSocketAddress("localhost", 1234)))
+    val conn = new VeloxConnection
 
-    val db : Database = conn.database("peter-db")
+    val dbf = conn.createDatabase("peter-db")
+    Await.ready(dbf, Duration.Inf)
+    val db = dbf.value.get.get
 
     // use existing table
     val table = db.table("test_table")
