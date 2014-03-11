@@ -33,7 +33,8 @@ class VeloxConnection extends Logging {
 
   val ms = new ClientRPCService
   ms.initialize()
-  logger.warn("Client rpc service initialized")
+  ClientCatalog.initializeSchemaFromZK()
+
   val partitioner = new ClientRandomPartitioner
 
   def database(name: DatabaseName): Database = {
