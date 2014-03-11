@@ -11,7 +11,7 @@ import java.net.InetSocketAddress
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.catalog.ClientCatalog
+import edu.berkeley.velox.catalog.Catalog
 
 // this causes our futures to not thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
@@ -123,15 +123,17 @@ object ClientBenchmark extends Logging {
       logger.info("table successfully added")
 
       val table = tblf.value.get.get
-      System.exit(0)
+      if (!run)
+        System.exit(0)
     }
 
    if (!run) {
      logger.error("RUN FALSE")
+     System.exit(-1)
    }
 
-    logger.error(s"local dbs: ${ClientCatalog.listLocalDatabases}")
-    logger.error(s"local tables: ${ClientCatalog.listLocalTables(DB_NAME)}")
+    logger.error(s"local dbs: ${Catalog.listLocalDatabases}")
+    logger.error(s"local tables: ${Catalog.listLocalTables(DB_NAME)}")
 
     val table = client.database(DB_NAME).table(TABLE_NAME)
     logger.info(s"Starting $parallelism threads!")

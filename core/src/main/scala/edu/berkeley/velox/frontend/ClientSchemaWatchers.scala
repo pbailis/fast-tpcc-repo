@@ -4,7 +4,7 @@ import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.framework.api.CuratorWatcher
 import com.typesafe.scalalogging.slf4j.Logging
 import org.apache.zookeeper.WatchedEvent
-import edu.berkeley.velox.catalog.{ServerCatalog, ClientCatalog}
+import edu.berkeley.velox.catalog.Catalog
 import org.apache.curator.utils.ZKPaths
 import edu.berkeley.velox.server.{ZookeeperConnectionUtils => ZKUtils}
 import scala.collection.JavaConverters._
@@ -15,7 +15,6 @@ import scala.collection.JavaConverters._
 /*
   Differences:
     - Schema changes aren't blocked on other clients, so the client watchers don't need to decrement the barrier
-    - Clients add to ClientCatalog, not ServerCatalog, because they don't have storage managers
  */
 class ClientDBWatcher(client: CuratorFramework) extends CuratorWatcher with Logging {
   override def process(event: WatchedEvent) {
@@ -24,13 +23,13 @@ class ClientDBWatcher(client: CuratorFramework) extends CuratorWatcher with Logg
       val catalogDBs = client.getChildren.usingWatcher(new ClientDBWatcher(client)).forPath(ZKUtils.CATALOG_ROOT)
         .asScala
         .toSet
-      val localDBs = ClientCatalog.listLocalDatabases
+      val localDBs = Catalog.listLocalDatabases
       val diff = catalogDBs -- localDBs
       logger.error(s"CLIENT: local: $localDBs, catalog: $catalogDBs, diff: $diff")
 
       if (diff.size == 1) {
         val newDBName = diff.toList(0)
-        ClientCatalog._createDatabaseTrigger(newDBName)
+        Catalog._createDatabaseTrigger(newDBName)
         client.getChildren.usingWatcher(new ClientTableWatcher(newDBName, client))
           .forPath(ZKUtils.makeDBPath(newDBName))
       } else if (diff.size == 0) {
@@ -57,13 +56,13 @@ class ClientTableWatcher(dbname: String,
         .forPath(ZKPaths.makePath(ZKUtils.CATALOG_ROOT, dbname))
         .asScala
         .toSet
-      val localTables = ClientCatalog.listLocalTables(dbname)
+      val localTables = Catalog.listLocalTables(dbname)
       val diff = catalogTables -- localTables
       logger.error(s"CREATING TABLE IN CLIENT: local: $localTables, catalog: $catalogTables, diff: $diff")
       if (diff.size == 1) {
         val newTableName = diff.toList(0)
         val schemaBytes = client.getData.forPath(ZKUtils.makeTablePath(dbname, newTableName))
-        ServerCatalog._createTableTrigger(dbname, newTableName, ZKUtils.bytesToSchema(schemaBytes))
+        Catalog._createTableTrigger(dbname, newTableName, ZKUtils.bytesToSchema(schemaBytes))
       } else if (diff.size == 0) {
         // we already know about all the tables in the catalog.
         logger.warn(s"Client Table watcher activated but all tables accounted for: $dbname, $catalogTables")

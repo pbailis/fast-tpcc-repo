@@ -16,7 +16,7 @@ import scala.util.Success
 import edu.berkeley.velox.operations.database.request.InsertionRequest
 import edu.berkeley.velox.operations.database.request.QueryRequest
 import edu.berkeley.velox.datamodel.Query
-import edu.berkeley.velox.catalog.ClientCatalog
+import edu.berkeley.velox.catalog.Catalog
 import java.util.{HashMap => JHashMap}
 import scala.collection.JavaConverters._
 
@@ -33,7 +33,8 @@ class VeloxConnection extends Logging {
 
   val ms = new ClientRPCService
   ms.initialize()
-  ClientCatalog.initializeSchemaFromZK()
+  Catalog.initCatalog(isClient=true)
+  Catalog.initializeSchemaFromZK()
 
   val partitioner = new ClientRandomPartitioner
 
@@ -43,14 +44,14 @@ class VeloxConnection extends Logging {
 
   def createDatabase(name: DatabaseName) : Future[Database] = {
     future {
-      ClientCatalog.createDatabase(name)
+      Catalog.createDatabase(name)
       new Database(this, name)
     }
   }
 
   def createTable(database: Database, tableName: TableName, schema: Schema) : Future[Table] = {
     future {
-      ClientCatalog.createTable(database.name, tableName, schema)
+      Catalog.createTable(database.name, tableName, schema)
       new Table(database, tableName)
     }
   }
@@ -101,7 +102,7 @@ class VeloxConnection extends Logging {
     val requestsByPartition = new JHashMap[NetworkDestinationHandle, InsertSet]
     insertion.insertSet.getRows.foreach(
       r => {
-        val pkey = ClientCatalog.extractPrimaryKey(insertion.database, insertion.table, r)
+        val pkey = Catalog.extractPrimaryKey(insertion.database, insertion.table, r)
         val partition = partitioner.getMasterPartition(pkey)
         if(!requestsByPartition.containsKey(partition)) {
           requestsByPartition.put(partition, new InsertSet)

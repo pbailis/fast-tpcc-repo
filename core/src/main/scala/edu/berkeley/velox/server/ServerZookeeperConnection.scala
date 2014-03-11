@@ -16,7 +16,7 @@ import org.apache.curator.framework.CuratorFramework
 import org.apache.curator.utils.ZKPaths
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.util.zk.DistributedCountdownLatch
-import edu.berkeley.velox.catalog.ServerCatalog
+import edu.berkeley.velox.catalog.Catalog
 import edu.berkeley.velox.datamodel.{Schema, TableName, DatabaseName}
 import edu.berkeley.velox.util.KryoThreadLocal
 import java.nio.ByteBuffer
