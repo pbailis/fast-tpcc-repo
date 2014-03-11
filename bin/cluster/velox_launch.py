@@ -144,6 +144,9 @@ if __name__ == "__main__":
     if args.terminate:
         terminate_cluster(region, cluster_id)
 
+    if not args.serializable:
+        args.profile = True
+
     if args.wh_bench:
         for it in ITS:
             for wh in [1, 2, 4, 8, 16]:
@@ -175,7 +178,7 @@ if __name__ == "__main__":
 
     if args.scaleout:
         for it in ITS:
-            for config in ["ca", "serializable"]:
+            for config in ["ca"]:
                 runid = "scaleout-S%d-C%d-%s-IT%d" % (num_servers, num_clients, config, it)
                 assign_hosts(region, cluster)
 
@@ -188,7 +191,7 @@ if __name__ == "__main__":
                 else:
                     args.serializable = False
                     clients = 100000
-                    args.sweep_time = 200
+                    args.sweep_time = 20
 
                 start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
                 sleep(20)

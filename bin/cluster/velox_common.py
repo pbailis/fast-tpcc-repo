@@ -296,7 +296,9 @@ def provision_instances(regionName, num, instance_type, placement_group="velox")
         print "Placement group exception "+placement_group
     '''
     reservations = conn.run_instances(AMIs[regionName],
-                                       count=num,
+                                       min_count=num,
+                                       max_count=num,
+
                                        instance_type=instance_type,
                                        security_groups=[VELOX_SECURITY_GROUP])
     #                                   placement_group=placement_group)
