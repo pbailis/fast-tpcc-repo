@@ -82,7 +82,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
       tpl_val_it.next().transactionKeys = keyArr
     }
 
-    storage.putPending(toPutLocal)
+    storage.putAll(toPutLocal)
 
     if(!toPutRemote.isEmpty) {
 
@@ -117,7 +117,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
       prepareFuture onComplete {
         case Success(responses) => {
-          deferredIncrementResponse = storage.putGood(txId, deferredIncrement)
+          deferredIncrementResponse = -1
           toPutLocal.clear()
           p success this
         }
@@ -128,7 +128,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
 
       toPutRemote.clear()
     } else {
-      deferredIncrementResponse = storage.putGood(txId, deferredIncrement)
+      deferredIncrementResponse = -1
       toPutLocal.clear()
       p success this
     }

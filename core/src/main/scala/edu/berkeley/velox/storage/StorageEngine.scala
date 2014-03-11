@@ -156,7 +156,14 @@ class StorageEngine extends Logging {
     val it = pairs.entrySet().iterator()
     while(it.hasNext) {
       val pair = it.next()
-      put(pair.getKey, pair.getValue)
+      var table = latestGoodForKey.get(pair.getKey.table)
+
+      if(table == null) {
+        latestGoodForKey.putIfAbsent(pair.getKey.table, new ConcurrentHashMap[PrimaryKey, Row](100000000, .7f, 24))
+        table = latestGoodForKey.get(pair.getKey.table)
+      }
+
+      table.put(pair.getKey, pair.getValue)
     }
   }
 
