@@ -119,42 +119,7 @@ class Transaction(val txId: Long, val partitioner: TPCCPartitioner, val storage:
         case Success(responses) => {
           deferredIncrementResponse = storage.putGood(txId, deferredIncrement)
           toPutLocal.clear()
-
-          var deferredPartition = -1
-          if(deferredIncrement != null) {
-            deferredPartition = partitioner.getMasterPartition(deferredIncrement.counterKey)
-          }
-
-          val commitFutures = new util.ArrayList[Future[CommitPutAllResponse]](writesByPartition.size())
-
-          val cf_it = writesByPartition.keySet().iterator()
-          while(cf_it.hasNext) {
-            var deferral: DeferredIncrement = null
-
-            val destination = cf_it.next()
-
-            if(destination == deferredPartition) {
-              deferral = deferredIncrement
-            }
-
-            messageService.send(destination, new CommitPutAllRequest(txId, deferral))
-          }
-
-          val commitFuture = Future.sequence(commitFutures.asScala)
-
-          commitFuture onComplete {
-            case Success(responses) => {
-              val resp_it = responses.iterator
-              while(resp_it.hasNext && deferredIncrementResponse == -1) {
-                val response = resp_it.next()
-                if(response.incrementResponse > -1) {
-                  deferredIncrementResponse = response.incrementResponse
-                }
-              }
-              p success this
-            }
-            case Failure(t) => p failure t
-          }
+          p success this
         }
         case Failure(t) => {
           p.failure(t)

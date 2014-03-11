@@ -89,7 +89,7 @@ class VeloxServer extends Logging {
   class InternalPreparePutAllHandler extends MessageHandler[PreparePutAllResponse, PreparePutAllRequest] {
     def receive(src: NetworkDestinationHandle, msg: PreparePutAllRequest): Future[PreparePutAllResponse] = {
       future {
-        storageEngine.putPending(msg.values)
+        storageEngine.putAll(msg.values)
         new PreparePutAllResponse
       }
     }
