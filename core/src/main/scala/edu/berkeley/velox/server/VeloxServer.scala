@@ -19,15 +19,16 @@ import edu.berkeley.velox.operations.database.response.QueryResponse
 import scala.util.Success
 import edu.berkeley.velox.operations.database.request.InsertionRequest
 import scala.collection.JavaConverters._
-import edu.berkeley.velox.catalog.{ClientCatalog, ServerCatalog}
+import edu.berkeley.velox.catalog.Catalog
 import java.util
 
 class VeloxServer(storage: StorageManager,
                   id: NetworkDestinationHandle) extends Logging {
 
+  Catalog.initCatalog(isClient=false)
   val servers = ServerZookeeperConnection.getServersInGroup()
   val partitioner = new ServerRandomPartitioner
-  //ServerCatalog.initializeSchemaFromZK()
+  //Catalog.initializeSchemaFromZK()
 
   // internalServer is unused for now
   val internalServer = new InternalRPCService(id, servers)

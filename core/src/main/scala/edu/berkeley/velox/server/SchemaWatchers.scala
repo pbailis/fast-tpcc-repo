@@ -3,7 +3,7 @@ package edu.berkeley.velox.server
 import org.apache.curator.framework.api.CuratorWatcher
 import org.apache.curator.framework.CuratorFramework
 import org.apache.zookeeper.WatchedEvent
-import edu.berkeley.velox.catalog.ServerCatalog
+import edu.berkeley.velox.catalog.Catalog
 import edu.berkeley.velox.util.zk.DistributedCountdownLatch
 import scala.collection.JavaConverters._
 import org.apache.curator.utils.ZKPaths
@@ -24,12 +24,12 @@ class ServerDBWatcher(client: CuratorFramework,
     val catalogDBs = client.getChildren.usingWatcher(new ServerDBWatcher(client, schemaChangeBarrier)).forPath(ZKUtils.CATALOG_ROOT)
       .asScala
       .toSet
-    val localDBs = ServerCatalog.listLocalDatabases
+    val localDBs = Catalog.listLocalDatabases
     val diff = catalogDBs -- localDBs
     logger.error(s"SERVER: local: $localDBs, catalog: $catalogDBs, diff: $diff")
     if (diff.size == 1) {
       val newDBName = diff.toList(0)
-      ServerCatalog._createDatabaseTrigger(newDBName)
+      Catalog._createDatabaseTrigger(newDBName)
       client.getChildren.usingWatcher(new ServerTableWatcher(newDBName, client, schemaChangeBarrier))
         .forPath(ZKUtils.makeDBPath(newDBName))
     } else if (diff.size == 0) {
@@ -56,12 +56,12 @@ class ServerTableWatcher(dbname: String,
       .forPath(ZKPaths.makePath(ZKUtils.CATALOG_ROOT, dbname))
       .asScala
       .toSet
-    val localTables = ServerCatalog.listLocalTables(dbname)
+    val localTables = Catalog.listLocalTables(dbname)
     val diff = catalogTables -- localTables
     if (diff.size == 1) {
       val newTableName = diff.toList(0)
       val schemaBytes = client.getData.forPath(ZKUtils.makeTablePath(dbname, newTableName))
-      ServerCatalog._createTableTrigger(dbname, newTableName, ZKUtils.bytesToSchema(schemaBytes))
+      Catalog._createTableTrigger(dbname, newTableName, ZKUtils.bytesToSchema(schemaBytes))
     } else if (diff.size == 0) {
       // we already know about all the tables in the catalog.
       logger.warn(s"Server Table watcher activated but all tables accounted for: $dbname, $catalogTables")
