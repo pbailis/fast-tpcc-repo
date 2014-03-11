@@ -67,7 +67,7 @@ class VeloxServer extends Logging {
           TPCCLoader.doLoad(msg.W_ID, partitioner, internalServer, storageEngine)
           p.success(new TPCCLoadResponse)
         }
-      })
+      }).start()
       p.future
     }
   }
