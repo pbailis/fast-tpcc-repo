@@ -6,7 +6,7 @@ import edu.berkeley.velox.cluster.{TPCCPartitioner}
 import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler, Request}
 import java.util.concurrent.ConcurrentHashMap
-import scala.concurrent.{Future, future}
+import scala.concurrent.{Promise, Future, future}
 import edu.berkeley.velox.util.NonThreadedExecutionContext._
 import edu.berkeley.velox.storage.StorageEngine
 import edu.berkeley.velox.benchmark.operation._
@@ -60,10 +60,15 @@ class VeloxServer extends Logging {
   class TPCCLoadRequestHandler extends MessageHandler[TPCCLoadResponse, TPCCLoadRequest] {
     def receive(src: NetworkDestinationHandle, msg: TPCCLoadRequest): Future[TPCCLoadResponse] = {
       logger.info(s"Loading TPCC warehouse ${msg.W_ID}")
-      future {
-        TPCCLoader.doLoad(msg.W_ID, partitioner, internalServer, storageEngine)
-        new TPCCLoadResponse
-      }
+      val p = Promise[TPCCLoadResponse]
+      //hackety hack for multi-warehouse runs
+      new Thread(new Runnable {
+        override def run() = {
+          TPCCLoader.doLoad(msg.W_ID, partitioner, internalServer, storageEngine)
+          p.success(new TPCCLoadResponse)
+        }
+      })
+      p.future
     }
   }
 
