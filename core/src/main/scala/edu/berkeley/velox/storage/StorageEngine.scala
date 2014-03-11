@@ -237,7 +237,7 @@ class StorageEngine extends Logging {
         latestGoodForKey.put(deferredIncrement.destinationKey.table, new ConcurrentHashMap[PrimaryKey, Row](100000000, .7f, 24))
         goodTable = latestGoodForKey.get(deferredIncrement.destinationKey.table)
       }
-      spinlock_lock(deferredIncrement.counterKey)
+      //spinlock_lock(deferredIncrement.counterKey)
       goodTable.put(deferredIncrement.destinationKey, goodRow)
 
       val toInc = getLatestItemForKey(deferredIncrement.counterKey)
@@ -245,7 +245,7 @@ class StorageEngine extends Logging {
       val newVal = curVal+1
       toInc.column(deferredIncrement.counterColumn, newVal)
       goodRow.column(deferredIncrement.destinationColumn, newVal)
-      spinlock_unlock(deferredIncrement.counterKey)
+      //spinlock_unlock(deferredIncrement.counterKey)
       ret = newVal
     }
 
