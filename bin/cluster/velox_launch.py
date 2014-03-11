@@ -46,6 +46,9 @@ if __name__ == "__main__":
     # actual actions we can run
     parser.add_argument('--launch', '-l', action='store_true',
                         help='Launch EC2 cluster')
+
+    parser.add_argument('--factor_analysis', action='store_true',
+                        help='Launch EC2 cluster')
     parser.add_argument('--claim', action='store_true',
                         help='Claim non-tagged instances as our own')
     parser.add_argument('--terminate', '-t', action='store_true',
@@ -149,7 +152,7 @@ if __name__ == "__main__":
 
     if args.wh_bench:
         for it in ITS:
-            for wh in [1, 2, 4, 8, 16]:
+            for wh in [8]:#1, 2, 4, 8, 16]:
                 for config in ["ca", "serializable"]:
                     runid = "whbench-WH%d-%s-IT%d" % (wh, config, it)
                     assign_hosts(region, cluster)
@@ -274,15 +277,41 @@ if __name__ == "__main__":
         runid = "THECRANK-%s" % (str(datetime.now()).replace(' ', '_').replace(":", '_'))
         pprint("Running THE CRANKSHAW")
         assign_hosts(region, cluster)
-        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+        start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable, log_gc=True)
         sleep(5)
+
+        if args.serializable:
+            ops = 1024
+            args.sweep_time = 0
+        else:
+            ops = 100000
+            args.sweep_time = 200
+
         run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
                                args.profile, args.profile_depth,
-                               parallelism=16, timeout=120, ops=100000, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
+                               parallelism=16, timeout=120, ops=ops, chance_remote=0.01, connection_parallelism=1, serializable=args.serializable
                                )
         stop_velox_processes()
         fetch_logs(args.output_dir, runid, cluster)
         pprint("THE CRANKSHAW has completed!")
+
+
+    if args.factor_analysis:
+        for it in ITS:
+            runid = "output/factor-%s-ID%d" % (args.output_dir, it)
+            pprint("Running THE CRANKSHAW")
+            assign_hosts(region, cluster)
+            args.buffer_size = 196608
+            args.sweep_time = 200
+            start_servers(cluster, args.network_service, args.buffer_size, args.sweep_time, args.profile, args.profile_depth, serializable=args.serializable)
+            sleep(5)
+            run_velox_client_bench(cluster, args.network_service, args.buffer_size, args.sweep_time,
+                                   args.profile, args.profile_depth,
+                                   parallelism=16, timeout=120, ops=1000000, chance_remote=0.01, connection_parallelism=1, serializable=False
+                                   )
+            stop_velox_processes()
+            fetch_logs(args.output_dir, runid, cluster)
+            pprint("THE CRANKSHAW has completed!")
 
     if args.client_bench_local:
         pprint("Running THE CRANKSHAW locally! (1 client only)")
