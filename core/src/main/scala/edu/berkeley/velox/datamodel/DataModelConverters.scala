@@ -15,14 +15,16 @@ object DataModelConverters {
     (ColumnLabel(value._1), f(value._2))
   }
 
-  implicit final def toInsertSetRepeated(values: (ColumnLabel, Value)*): InsertSet = {
-    toInsertSetSeq(values)
+  implicit final def toInsertSetRepeated(values: (ColumnLabel, Value)*)(implicit schema: Schema): InsertSet = {
+    toInsertSetSeq(values)(schema)
   }
 
-  implicit final def toInsertSetSeq(values: Seq[(ColumnLabel, Value)]): InsertSet = {
+  implicit final def toInsertSetSeq(values: Seq[(ColumnLabel, Value)])(implicit schema: Schema): InsertSet = {
     val ret = new InsertSet
-    ret.newRow
-    values.foreach { case (c: ColumnLabel, v: Value) => ret.set(c, v) }
+    ret.newRow(values.size)
+    values.foreach { case (c: ColumnLabel, v: Value) => {
+                      ret.set(schema.indexOf(c), v)
+                    } }
     ret.insertRow
     ret
   }

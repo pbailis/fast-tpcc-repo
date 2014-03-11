@@ -1,17 +1,27 @@
 package edu.berkeley.velox.frontend.api
 
-import edu.berkeley.velox.datamodel.api.operation.{Operation, InsertionOperation, QueryOperation}
-import edu.berkeley.velox.datamodel.{ResultSet, Value, Row, ColumnLabel}
-import edu.berkeley.velox.datamodel.DataModelConverters._
+import edu.berkeley.velox.catalog.Catalog
+import edu.berkeley.velox.datamodel.{ColumnLabel, ResultSet, Row, Value}
+import edu.berkeley.velox.datamodel.DataModelConverters.stringToColumnID
+import edu.berkeley.velox.datamodel.InsertSet
+import edu.berkeley.velox.datamodel.api.operation.{InsertionOperation, Operation, QueryOperation}
+import edu.berkeley.velox.exceptions.QueryException
 import scala.concurrent.Future
 
 class Table(val database: Database, val name: String) {
-  def column(name: String) : ColumnLabel = {
-    name
-  }
+
+  val schema = Catalog.getSchema(database.name,name)
+
+  if (schema == null)
+    throw new QueryException(s"Table $name does not exist in database $database")
+
+  // uses stringToColumnID
+  def column(name: String) : ColumnLabel = name
 
   def insert(values: (ColumnLabel, Value)*) : InsertionOperation = {
-    new InsertionOperation(this, values)
+    val ret = new InsertionOperation(values)
+    ret.into(this)
+    ret
   }
 
   def select(names: ColumnLabel*) : QueryOperation = {

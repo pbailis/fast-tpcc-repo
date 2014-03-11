@@ -58,16 +58,14 @@ class HashMapStorageManager extends StorageManager with Logging {
     i
   }
 
-  private def isPrimaryKeyQuery(databaseName: DatabaseName,
-                                tableName: TableName,
-                                query: Query): Boolean = {
+  private def isPrimaryKeyQuery(query: Query): Boolean = {
     query.predicate match {
       case Some(p) => {
         p match {
           case eqp: EqualityPredicate =>
-            Catalog.isPrimaryKeyFor(databaseName,
-                                    tableName,
-                                    eqp.column)
+            Catalog.isPrimaryKeyFor(query.databaseName,
+                                    query.tableName,
+                                    Seq(eqp.columnIndex))
           case _ => false
         }
       }
@@ -75,26 +73,24 @@ class HashMapStorageManager extends StorageManager with Logging {
     }
   }
 
-  protected def _query(databaseName: DatabaseName,
-                       tableName: TableName,
-                       query: Query) : ResultSet = {
+  protected def _query(query: Query) : ResultSet = {
     val rows = new ArrayBuffer[Row]
-    val table = dbs.get(databaseName).get(tableName)
+    val table = dbs.get(query.databaseName).get(query.tableName)
 
-    if (isPrimaryKeyQuery(databaseName,tableName,query)) {
-      val pkv = PrimaryKey(Seq(query.predicate.get.asInstanceOf[EqualityPredicate].value))
+    if (isPrimaryKeyQuery(query)) {
+      val pkv = PrimaryKey(Array[Value](query.predicate.get.asInstanceOf[EqualityPredicate].value))
       val row = table.get(pkv)
       if (row != null)
-        rows += row.project(query.columns)
+        rows += row.project(query.columnIndexes)
     } else {
       table.rows.values.asScala foreach {
         row => query.predicate match {
           case Some(p) => {
             p match {
-              case eqp: EqualityPredicate => if(row.get(eqp.column) == eqp.value) rows += row.project(query.columns)
+              case eqp: EqualityPredicate => if(row.get(eqp.columnIndex) == eqp.value) rows += row.project(query.columnIndexes)
             }
           }
-          case None => rows :+ row.project(query.columns)
+          case None => rows :+ row.project(query.columnIndexes)
         }
       }
     }

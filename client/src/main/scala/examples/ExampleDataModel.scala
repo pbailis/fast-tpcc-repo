@@ -27,7 +27,7 @@ object ExampleDataModel {
     val resultSet = Await.result(conn select("id","name") from table where("id" === 5) execute(), Duration.Inf)
 
     assert(resultSet.size == 1)
-    assert(resultSet.getInt("id") == 5)
+    assert(resultSet.getInt(0) == 5)
 
     val nickTable = db.table("nick-table")
 

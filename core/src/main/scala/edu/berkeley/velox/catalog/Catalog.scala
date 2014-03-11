@@ -59,9 +59,20 @@ object Catalog extends Logging {
     }
   }
 
-  def isPrimaryKeyFor(db: DatabaseName, table: TableName, column: ColumnLabel): Boolean = {
-    val pk = schemas(db)(table).primaryKey
-    pk.size == 1 && pk.head.equals(column)
+  def isPrimaryKeyFor(db: DatabaseName, table: TableName, columns: Seq[Int]): Boolean = {
+    val schema = schemas(db)(table)
+    if (columns.size == schema.numPkCols) {
+      // check that I've specified only pk columns
+      // and for now, that they are in order
+      // TODO: suport reorder in predicate
+      var i = 0
+      while (i < columns.length) {
+        if (i != columns(i)) return false
+        i+=1
+      }
+      true
+    }
+    else false
   }
 
   def listLocalDatabases: Set[DatabaseName] = {
@@ -115,17 +126,7 @@ object Catalog extends Logging {
 
 
   def extractPrimaryKey(database: DatabaseName, table: TableName, row: Row): PrimaryKey  = {
-    val definition = schemas(database)(table).primaryKey
-    val ret = new Array[Value](definition.size)
-    var i = 0
-    definition.foreach (
-      col => {
-        assert(row.get(col) != null)
-        ret(i) = row.get(col)
-        i += 1
-      }
-    )
-
+    val ret = row.values.take(schemas(database)(table).numPkCols)
     new PrimaryKey(ret)
   }
 

@@ -55,16 +55,12 @@ class InsertSet {
     position = Math.max(rows.size()-1, 0)
   }
 
-  def getInt(columnName: ColumnLabel): Int = {
-    rows.get(position).get(columnName).asInstanceOf[IntValue].value
+  def getInt(at: Int): Int = {
+    rows.get(position).get(at).asInstanceOf[IntValue].value
   }
 
-  def getString(columnName: ColumnLabel): String = {
-    rows.get(position).get(columnName).asInstanceOf[StringValue].value
-  }
-
-  def getColumnLabels(): Seq[ColumnLabel] = {
-    rows.get(position).getColumnLabels
+  def getString(at: Int): String = {
+    rows.get(position).get(at).asInstanceOf[StringValue].value
   }
 
   // TODO: do we want to support this operation?
@@ -72,12 +68,12 @@ class InsertSet {
     rows.size()
   }
 
-  def newRow = {
+  def newRow(size: Int) = {
     if(currentInsertRow != null) {
       throw new UnsupportedOperationException("New row requested, but previous row was not inserted!")
     }
 
-    currentInsertRow = new Row
+    currentInsertRow = new Row(size)
   }
 
   def insertRow = {
@@ -89,28 +85,28 @@ class InsertSet {
     currentInsertRow = null
   }
 
-  def set(column: ColumnLabel, value: Value) = {
+  def set(at: Int, value: Value) = {
     if(currentInsertRow == null) {
       throw new UnsupportedOperationException("No row is currently being built!")
     }
 
-    currentInsertRow.set(column, value)
+    currentInsertRow.set(at, value)
   }
 
-  def setString(column: ColumnLabel, value: String) = {
+  def setString(at: Int, value: String) = {
     if(currentInsertRow == null) {
       throw new UnsupportedOperationException("No row is currently being built!")
     }
 
-    currentInsertRow.set(column, value)
+    currentInsertRow.set(at, value)
   }
 
-  def setInt(column: ColumnLabel, value: Int) = {
+  def setInt(at: Int, value: Int) = {
     if(currentInsertRow == null) {
       throw new UnsupportedOperationException("No row is currently being built!")
     }
 
-    currentInsertRow.set(column, value)
+    currentInsertRow.set(at, value)
   }
 
   def merge(other: InsertSet) = {

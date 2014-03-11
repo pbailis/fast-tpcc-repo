@@ -67,7 +67,7 @@ class VeloxServer(storage: StorageManager,
   class QueryRequestHandler extends MessageHandler[QueryResponse, QueryRequest] with Logging {
     def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
       future {
-        new QueryResponse(storage.query(msg.database, msg.table, msg.query))
+        new QueryResponse(storage.query(msg.query))
       }
     }
   }
