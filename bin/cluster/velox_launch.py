@@ -163,9 +163,10 @@ if __name__ == "__main__":
                                       help='output directory for runs. [default: %(default)s]')
     # common crankshaw options
     common_client_bench = argparse.ArgumentParser(add_help=False)
-
     common_client_bench.add_argument('--latency', action='store_true',
                                      help='Compute average latency when running THE CRANKSHAW. [default: %(default)s]')
+    common_client_bench.add_argument('--test_index', action='store_true',
+                                     help='Test index inserts using triggers for THE CRANKSHAW. [default: %(default)s]')
     # common ycsb options
     common_ycsb_bench = argparse.ArgumentParser(add_help=False)
     common_ycsb_bench.add_argument('--skip_rebuild', action='store_true',

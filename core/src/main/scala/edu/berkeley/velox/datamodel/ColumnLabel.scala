@@ -29,6 +29,10 @@ case class ColumnLabel(name: String, var isPrimary: Boolean=false) {
   def gte(value: Value): GreaterThanEqualPredicate = GreaterThanEqualPredicate(name,value)
 
 
+  def <<(value: Value) : LessThanPredicate = {
+    LessThanPredicate(name, value)
+  }
+
   // Use just the name so we don't have to set primary every time we
   // want to use a column name as a key in a hashtable
   override def hashCode: Int = name.hashCode
