@@ -63,17 +63,17 @@ class ResultSet {
     position = rows.length-1
   }
 
-  def getInt(columnName: ColumnLabel): Int = {
-    rows(position).get(columnName).asInt
+  def getInt(at: Int): Int = {
+    rows(position).get(at).asInt
   }
 
-  def getString(columnName: ColumnLabel): String = {
-    rows(position).get(columnName).asString
+  def getString(at: Int): String = {
+    rows(position).get(at).asString
   }
 
-  def getColumnLabels(): Seq[ColumnLabel] = {
-    rows(position).getColumnLabels
-  }
+  //def getColumnLabels(): Seq[ColumnLabel] = {
+  //  rows(position).getColumnLabels
+  //}
 
   // TODO: do we want to support this operation?
   def size(): Int = {

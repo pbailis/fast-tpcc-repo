@@ -5,51 +5,33 @@ import scala.collection.JavaConverters._
 import scala.collection.JavaConversions._
 import scala.collection.mutable.StringBuilder
 
-protected[velox] class Row {
+protected[velox] class Row(width: Int) {
   // TODO : this is expensive
-  val columns = new ConcurrentHashMap[ColumnLabel, Value]
+  val values = new Array[Value](width)
 
-  def set(column: ColumnLabel, value: Value) : Row = {
-    columns.put(column, value)
+  def set(at: Int, value: Value) : Row = {
+    values(at) = value
     this
   }
 
-  def get(column: ColumnLabel) : Value = {
-    columns.get(column)
+  def get(at: Int) : Value = {
+    values(at)
   }
 
-  def getColumnLabels(): Seq[ColumnLabel] = {
-    columns.keys.toSeq
-  }
-
-  def project(columns: Seq[ColumnLabel]) : Row = {
-    val ret = new Row()
-    columns foreach {
-      c => ret.set(c, this.get(c))
+  def project(ats: Seq[Int]) : Row = {
+    val ret = new Row(ats.size)
+    var i = 0
+    while (i < ats.length) {
+      ret.set(i, this.get(ats(i)))
+      i+=1
     }
-    ret
-  }
-
-  def hashValues: Int = {
-    columns.values.asScala.foldLeft(1)((b, a) => b*a.hashCode())
-  }
-
-  override def hashCode: Int = {
-    var ret = 0
-    columns.entrySet.asScala.foreach(pair => ret *= pair.getKey.name.hashCode*pair.getValue.hashCode())
     ret
   }
 
   override def toString(): String = {
     val sb = new StringBuilder("row(")
-    val it = columns.entrySet.iterator
-    while (it.hasNext) {
-      val kv = it.next
-      sb.append(kv.getKey)
-      sb.append("->")
-      sb.append(kv.getValue)
-      sb.append(", ")
-    }
+    sb.append(values.mkString(","))
+    sb.append(")")
     sb.result
   }
 }

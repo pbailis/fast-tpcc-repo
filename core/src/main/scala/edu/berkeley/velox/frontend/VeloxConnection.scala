@@ -72,7 +72,7 @@ class VeloxConnection extends Logging {
   }
 
   def insert(values: (ColumnLabel, Value)*) : InsertionOperation = {
-    new InsertionOperation(null, values)
+    new InsertionOperation(values)
   }
 
   // Routing
@@ -80,7 +80,7 @@ class VeloxConnection extends Logging {
 
     val results: Future[ResultSet] = operation match {
       case s: QueryOperation => {
-        executeQuery(new QueryRequest(database.name, table.name, new Query(s.columns, s.predicate)))
+        executeQuery(new QueryRequest(new Query(database.name, table.name, s.columns, s.predicate)))
       }
       case i: InsertionOperation => {
         executeInsert(new InsertionRequest(database.name, table.name, i.insertSet))

@@ -1,30 +1,30 @@
 package edu.berkeley.velox.datamodel
 
-trait Predicate {
+abstract class Predicate(val column: ColumnLabel) {
+  var columnIndex = -1
   def apply(to: Value): Boolean
 }
 
-case class EqualityPredicate(column: ColumnLabel, value: Value) extends Predicate {
+case class EqualityPredicate(override val column: ColumnLabel, value: Value) extends Predicate(column) {
   def apply(to: Value): Boolean = value.equals(to)
 }
 
-case class NotEqualityPredicate(column: ColumnLabel, value: Value) extends Predicate {
+case class NotEqualityPredicate(override val column: ColumnLabel, value: Value) extends Predicate(column) {
   def apply(to: Value): Boolean = !value.equals(to)
 }
 
-case class LessThanPredicate(column: ColumnLabel, value: Value) extends Predicate {
+case class LessThanPredicate(override val column: ColumnLabel, value: Value) extends Predicate(column) {
   def apply(to: Value): Boolean = value.compareTo(to) > 0
 }
 
-case class LessThanEqualPredicate(column: ColumnLabel, value: Value) extends Predicate {
+case class LessThanEqualPredicate(override val column: ColumnLabel, value: Value) extends Predicate(column) {
   def apply(to: Value): Boolean = value.compareTo(to) >= 0
 }
 
-case class GreaterThanPredicate(column: ColumnLabel, value: Value) extends Predicate {
+case class GreaterThanPredicate(override val column: ColumnLabel, value: Value) extends Predicate(column) {
   def apply(to: Value): Boolean = value.compareTo(to) < 0
 }
 
-case class GreaterThanEqualPredicate(column: ColumnLabel, value: Value) extends Predicate {
+case class GreaterThanEqualPredicate(override val column: ColumnLabel, value: Value) extends Predicate(column) {
   def apply(to: Value): Boolean = value.compareTo(to) <= 0
 }
-

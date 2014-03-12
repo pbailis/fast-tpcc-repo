@@ -47,8 +47,8 @@ trait StorageManager {
     *
     * @return Set of values that answer the query
     */
-  final def query(databaseName: DatabaseName,  tableName: TableName, query: Query): ResultSet = {
-    _query(databaseName, tableName, query)
+  final def query(query: Query): ResultSet = {
+    _query(query)
   }
 
   /*
@@ -56,5 +56,5 @@ trait StorageManager {
    */
 
   protected def _insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int
-  protected def _query(databaseName: DatabaseName, tableName: TableName, query: Query): ResultSet
+  protected def _query(query: Query): ResultSet
 }
