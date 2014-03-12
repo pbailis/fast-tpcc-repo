@@ -207,6 +207,7 @@
             <plugin>
                 <groupId>org.scala-tools</groupId>
                 <artifactId>maven-scala-plugin</artifactId>
+                <version>2.15.2</version>
                 <executions>
                     <execution>
                         <goals>
@@ -221,6 +222,8 @@
                         <jvmArg>-Xms64m</jvmArg>
                         <jvmArg>-Xmx1024m</jvmArg>
                     </jvmArgs>
+                    <sourceDir>src/main/scala</sourceDir>
+                    <scalaVersion>2.10.0</scalaVersion>
                 </configuration>
             </plugin>
             <plugin>
