@@ -8,19 +8,24 @@ import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHa
 import java.util.{HashMap => JHashMap}
 import scala.concurrent.{Promise, Future, future}
 import edu.berkeley.velox.operations.database.request._
-import edu.berkeley.velox.operations.database.response.{InsertionResponse, CreateTableResponse, CreateDatabaseResponse}
+import edu.berkeley.velox.operations.database.response._
 import edu.berkeley.velox.storage.StorageManager
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import edu.berkeley.velox.datamodel.{InsertSet, ResultSet}
 import scala.util.Failure
-import edu.berkeley.velox.operations.database.request.CreateDatabaseRequest
-import edu.berkeley.velox.operations.database.request.CreateTableRequest
-import edu.berkeley.velox.operations.database.response.QueryResponse
 import scala.util.Success
-import edu.berkeley.velox.operations.database.request.InsertionRequest
 import scala.collection.JavaConverters._
 import edu.berkeley.velox.catalog.Catalog
 import java.util
+import edu.berkeley.velox.trigger.TriggerManager
+
+// Every server has a single instance of this class. It handles data storage
+// and serves client requests. Data is stored in a concurrent hash map.
+// As requests come in and are served, the hashmap is accessed concurrently
+// by the thread executing the message handlers (and the handlers have a
+// reference to the map. For now, the server is oblivious to the keyrange
+// it owns. It depends on the routing service to route only the correct
+// keys to it.
 
 class VeloxServer(storage: StorageManager,
                   id: NetworkDestinationHandle) extends Logging {
@@ -44,6 +49,7 @@ class VeloxServer(storage: StorageManager,
   frontendServer.initialize()
   logger.warn("Frontend server initialized.")
 
+  TriggerManager.initialize(internalServer)
 
   /*
    * Handlers for client requests

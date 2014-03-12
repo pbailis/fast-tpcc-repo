@@ -10,6 +10,7 @@ import edu.berkeley.velox.datamodel.DataModelConverters._
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import edu.berkeley.velox.operations.database.response.InsertionResponse
 import edu.berkeley.velox._
+import edu.berkeley.velox.util.ClosureUtil
 import scala.util.Failure
 import edu.berkeley.velox.datamodel.ColumnLabel
 import scala.util.Success
@@ -22,6 +23,7 @@ import scala.collection.JavaConverters._
 
 
 import java.util
+
 
 object VeloxConnection {
   def makeConnection: VeloxConnection = {
@@ -47,6 +49,13 @@ class VeloxConnection extends Logging {
       Catalog.createDatabase(name)
       new Database(this, name)
     }
+  }
+
+  // blocking command to register a new trigger.
+  def registerTrigger(dbName: DatabaseName, tableName: TableName, triggerClass: Class[_]) {
+    val className = triggerClass.getName
+    val classBytes = ClosureUtil.classToBytes(triggerClass)
+    Catalog.registerTrigger(dbName, tableName, className, classBytes)
   }
 
   def createTable(database: Database, tableName: TableName, schema: Schema) : Future[Table] = {
