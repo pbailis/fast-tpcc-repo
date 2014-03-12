@@ -7,6 +7,7 @@ import java.util.concurrent.ConcurrentHashMap
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.rpc.MessageService
+import edu.berkeley.velox.cluster.Partitioner
 
 object TriggerManager extends Logging {
   // Store all the triggers.
@@ -22,9 +23,11 @@ object TriggerManager extends Logging {
 
   val triggerClassLoader = new TriggerClassLoader
   var messageService: MessageService = null
+  var partitioner: Partitioner = null
 
-  def initialize(messageService: MessageService) {
+  def initialize(messageService: MessageService, partitioner: Partitioner) {
     this.messageService = messageService
+    this.partitioner = partitioner
   }
 
   // store a trigger in the given map
@@ -48,7 +51,7 @@ object TriggerManager extends Logging {
     val trigger = triggerClass.newInstance
 
     // initialize the trigger
-    trigger.asInstanceOf[RowTrigger].initialize()
+    trigger.asInstanceOf[RowTrigger].initialize(dbName, tableName)
 
     logger.info(s"new trigger: $dbName.$tableName: $triggerName")
 
@@ -85,7 +88,7 @@ object TriggerManager extends Logging {
                                                              ConcurrentHashMap[TableName, ArrayBuffer[(String, T)]]]): Seq[T] = {
     val dbTriggers = triggerMap.get(dbName)
     if (dbTriggers == null) return Nil
-    val tableTriggers = dbTriggers.get("table")
+    val tableTriggers = dbTriggers.get(tableName)
     if (tableTriggers == null) return Nil
     tableTriggers.map(_._2)
   }
@@ -93,7 +96,7 @@ object TriggerManager extends Logging {
   def beforeInsert(dbName: DatabaseName, tableName: TableName, insertSet: InsertSet) {
     val tableTriggers = _findTriggers(dbName, tableName, beforeInsertTriggers)
     if (tableTriggers == Nil) return
-    val ctx = new TriggerContext(dbName, tableName, messageService)
+    val ctx = new TriggerContext(dbName, tableName, messageService, partitioner)
     // Will this need to be a while loop?
     insertSet.getRows.foreach(row => {
       tableTriggers.foreach(_.beforeInsert(ctx, row))
@@ -103,7 +106,7 @@ object TriggerManager extends Logging {
   def afterInsert(dbName: DatabaseName, tableName: TableName, insertSet: InsertSet) {
     val tableTriggers = _findTriggers(dbName, tableName, afterInsertTriggers)
     if (tableTriggers == Nil) return
-    val ctx = new TriggerContext(dbName, tableName, messageService)
+    val ctx = new TriggerContext(dbName, tableName, messageService, partitioner)
     // Will this need to be a while loop?
     insertSet.getRows.foreach(row => {
       tableTriggers.foreach(_.afterInsert(ctx, row))

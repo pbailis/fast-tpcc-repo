@@ -37,6 +37,8 @@ class VeloxServer(storage: StorageManager,
 
   // internalServer is unused for now
   val internalServer = new InternalRPCService(id, servers)
+  internalServer.registerHandler(new QueryRequestHandler)
+  internalServer.registerHandler(new InsertionRequestHandler)
   internalServer.initialize()
   logger.info("Internal server initialized")
 
@@ -49,7 +51,7 @@ class VeloxServer(storage: StorageManager,
   frontendServer.initialize()
   logger.warn("Frontend server initialized.")
 
-  TriggerManager.initialize(internalServer)
+  TriggerManager.initialize(internalServer, partitioner)
 
   /*
    * Handlers for client requests

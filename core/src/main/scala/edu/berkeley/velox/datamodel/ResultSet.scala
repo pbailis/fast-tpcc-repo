@@ -23,7 +23,8 @@ class ResultSet {
     this.position = position
   }
 
-  def next() {
+  // returns true if the current row is valid, false when it points to after the last row.
+  def next(): Boolean = {
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
     } else if(position+1 > rows.size) {
@@ -31,6 +32,7 @@ class ResultSet {
     }
 
     position += 1
+    position < rows.size
   }
 
   def hasNext(): Boolean = {
@@ -45,6 +47,14 @@ class ResultSet {
     }
 
     position -= 1
+  }
+
+  def beforeFirst() {
+    if(rows == null) {
+      throw new UnsupportedOperationException(s"No rows found in set!")
+    }
+
+    position = -1
   }
 
   def start() {

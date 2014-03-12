@@ -8,7 +8,7 @@ import edu.berkeley.velox.frontend.api.Database
 import edu.berkeley.velox.datamodel.Row
 
 class MyTrigger extends AfterDeleteRowTrigger with AfterInsertRowTrigger with AfterUpdateRowTrigger with Logging {
-  override def initialize() {
+  override def initialize(dbName: String, tableName: String) {
   }
 
   override def afterDelete(ctx: TriggerContext, deleted: Row) {
