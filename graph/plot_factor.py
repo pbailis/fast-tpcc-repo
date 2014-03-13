@@ -30,15 +30,19 @@ def avg(l):
 
 basedir = "output"
 for d in listdir("output"):
-    if(d.find('remotebench') == -1):
+    if(d.find('factor') == -1):
        continue
 
     ds= d.split('-')
-    conf = ds[2]
-    clients = float(ds[1].split("PCT")[1])
-    it = ds[3].split("IT")[1]
+    if d.find("noramp") == -1:
+        conf = ds[1]
+        it = ds[2].split("ID")[1]
+    else:
+        conf="noramp"
+        it = ds[3].split("ID")[1]
+    clients = 0
 
-    bd1 = basedir+"/"+d+"/"+d
+    bd1 = basedir+"/"+d
     
 
 
@@ -49,8 +53,8 @@ for d in listdir("output"):
     if clients not in conf_results[conf]:
         conf_results[conf][clients] = []
 
-
     thru = 0
+
     for sd in listdir(bd1):
         sd_cur = bd1+'/'+sd
         if sd_cur.find("Cec2") == -1:
@@ -71,25 +75,22 @@ for conf in conf_results:
     items = conf_results[conf].keys()
     items.sort()
 
-
-    baseline = avg(conf_results[conf][0])
-    plot([i*100 for i in items], [avg(conf_results[conf][item])/baseline*100 for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
+    #plot(items, [avg(conf_results[conf][item]) for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
 
     for item in items:
         print conf, item, avg(conf_results[conf][item]), std(conf_results[conf][item])
 
 
-xlabel("Percentage Distributed Transactions")
-ylabel("Relative Throughput (%)")
-#yscale('log')
-xticks([0, 25, 50, 75, 100])
+xscale('log')
+xlabel("Number of Clients")
+ylabel("Throughput (txns/s)")
 
 l = legend(loc="upper right", ncol=3, handlelength=2)
 l.draw_frame(False)
 
 subplots_adjust(bottom=0.2, right=0.95, top=0.9, left=0.14)
 
-savefig("remote_thru.pdf", transparent=True, pad_inches=padInches)
+savefig("client_thru.pdf", transparent=True, pad_inches=padInches)
 
 
 

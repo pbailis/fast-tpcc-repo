@@ -74,7 +74,7 @@ for conf in conf_results:
     plot(items, [avg(conf_results[conf][item]) for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
 
     for item in items:
-        print conf, item, avg(conf_results[conf][item])
+        print conf, item, avg(conf_results[conf][item]), std(conf_results[conf][item])
 
 
 xscale('log')

@@ -72,7 +72,7 @@ for conf in conf_results:
     items = conf_results[conf].keys()
     items.sort()
 
-    plot(items, [avg(conf_results[conf][item]) for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
+    plot(range(1, len(items)+1), [avg(conf_results[conf][item]) for item in items], conf_fmt[conf],  color=conf_colors[conf],  markeredgecolor=conf_colors[conf], markerfacecolor='None', label=conf_labels[conf])
 
     for item in items:
         print conf, item, avg(conf_results[conf][item])
@@ -80,7 +80,9 @@ for conf in conf_results:
 
 xlabel("Number of Warehouses")
 ylabel("Throughput (txns/s)")
-xticks([1, 2, 4, 8, 16])
+xticks([1, 2, 3, 4], [8, 16, 32, 64])
+yscale('log')
+ylim(ymin=40000)
 
 l = legend(loc="upper right", ncol=3, handlelength=2)
 l.draw_frame(False)
