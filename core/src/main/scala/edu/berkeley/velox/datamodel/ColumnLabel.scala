@@ -12,9 +12,22 @@ case class ColumnLabel(name: String, var isPrimary: Boolean=false) {
   def INT() = new IntColumn(name,isPrimary)
   def STRING() = new StringColumn(name,isPrimary)
 
-  def ===(value: Value) : EqualityPredicate = {
-    EqualityPredicate(name, value)
-  }
+  // operater character operator defs
+  def ==*(value: Value): EqualityPredicate         = EqualityPredicate(name, value)
+  def !=*(value: Value): NotEqualityPredicate      = NotEqualityPredicate(name, value)
+  def <*(value: Value):  LessThanPredicate         = LessThanPredicate(name,value)
+  def <=*(value: Value): LessThanEqualPredicate    = LessThanEqualPredicate(name,value)
+  def >*(value: Value):  GreaterThanPredicate      = GreaterThanPredicate(name,value)
+  def =>*(value: Value): GreaterThanEqualPredicate = GreaterThanEqualPredicate(name,value)
+
+  // letter character operator defs
+  def eq(value: Value):  EqualityPredicate         = EqualityPredicate(name, value)
+  def neq(value: Value): NotEqualityPredicate      = NotEqualityPredicate(name, value)
+  def le(value: Value):  LessThanPredicate         = LessThanPredicate(name,value)
+  def leq(value: Value): LessThanEqualPredicate    = LessThanEqualPredicate(name,value)
+  def gt(value: Value):  GreaterThanPredicate      = GreaterThanPredicate(name,value)
+  def gte(value: Value): GreaterThanEqualPredicate = GreaterThanEqualPredicate(name,value)
+
 
   // Use just the name so we don't have to set primary every time we
   // want to use a column name as a key in a hashtable

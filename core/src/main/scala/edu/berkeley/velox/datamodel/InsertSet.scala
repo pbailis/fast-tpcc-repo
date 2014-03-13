@@ -19,13 +19,15 @@ class InsertSet {
     this.position = position
   }
 
+  def currentRow(): Row = rows(position)
+
   def hasNext(): Boolean = {
-    position+1 < rows.size()
+    position+1 < rows.length
   }
 
   def next() {
-    if(position+1 > rows.size) {
-      throw new UnsupportedOperationException(s"Next requested, but maximum position is ${rows.size-1}")
+    if(position+1 > rows.length) {
+      throw new UnsupportedOperationException(s"Next requested, but maximum position is ${rows.length-1}")
     }
 
     position += 1
@@ -52,7 +54,7 @@ class InsertSet {
       throw new UnsupportedOperationException(s"No rows found in set!")
     }
 
-    position = Math.max(rows.size()-1, 0)
+    position = Math.max(rows.length-1, 0)
   }
 
   def getInt(at: Int): Int = {
@@ -65,7 +67,7 @@ class InsertSet {
 
   // TODO: do we want to support this operation?
   def size(): Int = {
-    rows.size()
+    rows.length
   }
 
   def newRow(size: Int) = {

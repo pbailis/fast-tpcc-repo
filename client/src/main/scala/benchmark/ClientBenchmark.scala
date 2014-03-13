@@ -143,7 +143,7 @@ object ClientBenchmark extends Logging {
       override def run() = {
         while (opsSent.get < numops) {
           if (rand.nextDouble() < pctReads) {
-            val f = (client select STR_COL from table where ID_COL === rand.nextInt(keyrange)).execute
+            val f = (client select STR_COL from table where ID_COL ==* rand.nextInt(keyrange)).execute
             val startTime =
               if (computeLatency) System.nanoTime
               else 0

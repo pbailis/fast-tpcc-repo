@@ -58,40 +58,40 @@ class HashMapStorageManager extends StorageManager with Logging {
     i
   }
 
-  private def isPrimaryKeyQuery(query: Query): Boolean = {
-    query.predicate match {
-      case Some(p) => {
-        p match {
-          case eqp: EqualityPredicate =>
-            Catalog.isPrimaryKeyFor(query.databaseName,
-                                    query.tableName,
-                                    Seq(eqp.columnIndex))
-          case _ => false
+  // Find and return a predicate that can be used as a key to
+  // look up the result, or null if there isn't one.
+  private def pkFromQuery(query: Query): PrimaryKey = {
+    query.predicates.foreach(pred =>
+      pred match {
+        case eqp: EqualityPredicate => {
+          if ( Catalog.isPrimaryKeyFor(query.databaseName,
+                                       query.tableName,
+                                       Seq(eqp.columnIndex)) ) {
+            return PrimaryKey(Array[Value](eqp.value))
+          }
         }
-      }
-      case None => false
-    }
+      })
+    null
   }
 
   protected def _query(query: Query) : ResultSet = {
     val rows = new ArrayBuffer[Row]
     val table = dbs.get(query.databaseName).get(query.tableName)
 
-    if (isPrimaryKeyQuery(query)) {
-      val pkv = PrimaryKey(Array[Value](query.predicate.get.asInstanceOf[EqualityPredicate].value))
-      val row = table.get(pkv)
-      if (row != null)
+    val key = pkFromQuery(query)
+
+    if (key != null) {
+      val row = table.get(key)
+      if ( (row != null) &&
+           ((query.predicates.size <= 1 || row.matches(query.predicates))) )
         rows += row.project(query.columnIndexes)
     } else {
-      table.rows.values.asScala foreach {
-        row => query.predicate match {
-          case Some(p) => {
-            p match {
-              case eqp: EqualityPredicate => if(row.get(eqp.columnIndex) == eqp.value) rows += row.project(query.columnIndexes)
-            }
-          }
-          case None => rows :+ row.project(query.columnIndexes)
-        }
+      val it = table.rows.values.iterator
+      val needMatch = query.predicates.size > 0
+      while (it.hasNext) {
+        val row = it.next
+        if (!needMatch || row.matches(query.predicates))
+          rows :+ row.project(query.columnIndexes)
       }
     }
 
