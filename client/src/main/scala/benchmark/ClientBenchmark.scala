@@ -260,7 +260,7 @@ object ClientBenchmark extends Logging {
     if (testIndex) {
       // read some entries in the index.
       val tableIdx = client.database(DB_NAME).table(TABLE_NAME + ".index1")
-      val f = (client select (STR_COL, ID_COL) from tableIdx where ID_COL << 123).execute
+      val f = (client select (STR_COL, ID_COL) from tableIdx where ID_COL <* 123).execute
       f onComplete {
         case Success(rset) => {
           rset.beforeFirst()
