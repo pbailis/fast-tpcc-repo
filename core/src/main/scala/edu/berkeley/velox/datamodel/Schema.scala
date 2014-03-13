@@ -1,6 +1,7 @@
 package edu.berkeley.velox.datamodel
 
 import scala.collection.mutable.ArrayBuilder
+import scala.collection.immutable.HashMap
 
 object Schema {
   def columns(columns: TypedColumn*): Schema = {
@@ -13,6 +14,8 @@ object Schema {
 class Schema {
   var columns: Array[TypedColumn] = null
   var numPkCols = 0
+  // maps index names to index definition (Array of column names)
+  var indexes = new HashMap[String, Array[String]]
 
   def setColumns(columns: Seq[TypedColumn]): Schema = {
     val bldr = new ArrayBuilder.ofRef[TypedColumn]
@@ -40,6 +43,14 @@ class Schema {
 
   def columns(columns: TypedColumn*): Schema =
     setColumns(columns)
+
+  def index(indexName: String, columns: String*): Schema = {
+    val bldr = new ArrayBuilder.ofRef[String]
+    bldr.sizeHint(columns.size)
+    columns.foreach(bldr += _)
+    indexes += ((indexName, bldr.result))
+    this
+  }
 
   def indexOf(column: ColumnLabel): Int = {
     var i = 0

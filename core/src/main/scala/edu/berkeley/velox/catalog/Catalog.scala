@@ -205,6 +205,46 @@ object Catalog extends Logging {
     logger.info(s"Creating table $dbName:$tableName")
     _createTableTrigger(dbName, tableName, schema)
     ClientZookeeperConnection.createTable(dbName, tableName, schema)
+
+    // create all the indexes of the table.
+    schema.indexes.foreach {
+      case(indexName, indexColumns) => {
+        createIndex(dbName, tableName, schema, indexName, indexColumns)
+      }
+    }
+    true
+  }
+
+  def createIndex(dbName: DatabaseName, tableName: TableName, tableSchema: Schema, indexName: String, indexColumns: Array[String]): Boolean = {
+    logger.info(s"Creating index $dbName:$tableName.$indexName")
+
+    // Add the index columns as primary keys.
+    var prKeys: Seq[TypedColumn] = indexColumns.map(columnName => {
+      // Search for the TypedColumn object in the table schema
+      val index = tableSchema.indexOf(new ColumnLabel(columnName))
+      if (index == -1) {
+        // Index column not found in table!
+        throw new IllegalStateException(s"index.column: $indexName.$columnName does not exist in table: $tableName.")
+      }
+      val col = tableSchema.columns(index).copy()
+      col.isPrimary = true
+      col
+    })
+
+    // add the remaining primary keys of the table, to make up the index's full primary key.
+    tableSchema.columns.filter(_.isPrimary).foreach(typedColumn => {
+      val exists = prKeys.exists(_.name == typedColumn.name)
+      if (!exists) {
+        // Only add the primary key if it doesn't already exist.
+        prKeys = prKeys :+ typedColumn
+      }
+    })
+
+    val indexSchema = new Schema
+    indexSchema.setColumns(prKeys)
+    val fullIndexName = tableName + "." + indexName
+    // Create the index. Indexes are just tables.
+    createTable(dbName, fullIndexName, indexSchema)
   }
 
   def registerTrigger(dbName: DatabaseName, tableName: TableName, triggerName: String, triggerBytes: Array[Byte]) = {

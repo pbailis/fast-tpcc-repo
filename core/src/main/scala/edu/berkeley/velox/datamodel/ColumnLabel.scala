@@ -50,6 +50,9 @@ trait TypedColumn extends ColumnLabel {
   // check for equality from the perspective of the schema
   // does include exact type and isPrimary checks
   def schemaEquals(col: TypedColumn): Boolean
+
+  // returns a new object
+  def copy(): TypedColumn
 }
 class IntColumn(n: String, ip: Boolean) extends ColumnLabel(n,ip) with TypedColumn {
   override def schemaEquals(col: TypedColumn): Boolean = {
@@ -59,6 +62,8 @@ class IntColumn(n: String, ip: Boolean) extends ColumnLabel(n,ip) with TypedColu
     }
     else false // not same type
   }
+
+  override def copy(): IntColumn = new IntColumn(n, ip)
 }
 class StringColumn(n: String, ip: Boolean) extends ColumnLabel(n,ip) with TypedColumn {
   override def schemaEquals(col: TypedColumn): Boolean = {
@@ -68,4 +73,6 @@ class StringColumn(n: String, ip: Boolean) extends ColumnLabel(n,ip) with TypedC
     }
     else false // not same type
   }
+
+  override def copy(): StringColumn = new StringColumn(n, ip)
 }
