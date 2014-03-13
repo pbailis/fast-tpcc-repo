@@ -28,6 +28,21 @@ protected[velox] class Row(width: Int) {
     ret
   }
 
+  /** Test if this row passes all the specified predicates.
+    *
+    * @param predicates A sequence of predicates to be tested.
+    * @returns true if ALL the specified predicates match, otherwise false
+    */
+  def matches(predicates: Seq[Predicate]): Boolean = {
+    var i = 0
+    while (i < predicates.size) {
+      if (!predicates(i)(values(predicates(i).columnIndex)))
+        return false
+      i+=1
+    }
+    true
+  }
+
   override def toString(): String = {
     val sb = new StringBuilder("row(")
     sb.append(values.mkString(","))
@@ -36,3 +51,9 @@ protected[velox] class Row(width: Int) {
   }
 }
 
+object Row {
+  // use this when there is no row data
+  // so we only store a reference and
+  // don't make new objects
+  val nullRow = new Row(0)
+}

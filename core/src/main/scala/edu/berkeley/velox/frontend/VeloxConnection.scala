@@ -80,7 +80,7 @@ class VeloxConnection extends Logging {
 
     val results: Future[ResultSet] = operation match {
       case s: QueryOperation => {
-        executeQuery(new QueryRequest(new Query(database.name, table.name, s.columns, s.predicate)))
+        executeQuery(new QueryRequest(new Query(database.name, table.name, s.columns, s.predicates)))
       }
       case i: InsertionOperation => {
         executeInsert(new InsertionRequest(database.name, table.name, i.insertSet))

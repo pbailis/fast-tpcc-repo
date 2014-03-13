@@ -24,7 +24,7 @@ object ExampleDataModel {
     conn insert("id"-> 5, "name" -> "peter") insert ("id" -> 6, "name" -> "lanham") into table execute()
 
     // or table select (..) where (..) execute()
-    val resultSet = Await.result(conn select("id","name") from table where("id" === 5) execute(), Duration.Inf)
+    val resultSet = Await.result(conn select("id","name") from table where "id" ==* 5 and "name" !=* "nick" execute(), Duration.Inf)
 
     assert(resultSet.size == 1)
     assert(resultSet.getInt(0) == 5)
