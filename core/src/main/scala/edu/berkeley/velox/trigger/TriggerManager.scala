@@ -1,8 +1,7 @@
 package edu.berkeley.velox.trigger
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.immutable.HashMap
+import scala.collection.immutable.{HashMap, List}
 import java.util.concurrent.ConcurrentHashMap
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel._
@@ -12,14 +11,14 @@ import edu.berkeley.velox.cluster.Partitioner
 object TriggerManager extends Logging {
   // Store all the triggers.
   // Each type of trigger is separated, to avoid one level of lookups during execution
-  // stores a tuple per trigger: (triggername, trigger)
+  // stores a tuple per trigger: (triggerName, trigger)
   // TODO: Is multi-level hashmap best way to store triggers?
-  val beforeInsertTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, ArrayBuffer[(String, BeforeInsertRowTrigger)]]]()
-  val afterInsertTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, ArrayBuffer[(String, AfterInsertRowTrigger)]]]()
-  val beforeDeleteTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, ArrayBuffer[(String, BeforeDeleteRowTrigger)]]]()
-  val afterDeleteTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, ArrayBuffer[(String, AfterDeleteRowTrigger)]]]()
-  val beforeUpdateTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, ArrayBuffer[(String, BeforeUpdateRowTrigger)]]]()
-  val afterUpdateTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, ArrayBuffer[(String, AfterUpdateRowTrigger)]]]()
+  val beforeInsertTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, List[(String, BeforeInsertRowTrigger)]]]()
+  val afterInsertTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, List[(String, AfterInsertRowTrigger)]]]()
+  val beforeDeleteTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, List[(String, BeforeDeleteRowTrigger)]]]()
+  val afterDeleteTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, List[(String, AfterDeleteRowTrigger)]]]()
+  val beforeUpdateTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, List[(String, BeforeUpdateRowTrigger)]]]()
+  val afterUpdateTriggers = new ConcurrentHashMap[DatabaseName, ConcurrentHashMap[TableName, List[(String, AfterUpdateRowTrigger)]]]()
 
   val triggerClassLoader = new TriggerClassLoader
   var messageService: MessageService = null
@@ -31,17 +30,56 @@ object TriggerManager extends Logging {
   }
 
   // store a trigger in the given map
-  private def _storeTrigger[T](dbName: String,
-                               tableName: String,
-                               triggerName: String,
-                               trigger: Any,
-                               triggerMap: ConcurrentHashMap[DatabaseName,
-                                                             ConcurrentHashMap[TableName, ArrayBuffer[(String, T)]]]) {
-    triggerMap.putIfAbsent(dbName, new ConcurrentHashMap[TableName, ArrayBuffer[(String, T)]]())
+  private def _storeTriggerInMap[T](dbName: String,
+                                    tableName: String,
+                                    triggerName: String,
+                                    trigger: Any,
+                                    triggerMap: ConcurrentHashMap[DatabaseName,
+                                                                  ConcurrentHashMap[TableName, List[(String, T)]]]) {
+    triggerMap.putIfAbsent(dbName, new ConcurrentHashMap[TableName, List[(String, T)]]())
     val dbTriggers = triggerMap.get(dbName)
-    dbTriggers.putIfAbsent(tableName, new ArrayBuffer)
-    val tableTriggers = dbTriggers.get(tableName)
-    tableTriggers.append((triggerName, trigger.asInstanceOf[T]))
+    dbTriggers.synchronized {
+      // Serialize updating triggers. Should be fine as long as schema changes are rare.
+      val existingList = dbTriggers.get(tableName) match {
+        case l: List[(String, T)] => l
+        case null => Nil
+      }
+      // Filter out the previous version (if it exists) of the same trigger.
+      val newList = (triggerName, trigger.asInstanceOf[T]) :: existingList.filterNot(_._1 == triggerName)
+      dbTriggers.put(tableName, newList)
+    }
+  }
+
+  def addTriggerInstance(dbName: DatabaseName, tableName: TableName, triggerName: String, trigger: RowTrigger) {
+    // initialize the trigger
+    trigger.asInstanceOf[RowTrigger].initialize(dbName, tableName)
+    logger.info(s"new trigger: $dbName.$tableName: $triggerName")
+
+    // Store the trigger in the appropriate maps (possibly more than one).
+    if (trigger.isInstanceOf[BeforeInsertRowTrigger]) {
+      logger.info("    BeforeInsertRowTrigger")
+      _storeTriggerInMap(dbName, tableName, triggerName, trigger, beforeInsertTriggers)
+    }
+    if (trigger.isInstanceOf[AfterInsertRowTrigger]) {
+      logger.info("    AfterInsertRowTrigger")
+      _storeTriggerInMap(dbName, tableName, triggerName, trigger, afterInsertTriggers)
+    }
+    if (trigger.isInstanceOf[BeforeDeleteRowTrigger]) {
+      logger.info("    BeforeDeleteRowTrigger")
+      _storeTriggerInMap(dbName, tableName, triggerName, trigger, beforeDeleteTriggers)
+    }
+    if (trigger.isInstanceOf[AfterDeleteRowTrigger]) {
+      logger.info("    AfterDeleteRowTrigger")
+      _storeTriggerInMap(dbName, tableName, triggerName, trigger, afterDeleteTriggers)
+    }
+    if (trigger.isInstanceOf[BeforeUpdateRowTrigger]) {
+      logger.info("    BeforeUpdateRowTrigger")
+      _storeTriggerInMap(dbName, tableName, triggerName, trigger, beforeUpdateTriggers)
+    }
+    if (trigger.isInstanceOf[AfterUpdateRowTrigger]) {
+      logger.info("    AfterUpdateRowTrigger")
+      _storeTriggerInMap(dbName, tableName, triggerName, trigger, afterUpdateTriggers)
+    }
   }
 
   // add a trigger to local server (callback for zookeeper)
@@ -49,43 +87,13 @@ object TriggerManager extends Logging {
     triggerClassLoader.addClassBytes(triggerName, triggerBytes)
     val triggerClass  = triggerClassLoader.loadClass(triggerName)
     val trigger = triggerClass.newInstance
-
-    // initialize the trigger
-    trigger.asInstanceOf[RowTrigger].initialize(dbName, tableName)
-
-    logger.info(s"new trigger: $dbName.$tableName: $triggerName")
-
-    // store the trigger in the appropriate maps (possibly more than one).
-    if (trigger.isInstanceOf[BeforeInsertRowTrigger]) {
-      logger.info("    BeforeInsertRowTrigger")
-      _storeTrigger(dbName, tableName, triggerName, trigger, beforeInsertTriggers)
-    }
-    if (trigger.isInstanceOf[AfterInsertRowTrigger]) {
-      logger.info("    AfterInsertRowTrigger")
-      _storeTrigger(dbName, tableName, triggerName, trigger, afterInsertTriggers)
-    }
-    if (trigger.isInstanceOf[BeforeDeleteRowTrigger]) {
-      logger.info("    BeforeDeleteRowTrigger")
-      _storeTrigger(dbName, tableName, triggerName, trigger, beforeDeleteTriggers)
-    }
-    if (trigger.isInstanceOf[AfterDeleteRowTrigger]) {
-      logger.info("    AfterDeleteRowTrigger")
-      _storeTrigger(dbName, tableName, triggerName, trigger, afterDeleteTriggers)
-    }
-    if (trigger.isInstanceOf[BeforeUpdateRowTrigger]) {
-      logger.info("    BeforeUpdateRowTrigger")
-      _storeTrigger(dbName, tableName, triggerName, trigger, beforeUpdateTriggers)
-    }
-    if (trigger.isInstanceOf[AfterUpdateRowTrigger]) {
-      logger.info("    AfterUpdateRowTrigger")
-      _storeTrigger(dbName, tableName, triggerName, trigger, afterUpdateTriggers)
-    }
+    addTriggerInstance(dbName, tableName, triggerName, trigger.asInstanceOf[RowTrigger])
   }
 
   private def _findTriggers[T](dbName: DatabaseName,
                                tableName: TableName,
                                triggerMap: ConcurrentHashMap[DatabaseName,
-                                                             ConcurrentHashMap[TableName, ArrayBuffer[(String, T)]]]): Seq[T] = {
+                                                             ConcurrentHashMap[TableName, List[(String, T)]]]): Seq[T] = {
     val dbTriggers = triggerMap.get(dbName)
     if (dbTriggers == null) return Nil
     val tableTriggers = dbTriggers.get(tableName)
@@ -153,13 +161,13 @@ object TriggerManager extends Logging {
                     afterUpdateTriggers.get(dbName))
 
     val triggers = maps.map(m => {
-      // m is (tablename -> arraybuffer) map
+      // m is (tablename -> list) map
       if (m != null) {
-        val ab = m.get(tableName)
-        // ab is arraybuffer of (triggerName, trigger)
-        // convert ab to a set of trigger names
-        if (ab != null) {
-          ab.map(_._1).toSet
+        val l = m.get(tableName)
+        // l is list of (triggerName, trigger)
+        // convert l to a set of trigger names
+        if (l != null) {
+          l.map(_._1).toSet
         } else {
           Set[String]()
         }

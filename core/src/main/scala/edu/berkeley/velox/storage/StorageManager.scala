@@ -4,6 +4,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox._
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.trigger.TriggerManager
+import edu.berkeley.velox.catalog.Catalog
+import edu.berkeley.velox.trigger.server._
 
 trait StorageManager {
 
@@ -20,7 +22,33 @@ trait StorageManager {
     *  @param dbName Database to create table in
     *  @param tableName Name of Table to create
     */
-  def createTable(dbName: DatabaseName, tableName: TableName)
+  final def createTable(dbName: DatabaseName, tableName: TableName) {
+    _createTable(dbName, tableName)
+    val schema = Catalog.getSchema(dbName, tableName)
+
+    // If table has indexes, add trigger to update indexes.
+    // TODO: support alternative index update methods (specified by table schema).
+
+    // Assuming '.' is delimiter "tableName.indexName".
+    val parts = tableName.split("\\.")
+    if (parts.length > 1) {
+      // This "table" is an index for a table.
+      // Add (or re-add) a trigger for the table.
+      val baseTable = parts(0)
+      val tableSchema = Catalog.getSchema(dbName, baseTable)
+      val trigger = new IndexUpdateTrigger(dbName, baseTable)
+      val triggerName = trigger.getClass.getName
+      TriggerManager.addTriggerInstance(dbName, baseTable, triggerName, trigger)
+    } else {
+      // This "table" is a table.
+      // If table schema contains indexes, add (or re-add) a trigger for the table.
+      if (!schema.indexes.isEmpty) {
+        val trigger = new IndexUpdateTrigger(dbName, tableName)
+        val triggerName = trigger.getClass.getName
+        TriggerManager.addTriggerInstance(dbName, tableName, triggerName, trigger)
+      }
+    }
+  }
 
   /**
     * Insert a set of values into a table.
@@ -52,9 +80,10 @@ trait StorageManager {
   }
 
   /*
-   * Implementors of storage engines should implement the following methods to insert and query data
+   * Implementors of storage engines should implement the following methods.
    */
 
+  protected def _createTable(dbName: DatabaseName, tableName: TableName)
   protected def _insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int
   protected def _query(query: Query): ResultSet
 }
