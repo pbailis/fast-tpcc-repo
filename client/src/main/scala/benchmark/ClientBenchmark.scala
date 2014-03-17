@@ -237,6 +237,7 @@ object ClientBenchmark extends Logging {
             logger.info("result: (" + rset.getString(0) + ", " + rset.getInt(1) + ")")
           }
         }
+        case Failure(msg) => logger.error(s"Failed to get from index: $msg")
       }
       Await.result(f, Duration.Inf)
       Thread.sleep(5*1000)
