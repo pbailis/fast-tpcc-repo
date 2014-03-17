@@ -205,6 +205,39 @@ object Catalog extends Logging {
     logger.info(s"Creating table $dbName:$tableName")
     _createTableTrigger(dbName, tableName, schema)
     ClientZookeeperConnection.createTable(dbName, tableName, schema)
+
+    // create all the indexes of the table.
+    schema.indexes.foreach {
+      case(indexName, indexColumns) => {
+        createIndex(dbName, tableName, schema, indexName, indexColumns)
+      }
+    }
+    true
+  }
+
+  // TODO: This works currently, but think about potentially re-structuring when/where indexes schemas
+  //       are translated to table schemas. The "fully correct" way may be to consult the index storage
+  //       engine for the table schema.
+  def createIndex(dbName: DatabaseName, tableName: TableName, tableSchema: Schema, indexName: String, indexColumns: Array[TypedColumn]): Boolean = {
+    logger.info(s"Creating index $dbName:$tableName.$indexName")
+
+    // The index columns are the prefix of the primary key.
+    var prKeys: Seq[TypedColumn] = indexColumns
+
+    // add the remaining primary keys of the base table, to make up the index's full primary key.
+    tableSchema.columns.filter(_.isPrimary).foreach(typedColumn => {
+      val exists = prKeys.exists(_.name == typedColumn.name)
+      if (!exists) {
+        // Only add the primary key if it doesn't already exist.
+        prKeys = prKeys :+ typedColumn
+      }
+    })
+
+    val indexSchema = new Schema
+    indexSchema.setColumns(prKeys)
+    val fullIndexName = tableName + "." + indexName
+    // Create the index. Indexes are just tables.
+    createTable(dbName, fullIndexName, indexSchema)
   }
 
   def registerTrigger(dbName: DatabaseName, tableName: TableName, triggerName: String, triggerBytes: Array[Byte]) = {
