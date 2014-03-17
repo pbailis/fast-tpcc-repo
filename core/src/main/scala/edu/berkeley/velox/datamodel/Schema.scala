@@ -14,8 +14,8 @@ object Schema {
 class Schema {
   var columns: Array[TypedColumn] = null
   var numPkCols = 0
-  // maps index names to index definition (Array of column names)
-  var indexes = new HashMap[String, Array[String]]
+  // maps index names to index definition (Array of TypedColumn's)
+  var indexes = new HashMap[String, Array[TypedColumn]]
 
   def setColumns(columns: Seq[TypedColumn]): Schema = {
     val bldr = new ArrayBuilder.ofRef[TypedColumn]
@@ -44,10 +44,20 @@ class Schema {
   def columns(columns: TypedColumn*): Schema =
     setColumns(columns)
 
-  def index(indexName: String, columns: String*): Schema = {
-    val bldr = new ArrayBuilder.ofRef[String]
+  def index(indexName: String, indexColumns: String*): Schema = {
+    val bldr = new ArrayBuilder.ofRef[TypedColumn]
     bldr.sizeHint(columns.size)
-    columns.foreach(bldr += _)
+    indexColumns.foreach(columnName => {
+      // Search for the TypedColumn object in the table schema
+      val index = indexOf(new ColumnLabel(columnName))
+      if (index == -1) {
+        // Index column not found in table!
+        throw new IllegalStateException(s"index.column: $indexName.$columnName does not exist in table.")
+      }
+      val col = columns(index).copy()
+      col.isPrimary = true
+      bldr += col
+    })
     indexes += ((indexName, bldr.result))
     this
   }

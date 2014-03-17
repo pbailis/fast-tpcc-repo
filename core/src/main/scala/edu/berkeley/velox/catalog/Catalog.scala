@@ -215,23 +215,16 @@ object Catalog extends Logging {
     true
   }
 
-  def createIndex(dbName: DatabaseName, tableName: TableName, tableSchema: Schema, indexName: String, indexColumns: Array[String]): Boolean = {
+  // TODO: This works currently, but think about potentially re-structuring when/where indexes schemas
+  //       are translated to table schemas. The "fully correct" way may be to consult the index storage
+  //       engine for the table schema.
+  def createIndex(dbName: DatabaseName, tableName: TableName, tableSchema: Schema, indexName: String, indexColumns: Array[TypedColumn]): Boolean = {
     logger.info(s"Creating index $dbName:$tableName.$indexName")
 
-    // Add the index columns as primary keys.
-    var prKeys: Seq[TypedColumn] = indexColumns.map(columnName => {
-      // Search for the TypedColumn object in the table schema
-      val index = tableSchema.indexOf(new ColumnLabel(columnName))
-      if (index == -1) {
-        // Index column not found in table!
-        throw new IllegalStateException(s"index.column: $indexName.$columnName does not exist in table: $tableName.")
-      }
-      val col = tableSchema.columns(index).copy()
-      col.isPrimary = true
-      col
-    })
+    // The index columns are the prefix of the primary key.
+    var prKeys: Seq[TypedColumn] = indexColumns
 
-    // add the remaining primary keys of the table, to make up the index's full primary key.
+    // add the remaining primary keys of the base table, to make up the index's full primary key.
     tableSchema.columns.filter(_.isPrimary).foreach(typedColumn => {
       val exists = prKeys.exists(_.name == typedColumn.name)
       if (!exists) {
