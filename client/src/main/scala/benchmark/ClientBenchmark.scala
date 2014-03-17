@@ -41,6 +41,7 @@ object ClientBenchmark extends Logging {
 
     var useFutures = true
     var computeLatency = false
+    var testIndex = false
 
     val parser = new scopt.OptionParser[Unit]("velox") {
       opt[Int]("timeout") foreach {
@@ -70,6 +71,9 @@ object ClientBenchmark extends Logging {
       opt[String]("network_service") foreach {
         i => VeloxConfig.networkService = i
       } text ("Which network service to use [nio/array]")
+      opt[Boolean]("test_index") foreach {
+        i => testIndex = i
+      } text ("Test simple index inserts using triggers. (experimental)")
       opt[Unit]("run") foreach {
         i => run = true
       } text ("run")
@@ -116,9 +120,18 @@ object ClientBenchmark extends Logging {
 
       val db = dbf.value.get.get
 
-      val tblf = db.createTable(TABLE_NAME,
-        Schema.columns(ID_COL PRIMARY() INT,
-          STR_COL STRING))
+      val tblf = testIndex match {
+        case false => {
+          db.createTable(TABLE_NAME,
+                         Schema.columns(ID_COL PRIMARY() INT,
+                                        STR_COL STRING))
+        }
+        case true => {
+          db.createTable(TABLE_NAME,
+                         Schema.columns(ID_COL PRIMARY() INT,
+                                        STR_COL STRING).index("str", STR_COL))
+        }
+      }
       Await.ready(tblf, Duration.Inf)
       logger.info("table successfully added")
 
@@ -134,6 +147,7 @@ object ClientBenchmark extends Logging {
 
     logger.error(s"local dbs: ${Catalog.listLocalDatabases}")
     logger.error(s"local tables: ${Catalog.listLocalTables(DB_NAME)}")
+
 
     val table = client.database(DB_NAME).table(TABLE_NAME)
     logger.info(s"Starting $parallelism threads!")
@@ -210,6 +224,24 @@ object ClientBenchmark extends Logging {
     logger.info(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
     if (computeLatency)
       logger.info(s"Average latency ${currentLatency._2} milliseconds")
+
+    if (testIndex) {
+      // read some entries in the index.
+      val tableIdx = client.database(DB_NAME).table(TABLE_NAME + ".str")
+      val f = (client select (STR_COL, ID_COL) from tableIdx where ID_COL <* 123).execute
+      f onComplete {
+        case Success(rset) => {
+          rset.beforeFirst()
+          logger.info("result.size: " + rset.size())
+          while (rset.next()) {
+            logger.info("result: (" + rset.getString(0) + ", " + rset.getInt(1) + ")")
+          }
+        }
+      }
+      Await.result(f, Duration.Inf)
+      Thread.sleep(5*1000)
+    }
+
     System.exit(0)
   }
 

@@ -1,6 +1,6 @@
 package edu.berkeley.velox.trigger
 
-import edu.berkeley.velox.datamodel.Row
+import edu.berkeley.velox.datamodel._
 
 // Trigger calls are not thread-safe, so internal synchronization may be necessary.
 // All triggers are synchronous for now.
@@ -9,7 +9,7 @@ import edu.berkeley.velox.datamodel.Row
 // Base row trigger
 sealed trait RowTrigger {
   // Triggers can initialize some state.
-  def initialize() {}
+  def initialize(dbName: String, tableName: String) {}
 }
 
 // TODO: do before triggers get to change the row?

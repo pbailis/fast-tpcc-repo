@@ -25,7 +25,7 @@ class HashMapStorageManager extends StorageManager with Logging {
     dbs.putIfAbsent(name, new ConcurrentHashMap[TableName, Table]())
   }
 
-  def createTable(dbName: DatabaseName, tableName: TableName) {
+  protected def _createTable(dbName: DatabaseName, tableName: TableName) {
     if (dbs.containsKey(dbName)) {
       dbs.get(dbName).putIfAbsent(tableName, new Table)
     } else {
@@ -70,6 +70,7 @@ class HashMapStorageManager extends StorageManager with Logging {
             return PrimaryKey(Array[Value](eqp.value))
           }
         }
+        case _ => null
       })
     null
   }
@@ -91,7 +92,7 @@ class HashMapStorageManager extends StorageManager with Logging {
       while (it.hasNext) {
         val row = it.next
         if (!needMatch || row.matches(query.predicates))
-          rows :+ row.project(query.columnIndexes)
+          rows += row.project(query.columnIndexes)
       }
     }
 

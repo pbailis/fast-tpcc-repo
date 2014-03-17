@@ -5,7 +5,8 @@ import scala.collection.JavaConverters._
 
 // N.B.: in the future, we should consider turning this into a trait
 class ResultSet {
-  private var position: Int = 0
+  // Default to point before the first row.
+  private var position: Int = -1
   private var rows: Seq[Row] = null
 
   protected[velox] def this(rows: Seq[Row]) {
@@ -23,7 +24,9 @@ class ResultSet {
     this.position = position
   }
 
-  def next() {
+  // Moves the cursor forward one row from its current position.
+  // Returns true if the current row is valid, false when it points to after the last row.
+  def next(): Boolean = {
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
     } else if(position+1 > rows.size) {
@@ -31,6 +34,7 @@ class ResultSet {
     }
 
     position += 1
+    position < rows.size
   }
 
   def hasNext(): Boolean = {
@@ -47,12 +51,12 @@ class ResultSet {
     position -= 1
   }
 
-  def start() {
+  def beforeFirst() {
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
     }
 
-    position = 0
+    position = -1
   }
 
   def end() {
