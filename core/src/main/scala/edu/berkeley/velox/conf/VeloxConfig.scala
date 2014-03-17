@@ -1,6 +1,6 @@
 package edu.berkeley.velox.conf
 
-import edu.berkeley.velox.storage.{HashMapStorageManager,StorageManager}
+import edu.berkeley.velox.storage.{HashMapStorageManager,SkipListStorageManager,StorageManager}
 import java.net.{InetAddress, InetSocketAddress}
 import edu.berkeley.velox.net.{NetworkService,ArrayNetworkService,NIONetworkService}
 import edu.berkeley.velox.NetworkDestinationHandle
@@ -67,6 +67,7 @@ object VeloxConfig {
   def getStorageManager(): StorageManager = {
     storageManager match {
       case "hashmap" => new HashMapStorageManager
+      case "skiplist" => new SkipListStorageManager
       case _ => throw new Exception(s"Invalid storage manager type $storageManager")
     }
   }

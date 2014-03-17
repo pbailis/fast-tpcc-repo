@@ -48,14 +48,11 @@ class HashMapStorageManager extends StorageManager with Logging {
 
   protected def _insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
     val table =  dbs.get(databaseName).get(tableName)
-    var i = 0
-    insertSet.getRows foreach {
-      r => {
-        table.insert(Catalog.extractPrimaryKey(databaseName, tableName, r), r)
-        i+=1
-      }
+    while (insertSet.next) {
+      val r = insertSet.currentRow
+      table.insert(Catalog.extractPrimaryKey(databaseName, tableName, r), r)
     }
-    i
+    insertSet.size
   }
 
   // Find and return a predicate that can be used as a key to
