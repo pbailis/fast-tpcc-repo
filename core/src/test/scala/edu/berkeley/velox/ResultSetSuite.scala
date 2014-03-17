@@ -13,8 +13,9 @@ class ResultSetSuite extends FunSuite {
 
     val rs = new ResultSet(rows)
     assert(rs.size == 2)
+    assert(rs.next == true)
     assert(rs.getInt(0) == 0)
-    rs.next
+    assert(rs.next == true)
     assert(rs.getInt(0) == 1)
     assert(!rs.hasNext)
   }
