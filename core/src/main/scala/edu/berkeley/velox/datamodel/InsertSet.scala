@@ -22,7 +22,7 @@ class InsertSet {
   def currentRow(): Row = rows(position)
 
   def hasNext(): Boolean = {
-    position < rows.length
+    position+1 < rows.length
   }
 
   def next(): Boolean =  {
@@ -43,6 +43,7 @@ class InsertSet {
   }
 
   def beforeFirst() {
+
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
     }

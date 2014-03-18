@@ -45,7 +45,11 @@ class SkipListStorageManager extends StorageManager {
   // Extract as much of a primary key as we can from the query
   // to use in accessing our map.  This simply pulls out all
   // equality predicates that can be strung together to form
-  // a prefix of the key.  In addition this method returns only
+  // a prefix of the key.  It also uses a gt/gte predicate
+  // as the last piece of the key to match, as this will
+  // also index the skip list appropriately.
+  //
+  // In addition this method returns only
   // the predicates that cannot be statisfied by a key lookup.
   // (which are applied in _query)  If no such predicates exist
   // null is returned
@@ -57,10 +61,29 @@ class SkipListStorageManager extends StorageManager {
       (null,sorted)
     else {
       val builder = ArrayBuilder.make[Value]
+
       while (idx < sorted.size && idx == sorted(idx).columnIndex && sorted(idx).isInstanceOf[EqualityPredicate]) {
         builder += sorted(idx).asInstanceOf[EqualityPredicate].value
         idx+=1
       }
+
+      if (idx < sorted.size) {
+        // check if last unmatched predicate can be used
+        sorted(idx) match {
+          case gtp: GreaterThanPredicate => {
+            builder += gtp.value
+            // don't increment idx here, since we are strictly
+            // greater than, so we'll have to verify that we're
+            // not equal to.
+          }
+          case gtep: GreaterThanEqualPredicate => {
+            builder += gtep.value
+            idx += 1
+          }
+          case _ => {}
+        }
+      }
+
       (PrimaryKey(builder.result), sorted.drop(idx))
     }
   }

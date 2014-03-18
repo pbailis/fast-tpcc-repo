@@ -11,6 +11,14 @@ protected[velox] class Row(val values: Array[Value]) {
 
   // If this is a split row, how many columns come before me
   private var offset = 0
+  // A split row is never exposed to the user.  Rather, a storage
+  // manager can split a row before storing it, and then will re-assemble
+  // result rows before returning them to the user
+  //
+  // Conceptually a split row simply has the first X columns stored in one
+  // place, and the remaining stored somewhere else.  When offset is non-zero
+  // this row is the remaining piece, and therefore the various operations
+  // must be off-set by that amount.
 
   def set(at: Int, value: Value) : Row = {
     values(at-offset) = value

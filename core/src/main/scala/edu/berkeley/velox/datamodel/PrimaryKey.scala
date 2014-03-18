@@ -25,13 +25,16 @@ case class PrimaryKey(values: Array[Value]) extends Comparable[PrimaryKey] {
 
   /** Test if this key passes all the specified predicates.
     *
+    * Only tests predicates that should apply to the columns in the key.
+    *
     * @param predicates A sequence of predicates to be tested.
     * @returns true if ALL the specified predicates match, otherwise false
     */
   def matches(predicates: Seq[Predicate]): Boolean = {
     var i = 0
-    while (i < predicates.size && i < values.size) {
-      if (!predicates(i)(values(predicates(i).columnIndex)))
+    while (i < predicates.size) {
+      if ( predicates(i).columnIndex < values.length &&
+           !predicates(i)(values(predicates(i).columnIndex)) )
         return false
       i+=1
     }
