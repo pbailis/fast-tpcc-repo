@@ -17,7 +17,6 @@ class SkipListStorageSuite extends FunSuite {
   Catalog._createTableTrigger("testdb","testtable",schema)
 
   val m = new SkipListStorageManager
-  Catalog.registerStorageManager(m,true)
 
   test("Insert into storage") {
     val is = new InsertSet
@@ -29,7 +28,7 @@ class SkipListStorageSuite extends FunSuite {
       else
         is.set(0,IntValue(2))
       is.set(1,IntValue(9-i))
-      is.set(2,IntValue(3))
+      is.set(2,IntValue(2*i))
       is.set(3,IntValue(100))
       is.insertRow
       i+=1
@@ -47,7 +46,7 @@ class SkipListStorageSuite extends FunSuite {
     assert(rs.next == true)
     assert(rs.getInt(0) == 1)
     assert(rs.getInt(1) == 2)
-    assert(rs.getInt(2) == 3)
+    assert(rs.getInt(2) == 14)
   }
 
   test("Partial primary key select") {
@@ -57,13 +56,82 @@ class SkipListStorageSuite extends FunSuite {
     val rs = m.query(query)
     assert(rs.size == 10)
     var i = 0
+    var j = 9
     while (rs.next) {
       assert(rs.getInt(0) == 1)
       assert(rs.getInt(1) == i)
-      assert(rs.getInt(2) == 3)
+      assert(rs.getInt(2) == 2*j)
       i+=1
+      j-=1
     }
     assert(i==10)
+  }
+
+  test("Greater than first col primary key select") {
+    val query = Query("testdb","testtable",
+                      Seq("a","b","c"),
+                      Seq(GreaterThanPredicate("a",1)))
+    val rs = m.query(query)
+
+    assert(rs.size == 10)
+
+    var i = -10
+    while (rs.next) {
+      assert(rs.getInt(0) == 2)
+      assert(rs.getInt(1) == i)
+      i+=1
+    }
+  }
+
+  test("Greater than second col primary key select") {
+    val query = Query("testdb","testtable",
+                      Seq("a","b","c"),
+                      Seq(EqualityPredicate("a",1),GreaterThanPredicate("b",5)))
+    val rs = m.query(query)
+
+    assert(rs.size == 4)
+
+    var i = 6
+    while (rs.next) {
+      assert(rs.getInt(0) == 1)
+      assert(rs.getInt(1) == i)
+      i+=1
+    }
+  }
+
+  test("Extra pred on pk") {
+    val query = Query("testdb","testtable",
+                      Seq("a","b","c"),
+                      Seq(EqualityPredicate("a",1),LessThanPredicate("b",5)))
+    val rs = m.query(query)
+
+    assert(rs.size == 5)
+
+    var i = 0
+    while (rs.next) {
+      assert(rs.getInt(0) == 1)
+      assert(rs.getInt(1) == i)
+      i+=1
+    }
+  }
+
+  test("Predicate outside key") {
+    val query = Query("testdb","testtable",
+                      Seq("a","b","c"),
+                      Seq(EqualityPredicate("a",1),LessThanEqualPredicate("c",10)))
+    val rs = m.query(query)
+
+    assert(rs.size == 6)
+
+    var i = 4
+    var j = 5
+    while (rs.next) {
+      assert(rs.getInt(0) == 1)
+      assert(rs.getInt(1) == i)
+      assert(rs.getInt(2) == j*2)
+      i+=1
+      j-=1
+    }
   }
 
   test("Full iteration") {
@@ -74,6 +142,7 @@ class SkipListStorageSuite extends FunSuite {
     assert(rs.size == 20)
 
     var i = 0
+    var j = 9
     while (rs.next) {
       if (i < 10) {
         assert(rs.getInt(0) == 1)
@@ -84,8 +153,10 @@ class SkipListStorageSuite extends FunSuite {
         assert(rs.getInt(1) == (i-20))
       }
 
-      assert(rs.getInt(2) == 3)
+      assert(rs.getInt(2) == j*2)
       i+=1
+      j-=1
+      if (i == 10) j=19
     }
   }
 
