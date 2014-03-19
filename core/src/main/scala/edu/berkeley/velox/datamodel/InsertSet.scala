@@ -9,10 +9,10 @@ import scala.collection.JavaConversions._;
 class InsertSet {
   private var currentInsertRow: Row = null
   private val rows: ArrayList[Row] = new ArrayList[Row]()
-  private var position: Int = 0
+  private var position: Int = -1
 
   def absolute(position: Int) {
-    if (position > rows.size-1) {
+    if (position >= rows.size) {
       throw new UnsupportedOperationException(s"Position $position requested, but maximum position is ${rows.size-1}")
     }
 
@@ -25,12 +25,13 @@ class InsertSet {
     position+1 < rows.length
   }
 
-  def next() {
-    if(position+1 > rows.length) {
+  def next(): Boolean =  {
+    if (position > rows.length) {
       throw new UnsupportedOperationException(s"Next requested, but maximum position is ${rows.length-1}")
     }
 
     position += 1
+    position < rows.length
   }
 
   def prev() {
@@ -41,20 +42,21 @@ class InsertSet {
     position -= 1
   }
 
-  def start() {
+  def beforeFirst() {
+
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
     }
 
-    position = 0
+    position = -1
   }
 
-  def end() {
+  def afterEnd() {
     if(rows == null) {
       throw new UnsupportedOperationException(s"No rows found in set!")
     }
 
-    position = Math.max(rows.length-1, 0)
+    position = Math.max(rows.length, 1)
   }
 
   def getInt(at: Int): Int = {
