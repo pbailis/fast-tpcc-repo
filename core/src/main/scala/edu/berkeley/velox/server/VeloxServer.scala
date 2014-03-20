@@ -59,9 +59,21 @@ class VeloxServer(storage: StorageManager,
 
   class InsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] with Logging {
     def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
-      future {
-        storage.insert(msg.database, msg.table, msg.insertSet)
-        new InsertionResponse
+      TriggerManager.beforeInsert(msg.database, msg.table, msg.insertSet)
+      storage.insert(msg.database, msg.table, msg.insertSet)
+      val syncFutures = TriggerManager.afterInsert(msg.database, msg.table, msg.insertSet)
+
+      if (syncFutures == Nil) {
+        return Future.successful(new InsertionResponse)
+      } else {
+        // All the trigger futures must complete before responding to client.
+        val p = Promise[InsertionResponse]
+        val f = Future.sequence(syncFutures)
+        f.onComplete {
+          case Success(_) => p.success(new InsertionResponse)
+          case Failure(t) => logger.error(s"trigger futures error: ", t)
+        }
+        return p.future
       }
     }
   }

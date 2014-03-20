@@ -207,7 +207,7 @@ if __name__ == "__main__":
                         help='Branch to rebuild. [default: %(default)s]')
     parser_rebuild.add_argument('--git_remote', dest="git_remote", default="git@github.com:amplab/velox.git",
                         help='Upstream git url. [default: %(default)s]')
-    parser_rebuild.add_argument('--deploy_key', dest="deploy_key", default="velox",
+    parser_rebuild.add_argument('--deploy_key', dest="deploy_key", default=None,
                         help='Local path to upstream deploy key. [default: %(default)s]')
 
     # install_ykit
