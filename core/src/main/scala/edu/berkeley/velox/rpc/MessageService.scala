@@ -72,7 +72,11 @@ abstract class MessageService extends Logging {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
-    requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+
+    if(!msg.isInstanceOf[OneWayRequest]) {
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+    }
+
     if (dst == serviceID) { // Sending message to self
       sendLocalRequest(reqId, msg)
     } else {
@@ -85,7 +89,11 @@ abstract class MessageService extends Logging {
     // type R = M#Response
     val reqId = nextRequestId.getAndIncrement()
     val p = Promise[R]
-    requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+
+    if(!msg.isInstanceOf[OneWayRequest]) {
+      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+    }
+
     networkService.sendAny(serializeMessage(reqId, msg, isRequest=true))
     p.future
   }
@@ -94,7 +102,11 @@ abstract class MessageService extends Logging {
    val ret = networkService.getConnections map { c =>
      val p = Promise[R]
       val reqId = nextRequestId.getAndIncrement()
-      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+
+       if(!msg.isInstanceOf[OneWayRequest]) {
+         requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+       }
+
       networkService.send(c, serializeMessage(reqId, msg, isRequest=true))
       p.future
     }
@@ -105,7 +117,11 @@ abstract class MessageService extends Logging {
     val ret = networkService.getConnections map { c =>
       val p = Promise[R]
       val reqId = nextRequestId.getAndIncrement()
-      requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+
+      if(!msg.isInstanceOf[OneWayRequest]) {
+        requestMap.put(reqId, p.asInstanceOf[Promise[Any]])
+      }
+
       networkService.send(c, serializeMessage(reqId, msg, isRequest=true))
       p.future
     }
@@ -160,7 +176,11 @@ abstract class MessageService extends Logging {
     assert(h != null)
     try {
       h.receive(src, msg.asInstanceOf[Request[Any]]) onComplete {
-        case Success(response) => sendResponse(src, requestId, response)
+        case Success(response) => {
+          if(!msg.isInstanceOf[OneWayRequest]) {
+            sendResponse(src, requestId, response)
+          }
+        }
         case Failure(t) => logger.error(s"Error receiving message $t", t)
       }
     } catch {
