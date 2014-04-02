@@ -14,6 +14,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.collection.mutable.StringBuilder
 import scala.util.Random
 import scala.collection.JavaConverters._
+import edu.berkeley.velox.util.VeloxFixedThreadPool
 
 class SocketBuffer(
   channel: SocketChannel,
@@ -329,27 +330,13 @@ class SendSweeper(
 
 }
 
-class ArrayNetworkThreadFactory(val name: String) extends ThreadFactory {
-
-  val defaultFactory = Executors.defaultThreadFactory
-  var threadIdx = new AtomicInteger(0)
-
-  override
-  def newThread(r: Runnable):Thread = {
-    val t = defaultFactory.newThread(r)
-    val tid = threadIdx.getAndIncrement()
-    t.setName(s"ArrayNetworkServiceThread-$name-$tid")
-    t
-  }
-}
-
 class ArrayNetworkService(
   val name: String,
   val performIDHandshake: Boolean = false,
   val tcpNoDelay: Boolean = true,
   val serverID: Integer = -1) extends NetworkService with Logging {
 
-  val executor = Executors.newFixedThreadPool(16, new ArrayNetworkThreadFactory(name))
+  val executor = VeloxFixedThreadPool.pool
   val connections = new ConcurrentHashMap[NetworkDestinationHandle, SocketBufferPool]
   val nextConnectionID = new AtomicInteger(0)
   private val connectionSemaphore = new Semaphore(0)
