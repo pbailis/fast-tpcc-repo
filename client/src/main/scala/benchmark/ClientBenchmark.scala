@@ -223,7 +223,7 @@ object ClientBenchmark extends Logging {
     val totthruput = (nPuts + nGets).toDouble / gtime.toDouble
     logger.info(s"In $gtime seconds and with $parallelism threads, completed $numPuts PUTs ($pthruput ops/sec), $numGets GETs ($gthruput ops/sec)\nTOTAL THROUGHPUT: $totthruput ops/sec")
     if (computeLatency)
-      logger.info(s"Average latency ${currentLatency._2} milliseconds")
+      logger.info(s"Average latency ${currentLatency._2/1000000} milliseconds")
 
     if (testIndex) {
       // read some entries in the index.

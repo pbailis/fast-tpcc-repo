@@ -60,10 +60,7 @@ trait StorageManager {
     * @return The number of rows inserted
     */
   final def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
-    TriggerManager.beforeInsert(databaseName, tableName, insertSet)
-    val inserted = _insert(databaseName, tableName, insertSet)
-    TriggerManager.afterInsert(databaseName, tableName, insertSet)
-    inserted
+    _insert(databaseName, tableName, insertSet)
   }
 
   /**
