@@ -24,9 +24,12 @@ object VeloxBuild extends Build {
 
   lazy val packages = Seq[ClasspathDependency](core, client)
   lazy val packageProjects = Seq[ProjectReference](core, client)
-  lazy val allProjects = packageProjects ++ Seq[ProjectReference](assemblyProj)
-  lazy val allDeps = packages
 
+  lazy val allExternal = Seq[ClasspathDependency]()
+  lazy val allExternalRefs = Seq[ProjectReference]()
+
+  lazy val allProjects = packageProjects ++ allExternalRefs ++ Seq[ProjectReference](assemblyProj)
+  lazy val allDeps = packages ++ allExternal
 
   lazy val assembleDeps = TaskKey[Unit]("assemble-deps", "Build assembly of dependencies and packages Spark projects")
 
@@ -70,6 +73,10 @@ object VeloxBuild extends Build {
 
   def clientSettings = sharedSettings ++ Seq(
     name := "velox-client"
+  )
+
+  def sporeSettings = sharedSettings ++ Seq(
+    name := "spore"
   )
 
   def assemblyProjSettings = sharedSettings ++ Seq(

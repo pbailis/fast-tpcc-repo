@@ -2,7 +2,7 @@ package edu.berkeley.velox.util
 
 import java.io.{ByteArrayOutputStream, InputStream}
 
-object ClosureUtil {
+object JVMClassClosureUtil {
   def classToBytes(cls: Class[_]): Array[Byte] = {
     val className = cls.getName
     val shortName = className.replaceFirst("^.*\\.", "") + ".class"

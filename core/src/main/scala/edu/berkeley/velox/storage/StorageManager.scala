@@ -1,20 +1,23 @@
 package edu.berkeley.velox.storage
 
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox._
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.trigger.TriggerManager
 import edu.berkeley.velox.catalog.Catalog
 import edu.berkeley.velox.trigger.server._
+import edu.berkeley.velox.operations.CommandExecutor
+import scala.concurrent.Future
+import edu.berkeley.velox.operations.commands.{QueryOperation, InsertionOperation, Operation, QueryDatabase, QueryTable}
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 
-trait StorageManager {
+trait StorageManager extends CommandExecutor {
 
   /**
     * Create a new database. No-op if db already exists.
     *
     * @param dbName Name of the database to create
     */
-  def createDatabase(dbName: DatabaseName)
+  def createDatabaseLocal(dbName: DatabaseName)
 
   /**
     *  Create a table within a database.  No-op if table already exists
@@ -22,8 +25,8 @@ trait StorageManager {
     *  @param dbName Database to create table in
     *  @param tableName Name of Table to create
     */
-  final def createTable(dbName: DatabaseName, tableName: TableName) {
-    _createTable(dbName, tableName)
+  final def createTableLocal(dbName: DatabaseName, tableName: TableName) {
+    _createTableLocal(dbName, tableName)
     val schema = Catalog.getSchema(dbName, tableName)
 
     // If table has indexes, add trigger to update indexes.
@@ -61,7 +64,7 @@ trait StorageManager {
     */
   final def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
     TriggerManager.beforeInsert(databaseName, tableName, insertSet)
-    val inserted = _insert(databaseName, tableName, insertSet)
+    val inserted = _insertLocal(databaseName, tableName, insertSet)
     TriggerManager.afterInsert(databaseName, tableName, insertSet)
     inserted
   }
@@ -69,21 +72,36 @@ trait StorageManager {
   /**
     * Run a query against a table.
     *
-    * @param databaseName Database to query
-    * @param tableName Table to query
     * @param query Query to run
     *
     * @return Set of values that answer the query
     */
   final def query(query: Query): ResultSet = {
-    _query(query)
+    _queryLocal(query)
+  }
+
+  def execute(database: QueryDatabase, table: QueryTable, operation: Operation) : Future[ResultSet] = {
+    Future{
+      executeBlocking(database, table, operation)
+    }
+  }
+
+  def executeBlocking(database: QueryDatabase, table: QueryTable, operation: Operation): ResultSet = {
+    operation match {
+      case s: QueryOperation => {
+        _queryLocal(new Query(database.name, table.name, s.columns, s.predicates))
+      }
+      case i: InsertionOperation => {
+        insert(database.name, table.name, i.insertSet); new ResultSet
+      }
+    }
   }
 
   /*
    * Implementors of storage engines should implement the following methods.
    */
 
-  protected def _createTable(dbName: DatabaseName, tableName: TableName)
-  protected def _insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int
-  protected def _query(query: Query): ResultSet
+  protected def _createTableLocal(dbName: DatabaseName, tableName: TableName)
+  protected def _insertLocal(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int
+  protected def _queryLocal(query: Query): ResultSet
 }

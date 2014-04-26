@@ -17,7 +17,7 @@ class SkipListStorageManager extends StorageManager {
 
   Catalog.registerStorageManager(this,true)
 
-  def createDatabase(dbName: DatabaseName) = {
+  def createDatabaseLocal(dbName: DatabaseName) = {
     dbs.putIfAbsent(dbName,java.lang.Boolean.TRUE)
   }
 
@@ -25,7 +25,7 @@ class SkipListStorageManager extends StorageManager {
     dbName.## * 31 + tableName.##
   }
 
-  protected def _createTable(dbName:DatabaseName, tableName: TableName) {
+  protected def _createTableLocal(dbName:DatabaseName, tableName: TableName) {
     if (dbs.containsKey(dbName)) {
       tbls.putIfAbsent(tableId(dbName,tableName),new ConcurrentSkipListMap[PrimaryKey,Row])
     } else {
@@ -33,7 +33,7 @@ class SkipListStorageManager extends StorageManager {
     }
   }
 
-  protected def _insert(dbName: DatabaseName,tableName: TableName, insertSet: InsertSet): Int = {
+  protected def _insertLocal(dbName: DatabaseName,tableName: TableName, insertSet: InsertSet): Int = {
     val table =  tbls.get(tableId(dbName,tableName))
     val schema = Catalog.getSchema(dbName,tableName)
     if (insertSet.size == 0) 0
@@ -114,7 +114,7 @@ class SkipListStorageManager extends StorageManager {
     }
   }
 
-  protected def _query(query: Query): ResultSet = {
+  protected def _queryLocal(query: Query): ResultSet = {
     val schema = Catalog.getSchema(query.databaseName,query.tableName)
     val (startkey,endkey,preds,inclusive) = pkFromQuery(query,schema)
     val nopreds = preds == null || preds.size == 0

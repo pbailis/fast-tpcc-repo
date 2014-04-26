@@ -487,7 +487,7 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
 
     cmd_args = {'pstr': pstr,
                 'jar_loc': VELOX_JAR_LOCATION,
-                'server_class': VELOX_CLIENT_BENCH_CLASS,
+                'server_class': kwargs.get("client_class", VELOX_CLIENT_BENCH_CLASS),
                 # 'client_str': clientConfigStr,
                 'parallelism': parallelism,
                 'read_pct': read_pct,
@@ -527,7 +527,7 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
 
     cmd_args = {'pstr': pstr,
                 'jar_loc': VELOX_JAR_LOCATION,
-                'server_class': VELOX_CLIENT_BENCH_CLASS,
+                'server_class': kwargs.get("client_class", VELOX_CLIENT_BENCH_CLASS),
                 'heap_size': heap_size,
                 # 'client_str': cluster.frontend_cluster_str
                 'parallelism': parallelism,

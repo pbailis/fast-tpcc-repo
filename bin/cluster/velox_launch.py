@@ -167,7 +167,11 @@ if __name__ == "__main__":
                                      help='Compute average latency when running THE CRANKSHAW. [default: %(default)s]')
     common_client_bench.add_argument('--test_index', action='store_true',
                                      help='Test index inserts using triggers for THE CRANKSHAW. [default: %(default)s]')
-    # common ycsb options
+    common_client_bench.add_argument('--client_class', type=str,
+                                     dest="client_class", help='Client benchmark main class.',
+                                     default=VELOX_CLIENT_BENCH_CLASS)
+
+# common ycsb options
     common_ycsb_bench = argparse.ArgumentParser(add_help=False)
     common_ycsb_bench.add_argument('--skip_rebuild', action='store_true',
                                    help='Skip rebuilding ycsb before running the benchmark. [default: %(default)s]')

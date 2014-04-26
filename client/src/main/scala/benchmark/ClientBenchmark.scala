@@ -106,7 +106,7 @@ object ClientBenchmark extends Logging {
     }
 
     val ostart = System.nanoTime
-    val client = new VeloxConnection
+    implicit val client = new VeloxConnection
     val DB_NAME = "client-benchmark-db"
     val TABLE_NAME = "table1"
     val ID_COL = "id"

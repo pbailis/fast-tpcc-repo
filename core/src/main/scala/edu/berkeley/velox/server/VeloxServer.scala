@@ -7,8 +7,6 @@ import edu.berkeley.velox.conf.VeloxConfig
 import edu.berkeley.velox.rpc.{FrontendRPCService, InternalRPCService, MessageHandler}
 import java.util.{HashMap => JHashMap}
 import scala.concurrent.{Promise, Future, future}
-import edu.berkeley.velox.operations.database.request._
-import edu.berkeley.velox.operations.database.response._
 import edu.berkeley.velox.storage.StorageManager
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import edu.berkeley.velox.datamodel.{InsertSet, ResultSet}
@@ -18,6 +16,10 @@ import scala.collection.JavaConverters._
 import edu.berkeley.velox.catalog.Catalog
 import java.util
 import edu.berkeley.velox.trigger.TriggerManager
+import edu.berkeley.velox.operations.internal._
+import edu.berkeley.velox.operations.internal.QueryResponse
+import edu.berkeley.velox.operations.internal.InsertionRequest
+import edu.berkeley.velox.operations.internal.QueryRequest
 
 // Every server has a single instance of this class. It handles data storage
 // and serves client requests. Data is stored in a concurrent hash map.
@@ -47,6 +49,7 @@ class VeloxServer(storage: StorageManager,
 
   frontendServer.registerHandler(new QueryRequestHandler)
   frontendServer.registerHandler(new InsertionRequestHandler)
+  frontendServer.registerHandler(new PerPartitionUDFRequestHandler)
 
   frontendServer.initialize()
   logger.warn("Frontend server initialized.")
@@ -70,6 +73,14 @@ class VeloxServer(storage: StorageManager,
     def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
       future {
         new QueryResponse(storage.query(msg.query))
+      }
+    }
+  }
+
+  class PerPartitionUDFRequestHandler extends MessageHandler[Any, PerPartitionUDFRequest] {
+    def receive(src: NetworkDestinationHandle, msg: PerPartitionUDFRequest): Future[Any] = {
+      future {
+        msg.udf(storage)
       }
     }
   }

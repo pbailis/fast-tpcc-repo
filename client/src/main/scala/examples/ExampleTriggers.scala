@@ -4,8 +4,8 @@ import com.typesafe.scalalogging.slf4j.Logging
 import java.net.InetSocketAddress
 import edu.berkeley.velox.trigger._
 import edu.berkeley.velox.frontend.VeloxConnection
-import edu.berkeley.velox.frontend.api.Database
 import edu.berkeley.velox.datamodel.Row
+import edu.berkeley.velox.operations.commands.QueryDatabase
 
 class MyTrigger extends AfterDeleteRowTrigger with AfterInsertRowTrigger with AfterUpdateRowTrigger with Logging {
   override def initialize(dbName: String, tableName: String) {
@@ -24,8 +24,8 @@ class MyTrigger extends AfterDeleteRowTrigger with AfterInsertRowTrigger with Af
 object ExampleTriggers extends Logging {
   def main(args: Array[String]) {
     logger.info("example triggers")
-    val conn = new VeloxConnection()
-    val db : Database = conn.database("db")
+    implicit val conn = new VeloxConnection()
+    val db : QueryDatabase = conn.database("db")
     db.registerTrigger("table", classOf[MyTrigger])
   }
 }

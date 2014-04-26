@@ -42,9 +42,9 @@ object Catalog extends Logging {
       schemas.synchronized {
         schemas.foreach {
           case (dbname,tables) => {
-            manager.createDatabase(dbname)
+            manager.createDatabaseLocal(dbname)
             tables.foreach {
-              case (tablename,schema) => manager.createTable(dbname,tablename)
+              case (tablename,schema) => manager.createTableLocal(dbname,tablename)
             }
           }
         }
@@ -155,7 +155,7 @@ object Catalog extends Logging {
       schemas.synchronized {
         schemas += ((db, new HashMap[TableName, Schema]))
       }
-      storageManagers foreach (_.createDatabase(db))
+      storageManagers foreach (_.createDatabaseLocal(db))
       true
     }
   }
@@ -189,7 +189,7 @@ object Catalog extends Logging {
           schemas += ((db,newMap))
         }
       }
-      storageManagers foreach (_.createTable(db,table))
+      storageManagers foreach (_.createTableLocal(db,table))
       true
     }
   }

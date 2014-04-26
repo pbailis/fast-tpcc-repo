@@ -1,15 +1,13 @@
-package edu.berkeley.velox.frontend.api
+package edu.berkeley.velox.operations.commands
 
 import edu.berkeley.velox.catalog.Catalog
-import edu.berkeley.velox.datamodel.{ColumnLabel, ResultSet, Row, Value}
+import edu.berkeley.velox.datamodel.{Query, ColumnLabel, ResultSet, Value}
 import edu.berkeley.velox.datamodel.DataModelConverters.stringToColumnID
-import edu.berkeley.velox.datamodel.InsertSet
-import edu.berkeley.velox.datamodel.api.operation.{InsertionOperation, Operation, QueryOperation}
 import edu.berkeley.velox.exceptions.QueryException
 import scala.concurrent.Future
+import edu.berkeley.velox.operations.CommandExecutor
 
-class Table(val database: Database, val name: String) {
-
+class QueryTable(val database: QueryDatabase, val name: String) {
   val schema = Catalog.getSchema(database.name,name)
 
   if (schema == null)
@@ -24,11 +22,23 @@ class Table(val database: Database, val name: String) {
     ret
   }
 
+  def insertBatch(): InsertionOperation = {
+    new InsertionOperation(null).into(this)
+  }
+
   def select(names: ColumnLabel*) : QueryOperation = {
     new QueryOperation(this, names)
   }
 
   def execute(operation: Operation) : Future[ResultSet] = {
     database.execute(this, operation)
+  }
+
+  def executeBlocking(operation: Operation) : ResultSet = {
+    database.executeBlocking(this, operation)
+  }
+
+  def prepareQuery(queryOperation: QueryOperation): Query = {
+    database.prepareQuery(this, queryOperation)
   }
 }

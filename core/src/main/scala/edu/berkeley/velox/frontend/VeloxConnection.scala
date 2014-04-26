@@ -2,27 +2,27 @@ package edu.berkeley.velox.frontend
 
 import edu.berkeley.velox.rpc.ClientRPCService
 import scala.concurrent._
-import edu.berkeley.velox.frontend.api._
 import edu.berkeley.velox.datamodel._
-import edu.berkeley.velox.datamodel.api.operation._
 import com.typesafe.scalalogging.slf4j.Logging
-import edu.berkeley.velox.datamodel.DataModelConverters._
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
-import edu.berkeley.velox.operations.database.response.InsertionResponse
 import edu.berkeley.velox._
-import edu.berkeley.velox.util.ClosureUtil
-import scala.util.Failure
-import edu.berkeley.velox.datamodel.ColumnLabel
-import scala.util.Success
-import edu.berkeley.velox.operations.database.request.InsertionRequest
-import edu.berkeley.velox.operations.database.request.QueryRequest
-import edu.berkeley.velox.datamodel.Query
+import edu.berkeley.velox.util.JVMClassClosureUtil
 import edu.berkeley.velox.catalog.Catalog
 import java.util.{HashMap => JHashMap}
 import scala.collection.JavaConverters._
 
 
 import java.util
+import edu.berkeley.velox.operations.CommandExecutor
+import edu.berkeley.velox.udf.PerPartitionUDF
+import edu.berkeley.velox.operations.commands._
+import scala.util.Failure
+import edu.berkeley.velox.datamodel.ColumnLabel
+import edu.berkeley.velox.operations.commands.Operation
+import scala.util.Success
+import edu.berkeley.velox.datamodel.Query
+import edu.berkeley.velox.operations.internal.{InsertionResponse, InsertionRequest, QueryRequest, PerPartitionUDFRequest}
+import scala.concurrent.duration.Duration
 
 
 object VeloxConnection {
@@ -31,7 +31,7 @@ object VeloxConnection {
   }
 }
 
-class VeloxConnection extends Logging {
+class VeloxConnection extends Logging with CommandExecutor {
 
   val ms = new ClientRPCService
   ms.initialize()
@@ -40,44 +40,12 @@ class VeloxConnection extends Logging {
 
   val partitioner = new ClientRandomPartitioner
 
-  def database(name: DatabaseName): Database = {
-    new Database(this, name)
-  }
-
-  def createDatabase(name: DatabaseName) : Future[Database] = {
-    future {
-      Catalog.createDatabase(name)
-      new Database(this, name)
-    }
-  }
-
-  // blocking command to register a new trigger.
-  def registerTrigger(dbName: DatabaseName, tableName: TableName, triggerClass: Class[_]) {
-    val className = triggerClass.getName
-    val classBytes = ClosureUtil.classToBytes(triggerClass)
-    Catalog.registerTrigger(dbName, tableName, className, classBytes)
-  }
-
-  def createTable(database: Database, tableName: TableName, schema: Schema) : Future[Table] = {
-    future {
-      Catalog.createTable(database.name, tableName, schema)
-      new Table(database, tableName)
-    }
-  }
-
-
-  // Query creation/parsing/validation
-  def select(names: ColumnLabel*) : QueryOperation = {
-    new QueryOperation(null, names)
-  }
-
-  def insert(values: (ColumnLabel, Value)*) : InsertionOperation = {
-    new InsertionOperation(values)
+  def perPartitionUDF(udf: PerPartitionUDF): Future[Seq[Any]] = {
+    return Future.sequence(ms.sendAllRemote(new PerPartitionUDFRequest(udf)))
   }
 
   // Routing
-  def execute(database: Database, table: Table, operation: Operation) : Future[ResultSet] = {
-
+  override def execute(database: QueryDatabase, table: QueryTable, operation: Operation) : Future[ResultSet] = {
     val results: Future[ResultSet] = operation match {
       case s: QueryOperation => {
         executeQuery(new QueryRequest(new Query(database.name, table.name, s.columns, s.predicates)))
@@ -87,6 +55,13 @@ class VeloxConnection extends Logging {
       }
     }
     results
+  }
+
+  // Routing
+  override def executeBlocking(database: QueryDatabase, table: QueryTable, operation: Operation) : ResultSet = {
+    val resultsFuture = execute(database, table, operation)
+    Await.ready(resultsFuture, Duration.Inf)
+    resultsFuture.value.get.get
   }
 
   private def executeQuery(query: QueryRequest) : Future[ResultSet] = {

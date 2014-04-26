@@ -4,8 +4,8 @@ import scala.collection.immutable.HashMap
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.catalog.Catalog
-import edu.berkeley.velox.operations.database.request.InsertionRequest
 import edu.berkeley.velox.trigger._
+import edu.berkeley.velox.operations.internal.InsertionRequest
 
 // Inserts new table rows into the table's indexes.
 class IndexUpdateTrigger(val dbName: String, val tableName: String) extends AfterInsertRowTrigger with AfterDeleteRowTrigger with AfterUpdateRowTrigger with Logging {

@@ -1,11 +1,11 @@
-package edu.berkeley.velox.datamodel.api.operation
+package edu.berkeley.velox.operations.commands
 
-import edu.berkeley.velox.datamodel.{ResultSet, ColumnLabel, Predicate}
+import edu.berkeley.velox.datamodel.{Query, ResultSet, ColumnLabel, Predicate}
 import edu.berkeley.velox.exceptions.QueryException
-import edu.berkeley.velox.frontend.api.Table
 import scala.concurrent.Future
+import edu.berkeley.velox.operations.CommandExecutor
 
-class QueryOperation(var table: Table, val columns: Seq[ColumnLabel]) extends Operation {
+class QueryOperation(var table: QueryTable, val columns: Seq[ColumnLabel]) extends Operation {
   var predicates: Seq[Predicate] = Nil
 
   override def execute(): Future[ResultSet] = {
@@ -17,7 +17,7 @@ class QueryOperation(var table: Table, val columns: Seq[ColumnLabel]) extends Op
     this
   }
 
-  def from(table: Table): QueryOperation = {
+  def from(table: QueryTable): QueryOperation = {
     this.table = table
     this
   }
@@ -27,5 +27,9 @@ class QueryOperation(var table: Table, val columns: Seq[ColumnLabel]) extends Op
       throw new QueryException("Syntax error, and not expected here")
     predicates :+= pred
     this
+  }
+
+  def prepareQuery: Query = {
+    table.prepareQuery(this)
   }
 }

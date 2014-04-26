@@ -21,11 +21,11 @@ class HashMapStorageManager extends StorageManager with Logging {
    * Create a new database. Nop if db already exists.
    * @param name
    */
-  def createDatabase(name: DatabaseName) {
+  def createDatabaseLocal(name: DatabaseName) {
     dbs.putIfAbsent(name, new ConcurrentHashMap[TableName, Table]())
   }
 
-  protected def _createTable(dbName: DatabaseName, tableName: TableName) {
+  protected def _createTableLocal(dbName: DatabaseName, tableName: TableName) {
     if (dbs.containsKey(dbName)) {
       dbs.get(dbName).putIfAbsent(tableName, new Table)
     } else {
@@ -46,7 +46,7 @@ class HashMapStorageManager extends StorageManager with Logging {
     dbs.keySet().asScala
   }
 
-  protected def _insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
+  protected def _insertLocal(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
     val table =  dbs.get(databaseName).get(tableName)
     while (insertSet.next) {
       val r = insertSet.currentRow
@@ -72,7 +72,7 @@ class HashMapStorageManager extends StorageManager with Logging {
     null
   }
 
-  protected def _query(query: Query) : ResultSet = {
+  protected def _queryLocal(query: Query) : ResultSet = {
     val rows = new ArrayBuffer[Row]
     val table = dbs.get(query.databaseName).get(query.tableName)
 

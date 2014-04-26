@@ -1,9 +1,7 @@
 package edu.berkeley.velox.datamodel
 
 import edu.berkeley.velox.catalog.Catalog
-import edu.berkeley.velox.datamodel.api.operation.Operation
 import edu.berkeley.velox.exceptions.QueryException
-import edu.berkeley.velox.frontend.api.Table
 
 case class Query(val databaseName: String, val tableName: String, val columns: Seq[ColumnLabel], val predicates: Seq[Predicate]) {
 

@@ -1,8 +1,6 @@
 package edu.berkeley.velox.datamodel
 
 import edu.berkeley.velox.frontend.VeloxConnection
-import java.net.InetSocketAddress
-import edu.berkeley.velox.frontend.api.Database
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import edu.berkeley.velox.datamodel.DataModelConverters._
@@ -11,7 +9,7 @@ import scala.language.postfixOps
 
 object ExampleDataModel {
   def main(args: Array[String]) {
-    val conn = new VeloxConnection
+    implicit val conn = new VeloxConnection
 
     val dbf = conn.createDatabase("peter-db")
     Await.ready(dbf, Duration.Inf)
