@@ -11,6 +11,7 @@ import scala.util.Random
 import java.util.concurrent.atomic.AtomicInteger
 import edu.berkeley.velox.rpc.MessageService
 import scala.collection.JavaConversions._
+import edu.berkeley.velox.util.VeloxFixedThreadPool
 
 class NIONetworkService(val name: String,
                         val performIDHandshake: Boolean = false,
@@ -225,7 +226,8 @@ class NIONetworkService(val name: String,
   // Initialize the read buffer pool with buffers
   val readBufferPool = new LinkedBlockingQueue[ByteBuffer]
   val readerThread = new ReaderThread
-  val readExecutor = Executors.newFixedThreadPool(16)
+  val readExecutor = VeloxFixedThreadPool.pool
+
   val nextConnectionID = new AtomicInteger(0)
 
   override def setMessageService(messageService: MessageService) {

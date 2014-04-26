@@ -62,11 +62,8 @@ trait StorageManager extends CommandExecutor {
     *
     * @return The number of rows inserted
     */
-  final def insert(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
-    TriggerManager.beforeInsert(databaseName, tableName, insertSet)
-    val inserted = _insertLocal(databaseName, tableName, insertSet)
-    TriggerManager.afterInsert(databaseName, tableName, insertSet)
-    inserted
+  final def insertLocal(databaseName: DatabaseName, tableName: TableName, insertSet: InsertSet): Int = {
+    _insertLocal(databaseName, tableName, insertSet)
   }
 
   /**
@@ -92,7 +89,7 @@ trait StorageManager extends CommandExecutor {
         _queryLocal(new Query(database.name, table.name, s.columns, s.predicates))
       }
       case i: InsertionOperation => {
-        insert(database.name, table.name, i.insertSet); new ResultSet
+        _insertLocal(database.name, table.name, i.insertSet); new ResultSet
       }
     }
   }

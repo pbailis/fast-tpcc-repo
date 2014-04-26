@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.immutable.HashSet
 import scopt._
+import edu.berkeley.velox.util.VeloxFixedThreadPool
 
 class SocketBuffer(channel: SocketChannel) extends Runnable {
   var buf = new Array[Byte](ArrayOnlyProto.bufSize)
@@ -140,7 +141,8 @@ class Receiver(bytes: ByteBuffer, executor: ExecutorService, channel: SocketChan
 
 class ProtoService(executor: ExecutorService) {
 
-  val writeExecutor = Executors.newFixedThreadPool(2)
+  val writeExecutor = VeloxFixedThreadPool.pool
+
   val channelMap = new ConcurrentHashMap[SocketChannel, SocketBuffer]
 
   /**

@@ -6,9 +6,11 @@ import edu.berkeley.velox.datamodel._
 import edu.berkeley.velox.catalog.Catalog
 import edu.berkeley.velox.trigger._
 import edu.berkeley.velox.operations.internal.InsertionRequest
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import scala.concurrent.Future
 
 // Inserts new table rows into the table's indexes.
-class IndexUpdateTrigger(val dbName: String, val tableName: String) extends AfterInsertRowTrigger with AfterDeleteRowTrigger with AfterUpdateRowTrigger with Logging {
+class IndexUpdateTrigger(val dbName: String, val tableName: String) extends AfterInsertAsyncRowTrigger with AfterDeleteAsyncRowTrigger with AfterUpdateAsyncRowTrigger with Logging {
   // Info for helping update an index.
   private case class IndexInfo(name: String, schema: Schema, rowProjection: Seq[Int])
   private var indexes = new HashMap[String, IndexInfo]
@@ -30,22 +32,27 @@ class IndexUpdateTrigger(val dbName: String, val tableName: String) extends Afte
     })
   }
 
-  override def afterInsert(ctx: TriggerContext, inserted: Row) {
-    // Will this need to be a while loop?
-    indexes.values.foreach(idxInfo => {
-      // Update all the indexes.
-      val indexRow = inserted.project(idxInfo.rowProjection)
-      val insertSet = new InsertSet
-      insertSet.appendRow(indexRow)
-      val pkey = Catalog.extractPrimaryKey(dbName, idxInfo.name, indexRow)
-      val partition = ctx.partitioner.getMasterPartition(pkey)
-      ctx.messageService.send(partition, new InsertionRequest(dbName, idxInfo.name, insertSet))
+  override def afterInsertAsync(ctx: TriggerContext, inserted: Seq[Row]): Future[Any] = {
+    val allFutures = inserted.flatMap(row => {
+      val futures = indexes.values.map(idxInfo => {
+        // Update all the indexes.
+        val indexRow = row.project(idxInfo.rowProjection)
+        val insertSet = new InsertSet
+        insertSet.appendRow(indexRow)
+        val pkey = Catalog.extractPrimaryKey(dbName, idxInfo.name, indexRow)
+        val partition = ctx.partitioner.getMasterPartition(pkey)
+        ctx.messageService.send(partition, new InsertionRequest(dbName, idxInfo.name, insertSet))
+      })
+      futures
     })
+    Future.sequence(allFutures)
   }
 
-  override def afterDelete(ctx: TriggerContext, deleted: Row) {
+  override def afterDeleteAsync(ctx: TriggerContext, deleted: Seq[Row]): Future[Any] = {
+    Future.successful()
   }
 
-  override def afterUpdate(ctx: TriggerContext, oldRow: Row, newRow: Row) {
+  override def afterUpdateAsync(ctx: TriggerContext, updated: Seq[(Row, Row)]): Future[Any] = {
+    Future.successful()
   }
 }

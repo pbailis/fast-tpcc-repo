@@ -359,9 +359,9 @@ def stop_velox_processes():
     pprint('Termination command sent.')
 
 def install_ykit(cluster):
-    run_cmd("all-hosts", "wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
-    run_cmd("all-hosts", "tar -xvf yjp-2013-build-13072-linux.tar.bz2")
-    run_cmd("all-hosts", "mv yjp-2013-build-13072 yourkit")
+    run_cmd("all-hosts", "wget http://www.yourkit.com/download/yjp-2013-build-13074-linux.tar.bz2")
+    run_cmd("all-hosts", "tar -xvf yjp-2013-build-13074-linux.tar.bz2")
+    run_cmd("all-hosts", "mv yjp-2013-build-13074 yourkit")
     # master = cluster.clients[0].ip
     # run_cmd_single(master, "wget http://www.yourkit.com/download/yjp-2013-build-13072-linux.tar.bz2")
     # run_cmd("all-hosts", "scp ubuntu@%s:yjp-2013-build-13072-linux.tar.bz2 yjp-2013.tar.bz2" %  master)
