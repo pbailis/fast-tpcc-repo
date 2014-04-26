@@ -63,7 +63,7 @@ class VeloxServer(storage: StorageManager,
   class InsertionRequestHandler extends MessageHandler[InsertionResponse, InsertionRequest] with Logging {
     def receive(src: NetworkDestinationHandle, msg: InsertionRequest): Future[InsertionResponse] = {
       TriggerManager.beforeInsert(msg.database, msg.table, msg.insertSet)
-      storage.insert(msg.database, msg.table, msg.insertSet)
+      storage.insertLocal(msg.database, msg.table, msg.insertSet)
       val syncFutures = TriggerManager.afterInsert(msg.database, msg.table, msg.insertSet)
 
       if (syncFutures == Nil) {
