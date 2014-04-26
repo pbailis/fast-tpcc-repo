@@ -12,6 +12,10 @@ class QueryOperation(var table: QueryTable, val columns: Seq[ColumnLabel]) exten
     table.execute(this)
   }
 
+  override def executeBlocking(): ResultSet = {
+    table.executeBlocking(this)
+  }
+
   def where(pred: Predicate): QueryOperation = {
     predicates = Seq(pred)
     this

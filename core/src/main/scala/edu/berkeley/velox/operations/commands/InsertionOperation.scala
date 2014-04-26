@@ -32,4 +32,8 @@ class InsertionOperation(val values: Seq[(ColumnLabel, Value)]) extends Operatio
       throw new Exception("Insert with no table specified")
     table.execute(this)
   }
+
+  override def executeBlocking(): ResultSet = {
+    table.executeBlocking(this)
+  }
 }

@@ -35,9 +35,7 @@ object ParallelAggTest {
     insertQuery.execute()
 
     val parallelAggregator = (sm: StorageManager) => {
-      val rsf = sm.database(dbname).table(tablename).select(testCol).execute()
-      Await.ready(rsf, Duration.Inf)
-      val rs = rsf.value.get.get
+      val rs = sm.database(dbname).table(tablename).select(testCol).executeBlocking()
 
       var sum = 0
       while(rs.next()) {

@@ -6,4 +6,5 @@ import edu.berkeley.velox.operations.CommandExecutor
 
 trait Operation {
   def execute() : Future[ResultSet]
+  def executeBlocking() : ResultSet
 }
