@@ -227,6 +227,10 @@ abstract class MessageService extends Logging {
   def disconnect(which: NetworkDestinationHandle) {
     networkService.disconnect(which)
   }
+
+  def getConnections() = {
+    networkService.getConnections
+  }
 }
 
 // End of class RPC

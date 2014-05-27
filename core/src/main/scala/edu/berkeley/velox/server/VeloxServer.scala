@@ -18,6 +18,7 @@ import scala.collection.JavaConverters._
 import edu.berkeley.velox.catalog.Catalog
 import java.util
 import edu.berkeley.velox.trigger.TriggerManager
+import edu.berkeley.velox.ml.{PegasosMessage, PegasosWorker}
 
 // Every server has a single instance of this class. It handles data storage
 // and serves client requests. Data is stored in a concurrent hash map.
@@ -35,10 +36,16 @@ class VeloxServer(storage: StorageManager,
   val partitioner = new ServerRandomPartitioner
   //Catalog.initializeSchemaFromZK()
 
-  // internalServer is unused for now
+
   val internalServer = new InternalRPCService(id, servers)
+
+  val pegasosWorker = new PegasosWorker(internalServer)
+  val pegasosHandler = new PegasosRequestHandler
+
   internalServer.registerHandler(new QueryRequestHandler)
   internalServer.registerHandler(new InsertionRequestHandler)
+  internalServer.registerHandler(pegasosHandler)
+
   internalServer.initialize()
   logger.info("Internal server initialized")
 
@@ -47,6 +54,7 @@ class VeloxServer(storage: StorageManager,
 
   frontendServer.registerHandler(new QueryRequestHandler)
   frontendServer.registerHandler(new InsertionRequestHandler)
+  frontendServer.registerHandler(pegasosHandler)
 
   frontendServer.initialize()
   logger.warn("Frontend server initialized.")
@@ -82,6 +90,14 @@ class VeloxServer(storage: StorageManager,
     def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
       future {
         new QueryResponse(storage.query(msg.query))
+      }
+    }
+  }
+
+  class PegasosRequestHandler extends MessageHandler[Any, PegasosMessage] with Logging {
+    def receive(src: NetworkDestinationHandle, msg: PegasosMessage): Future[Any] = {
+      future {
+        pegasosWorker.receive(msg)
       }
     }
   }
