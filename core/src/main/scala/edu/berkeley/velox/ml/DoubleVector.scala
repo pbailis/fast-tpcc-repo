@@ -1,5 +1,7 @@
 package edu.berkeley.velox.ml
 
+import java.util.Random
+
 /**
  * Created by jegonzal on 5/28/14.
  */
@@ -24,6 +26,17 @@ class DoubleVector {
   }
 
   def size(): Int = arr.size
+
+  def l2norm(): Double = {
+    var norm = 0.0
+    var i = 0
+    val n = size()
+    while (i < n) {
+      norm += arr(i) * arr(i)
+      i += 1
+    }
+    math.sqrt(norm)
+  }
 
   def dot(v: DoubleVector): Double = {
     assert(size() == v.size())
@@ -229,5 +242,19 @@ class DoubleScalar (val x: Double) {
       i += 1
     }
     ret
+  }
+}
+
+
+object DoubleVector {
+  val gen = new Random()
+  def gaussian(d: Int): DoubleVector = {
+    val x = new DoubleVector(d)
+    var i = 0
+    while (i < d) {
+      x(i) = gen.nextGaussian()
+      i += 1
+    }
+    x
   }
 }
