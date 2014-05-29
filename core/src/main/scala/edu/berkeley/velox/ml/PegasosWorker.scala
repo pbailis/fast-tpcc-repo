@@ -10,8 +10,10 @@ class PegasosWorker(val ms: MessageService) extends Logging {
   var examples: Array[Example] = null
   var w: DoubleVector = null
 
-  def loadExamples(e: Array[Example]) {
-    examples = e
+  val LAMBDA = 1
+
+  def loadExamples(l: LoadExamples) {
+    examples = GeneralizedLinearModels.randomData(l.model, l.n, l.obsNoise)
     logger.info("Loaded examples!")
   }
 
@@ -19,10 +21,10 @@ class PegasosWorker(val ms: MessageService) extends Logging {
     w += v
   }
 
-  def runPegasosAsync(gamma: Double, iterations: Int): DoubleVector = {
-    w = new DoubleVector(examples(0)._1.size() )
+  def runPegasosAsync(gamma: Double, iterations: Int): TrainingResult = {
+    w = new DoubleVector(examples(0)._1.size())
 
-    for(t <- 0 to iterations) {
+    for(t <- 1 to iterations) {
       val i = Random.nextInt(examples.length - 1)
       val eta = 1.0 / (gamma*t)
 
@@ -42,8 +44,13 @@ class PegasosWorker(val ms: MessageService) extends Logging {
       ms.sendAll(new DeltaUpdate(w_delta))
 
       w = w_delta
+      logger.info(s"$t, ${GeneralizedLinearModels.hingeLossDataLikelihood(w, examples, LAMBDA)}")
+
     }
-    w
+
+    val loss = GeneralizedLinearModels.hingeLossDataLikelihood(w, examples, LAMBDA)
+
+    new TrainingResult(w, loss)
   }
 
 }

@@ -8,6 +8,9 @@ import java.util.Random
 class DoubleVector {
   var arr: Array[Double] = null
 
+
+  override
+  def toString: String = { "("+arr.mkString(", ")+")" }
   def this(size: Int) {
     this()
     assert(size > 0)
