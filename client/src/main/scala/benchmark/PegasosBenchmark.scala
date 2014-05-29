@@ -15,11 +15,11 @@ import edu.berkeley.velox.ml.LoadExamples
 import edu.berkeley.velox.ml.RunPegasosAsync
 
 object PegasosBenchmark extends Logging {
-  val DATA_SIZE_PER_BOX = 100
+  val DATA_SIZE_PER_BOX = 10000
   val DATA_DIMENSION = 5
 
-  val GAMMA = 5
-  val NUM_ITERATIONS = 10
+  val GAMMA = 1
+  val NUM_ITERATIONS = 1000
 
   def main(args: Array[String]) {
     VeloxConfig.initialize(args)

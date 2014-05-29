@@ -43,7 +43,7 @@ class PegasosWorker(val ms: MessageService) extends Logging {
 
       ms.sendAll(new DeltaUpdate(w_delta))
 
-      w = w_delta
+      w = w_next
       logger.info(s"$t, ${GeneralizedLinearModels.hingeLossDataLikelihood(w, examples, LAMBDA)}")
 
     }
