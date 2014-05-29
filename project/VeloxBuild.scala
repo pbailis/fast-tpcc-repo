@@ -28,7 +28,7 @@ object VeloxBuild extends Build {
   lazy val allDeps = packages
 
 
-  lazy val assembleDeps = TaskKey[Unit]("assemble-deps", "Build assembly of dependencies and packages Spark projects")
+  lazy val assembleDeps = TaskKey[Unit]("assemble-deps", "Build assembly of dependencies and packages Velox projects")
 
   def sharedSettings = Defaults.defaultSettings ++ Seq(
     organization := "edu.berkeley.velox",
@@ -64,7 +64,8 @@ object VeloxBuild extends Build {
       "org.scalatest" %% "scalatest" % "2.0" % "test",
       "org.apache.curator" % "curator-framework" % "2.3.0",
       "org.apache.curator" % "curator-recipes" % "2.3.0",
-      "org.apache.curator" % "curator-test" % "2.3.0"
+      "org.apache.curator" % "curator-test" % "2.3.0",
+      "org.scalanlp" % "breeze-math_2.10" % "0.4"
     )
   )
 

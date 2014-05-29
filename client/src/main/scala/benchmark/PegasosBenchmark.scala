@@ -1,7 +1,7 @@
 package benchmark
 
 import edu.berkeley.velox.frontend.VeloxConnection
-import edu.berkeley.velox.ml.{RunPegasosAsync, LoadExamples, Example, Vector}
+import edu.berkeley.velox.ml.{RunPegasosAsync, LoadExamples, Example, DoubleVector}
 import scala.util.Random
 import scala.concurrent.{Await, Future}
 import java.util
@@ -22,7 +22,7 @@ class PegasosBenchmark {
     val examples = new Array[Example](DATA_SIZE_PER_BOX)
 
     for(i <- 0 until DATA_SIZE_PER_BOX) {
-      val vector = new Vector(DATA_DIMENSION)
+      val vector = new DoubleVector(DATA_DIMENSION)
       for(j <- 0 until DATA_DIMENSION) {
         vector.arr(j) = Random.nextInt()
       }
