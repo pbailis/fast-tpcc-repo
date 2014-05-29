@@ -10,8 +10,9 @@ import scala.collection.JavaConversions._
 import scala.collection.mutable
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
 import edu.berkeley.velox.conf.VeloxConfig
+import com.typesafe.scalalogging.log4j.Logging
 
-object PegasosBenchmark {
+object PegasosBenchmark extends Logging {
   val DATA_SIZE_PER_BOX = 10
   val DATA_DIMENSION = 5
 
@@ -38,11 +39,21 @@ object PegasosBenchmark {
       client.ms.send(conn, new LoadExamples(examples))
     })
 
+    logger.info(s"Waiting to load examples...")
     Await.ready(Future.sequence(loadFutures), Duration.Inf)
+    logger.info(s"Examples loaded!")
 
-    val runFutures = client.ms.sendAll(new RunPegasosAsync(GAMMA, NUM_ITERATIONS))
 
-    Await.ready(Future.sequence(runFutures), Duration.Inf)
+    logger.error(s"Starting run!")
+    val runFutures = client.ms.sendAllRemote(new RunPegasosAsync(GAMMA, NUM_ITERATIONS))
+
+    val doneF = Future.sequence(runFutures)
+    Await.ready(doneF, Duration.Inf)
+
+    logger.error(s"Ended run! s${doneF.value.get.get}")
+
+
+
 
     //TODO: AVERAGE HERE
   }

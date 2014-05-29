@@ -170,7 +170,7 @@ abstract class MessageService extends Logging {
   // doesn't block, but does set up a handler that will deliver the message when it's ready
   private def recvRequest_(src: NetworkDestinationHandle, requestId: RequestId, msg: Any): Unit = {
     val key = msg.getClass().hashCode()
-    assert(handlers.containsKey(key), {println(s"Assert failed: handlers does not contain ${msg.getClass.getName}")})
+    assert(handlers.containsKey(key), s"Assert failed: handlers does not contain ${msg.getClass.getName}")
     val h = handlers.get(key)
 
     assert(h != null)

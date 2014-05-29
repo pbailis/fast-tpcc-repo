@@ -3,27 +3,20 @@ package edu.berkeley.velox.ml
 import java.util
 import com.typesafe.scalalogging.slf4j.Logging
 import scala.util.Random
-import edu.berkeley.velox.rpc.MessageService
+import edu.berkeley.velox.rpc.{Request, MessageHandler, MessageService}
+import edu.berkeley.velox.NetworkDestinationHandle
 
 class PegasosWorker(val ms: MessageService) extends Logging {
   var examples: Array[Example] = null
   var w: DoubleVector = null
 
-  def receive[T](msg: PegasosMessage[T]): Any = {
-    msg match {
-      case LoadExamples(e) => {
-        examples = e
-        true
-      }
-      case RunPegasosAsync(gamma, iterations) => {
-        runPegasosAsync(gamma, iterations)
-      }
-      case DeltaUpdate(d) => {
-        w + d
-      }
-      case _ =>
-        logger.error(s"Got message of unknown type! $msg")
-    }
+  def loadExamples(e: Array[Example]) {
+    examples = e
+    logger.info("Loaded examples!")
+  }
+
+  def deltaUpdate(v: DoubleVector) {
+    w += v
   }
 
   def runPegasosAsync(gamma: Double, iterations: Int): DoubleVector = {

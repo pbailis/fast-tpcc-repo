@@ -18,7 +18,12 @@ import scala.collection.JavaConverters._
 import edu.berkeley.velox.catalog.Catalog
 import java.util
 import edu.berkeley.velox.trigger.TriggerManager
-import edu.berkeley.velox.ml.{PegasosMessage, PegasosWorker}
+import edu.berkeley.velox.ml._
+import edu.berkeley.velox.operations.database.response.QueryResponse
+import scala.util.Success
+import edu.berkeley.velox.operations.database.request.InsertionRequest
+import edu.berkeley.velox.operations.database.request.QueryRequest
+import scala.util.Failure
 
 // Every server has a single instance of this class. It handles data storage
 // and serves client requests. Data is stored in a concurrent hash map.
@@ -40,11 +45,10 @@ class VeloxServer(storage: StorageManager,
   val internalServer = new InternalRPCService(id, servers)
 
   val pegasosWorker = new PegasosWorker(internalServer)
-  val pegasosHandler = new PegasosRequestHandler
 
   internalServer.registerHandler(new QueryRequestHandler)
   internalServer.registerHandler(new InsertionRequestHandler)
-  internalServer.registerHandler(pegasosHandler)
+  internalServer.registerHandler(new PegasosDeltaUpdateHandler(pegasosWorker))
 
   internalServer.initialize()
   logger.info("Internal server initialized")
@@ -54,7 +58,8 @@ class VeloxServer(storage: StorageManager,
 
   frontendServer.registerHandler(new QueryRequestHandler)
   frontendServer.registerHandler(new InsertionRequestHandler)
-  frontendServer.registerHandler(pegasosHandler)
+  frontendServer.registerHandler(new PegasosLoadExamplesHandler(pegasosWorker))
+  frontendServer.registerHandler(new PegasosRunAsyncHandler(pegasosWorker))
 
   frontendServer.initialize()
   logger.warn("Frontend server initialized.")
@@ -90,14 +95,6 @@ class VeloxServer(storage: StorageManager,
     def receive(src: NetworkDestinationHandle, msg: QueryRequest): Future[QueryResponse] = {
       future {
         new QueryResponse(storage.query(msg.query))
-      }
-    }
-  }
-
-  class PegasosRequestHandler extends MessageHandler[Any, PegasosMessage[Any]] with Logging {
-    def receive(src: NetworkDestinationHandle, msg: PegasosMessage[Any]): Future[Any] = {
-      future {
-        pegasosWorker.receive(msg)
       }
     }
   }
