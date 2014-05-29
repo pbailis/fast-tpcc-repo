@@ -27,6 +27,17 @@ class DoubleVector {
 
   def size(): Int = arr.size
 
+  def l2norm(): Double = {
+    var norm = 0.0
+    var i = 0
+    val n = size()
+    while (i < n) {
+      norm += arr(i) * arr(i)
+      i += 1
+    }
+    math.sqrt(norm)
+  }
+
   def dot(v: DoubleVector): Double = {
     assert(size() == v.size())
     val n = size()

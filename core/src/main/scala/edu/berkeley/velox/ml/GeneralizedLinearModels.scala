@@ -3,7 +3,7 @@ package edu.berkeley.velox.ml
 import java.util.Random
 
 
-object SyntheticData {
+object GeneralizedLinearModels {
   val gen = new Random()
 
   def randomModel(dim: Int, scale: Double = 1.0, sparsity: Double = 1.0): DoubleVector = {
@@ -32,6 +32,17 @@ object SyntheticData {
     data
   }
 
-
+  def hingeLossDataLikelihood(model: DoubleVector, data: Array[Example], lambda: Double): Double = {
+    val n = data.size
+    val d = model.size
+    var i = 0
+    var loss = 0.0
+    while (i < n) {
+      val (x,y) = data(i)
+      loss += math.max(0, 1 - y * (model dot x))
+      i += 1
+    }
+    loss + lambda * model.l2norm()
+  }
 
 }
