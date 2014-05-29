@@ -13,11 +13,11 @@ import edu.berkeley.velox.conf.VeloxConfig
 import com.typesafe.scalalogging.log4j.Logging
 
 object PegasosBenchmark extends Logging {
-  val DATA_SIZE_PER_BOX = 10
+  val DATA_SIZE_PER_BOX = 1000
   val DATA_DIMENSION = 5
 
   val GAMMA = 5
-  val NUM_ITERATIONS = 1000000
+  val NUM_ITERATIONS = 10
 
   def main(args: Array[String]) {
     VeloxConfig.initialize(args)
