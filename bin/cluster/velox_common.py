@@ -21,7 +21,6 @@ VELOX_SECURITY_GROUP = "velox"
 DEFAULT_INSTANCE_TYPE = "cr1.8xlarge"
 
 VELOX_SERVER_CLASS = "edu.berkeley.velox.server.VeloxServer"
-VELOX_CLIENT_BENCH_CLASS = "edu.berkeley.velox.benchmark.ClientBenchmark"
 
 AMIs = {'us-west-2': 'ami-8885e5b8',
         'us-east-1': 'ami-b7dbe3de'}
@@ -469,13 +468,13 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, **kwargs):
+def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, client_class, **kwargs):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
     if profile:
         pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % profile_depth
     else:
         pstr = ""
-    base_cmd = ("java %(pstr)s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %(jar_loc)s %(server_class)s "
+    base_cmd = ("java %(pstr)s -XX:+UseParallelGC -Xms512m -Xmx2G -cp %(jar_loc)s %(client_class)s "
               # "-m %(client_str)s --parallelism %(parallelism)d --pct_reads %(read_pct)f --ops %(num_ops)d "
               "--parallelism %(parallelism)d --pct_reads %(read_pct)f --ops %(num_ops)d "
               "--timeout %(timeout)d --network_service %(net_service)s --buffer_size %(buf_size)d "
@@ -487,7 +486,7 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
 
     cmd_args = {'pstr': pstr,
                 'jar_loc': VELOX_JAR_LOCATION,
-                'server_class': VELOX_CLIENT_BENCH_CLASS,
+                'client_class': client_class,
                 # 'client_str': clientConfigStr,
                 'parallelism': parallelism,
                 'read_pct': read_pct,
@@ -505,7 +504,7 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
     system(runcmd)
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, heap_size=HEAP_SIZE_GB, **kwargs):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, client_class, heap_size=HEAP_SIZE_GB, **kwargs):
     pstr = ""
 
     if profile:
@@ -527,7 +526,7 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
 
     cmd_args = {'pstr': pstr,
                 'jar_loc': VELOX_JAR_LOCATION,
-                'server_class': VELOX_CLIENT_BENCH_CLASS,
+                'client_class': client_class,
                 'heap_size': heap_size,
                 # 'client_str': cluster.frontend_cluster_str
                 'parallelism': parallelism,

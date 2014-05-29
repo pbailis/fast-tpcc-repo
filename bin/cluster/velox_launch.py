@@ -138,6 +138,10 @@ if __name__ == "__main__":
     common_benchmark.add_argument('--buffer_size', dest='buffer_size',
                                   default=16384*8, type=int,
                                   help='Size (in bytes) to make the network buffer. [default: %(default)s]')
+
+    common_benchmark.add_argument('--client_class', dest='client_class',
+                                  default="edu.berkeley.velox.benchmark.ClientBenchmark", type=str,
+                                  help='ClientBenchmark default class. [default: %(default)s]')
     common_benchmark.add_argument('--sweep_time', dest='sweep_time',
                                   default=500, type=int,
                                   help='Time (in ms) the ArrayNetworkService send sweep thread should wait between sweeps. [default: %(default)s]')
@@ -153,7 +157,6 @@ if __name__ == "__main__":
     common_benchmark.add_argument('--ops', dest='ops',
                                   default=100000, type=int,
                                   help='Number of operations to perform in the benchmark. [default: %(default)s]')
-
     common_benchmark.add_argument('--heap_size_gb', dest='heap_size',
                                   default=230, type=int,
                                   help='Size (in GB) to make the JVM heap. [default: %(default)s]')

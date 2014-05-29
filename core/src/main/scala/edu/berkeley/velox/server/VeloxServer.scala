@@ -94,8 +94,8 @@ class VeloxServer(storage: StorageManager,
     }
   }
 
-  class PegasosRequestHandler extends MessageHandler[Any, PegasosMessage] with Logging {
-    def receive(src: NetworkDestinationHandle, msg: PegasosMessage): Future[Any] = {
+  class PegasosRequestHandler extends MessageHandler[Any, PegasosMessage[Any]] with Logging {
+    def receive(src: NetworkDestinationHandle, msg: PegasosMessage[Any]): Future[Any] = {
       future {
         pegasosWorker.receive(msg)
       }

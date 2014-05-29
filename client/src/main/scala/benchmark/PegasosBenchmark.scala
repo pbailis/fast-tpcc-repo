@@ -6,38 +6,44 @@ import scala.util.Random
 import scala.concurrent.{Await, Future}
 import java.util
 import scala.concurrent.duration.Duration
+import scala.collection.JavaConversions._
+import scala.collection.mutable
+import edu.berkeley.velox.util.NonThreadedExecutionContext.context
+import edu.berkeley.velox.conf.VeloxConfig
 
-class PegasosBenchmark {
-  val client = new VeloxConnection
-
+object PegasosBenchmark {
   val DATA_SIZE_PER_BOX = 10
   val DATA_DIMENSION = 5
 
   val GAMMA = 5
   val NUM_ITERATIONS = 1000000
 
-  val loadFutures = new util.ArrayList[Future[Boolean]]()
+  def main(args: Array[String]) {
+    VeloxConfig.initialize(args)
+    val client = new VeloxConnection
 
-  for(dest <- client.ms.getConnections) {
-    val examples = new Array[Example](DATA_SIZE_PER_BOX)
+    val loadFutures = client.ms.getConnections().map(
+    conn => {
+      val examples = new Array[Example](DATA_SIZE_PER_BOX)
 
-    for(i <- 0 until DATA_SIZE_PER_BOX) {
-      val vector = new DoubleVector(DATA_DIMENSION)
-      for(j <- 0 until DATA_DIMENSION) {
-        vector.arr(j) = Random.nextInt()
+      for (i <- 0 until DATA_SIZE_PER_BOX) {
+        val vector = new DoubleVector(DATA_DIMENSION)
+        for (j <- 0 until DATA_DIMENSION) {
+          vector.arr(j) = Random.nextInt()
+        }
+
+        examples(i) = (vector, if (Random.nextBoolean()) 1 else -1)
       }
 
-      examples(i) = (vector, if(Random.nextBoolean()) 1 else -1)
-    }
+      client.ms.send(conn, new LoadExamples(examples))
+    })
 
-    loadFutures.add(client.ms.send(dest, new LoadExamples(examples)))
+    Await.ready(Future.sequence(loadFutures), Duration.Inf)
+
+    val runFutures = client.ms.sendAll(new RunPegasosAsync(GAMMA, NUM_ITERATIONS))
+
+    Await.ready(Future.sequence(runFutures), Duration.Inf)
+
+    //TODO: AVERAGE HERE
   }
-
-  Await.ready(Future.sequence(loadFutures), Duration.Inf)
-
-  val runFutures = client.ms.sendAll(new RunPegasosAsync(GAMMA, NUM_ITERATIONS))
-
-  Await.ready(Future.sequence(runFutures), Duration.Inf)
-
-  //TODO: AVERAGE HERE
 }

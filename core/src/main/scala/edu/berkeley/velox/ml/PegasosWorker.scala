@@ -9,7 +9,7 @@ class PegasosWorker(val ms: MessageService) extends Logging {
   var examples: Array[Example] = null
   var w: DoubleVector = null
 
-  def receive(msg: PegasosMessage): Any = {
+  def receive[T](msg: PegasosMessage[T]): Any = {
     msg match {
       case LoadExamples(e) => {
         examples = e
