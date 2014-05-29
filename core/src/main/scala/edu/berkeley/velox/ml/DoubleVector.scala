@@ -1,5 +1,7 @@
 package edu.berkeley.velox.ml
 
+import java.util.Random
+
 /**
  * Created by jegonzal on 5/28/14.
  */
@@ -229,5 +231,19 @@ class DoubleScalar (val x: Double) {
       i += 1
     }
     ret
+  }
+}
+
+
+object DoubleVector {
+  val gen = new Random()
+  def gaussian(d: Int): DoubleVector = {
+    val x = new DoubleVector(d)
+    var i = 0
+    while (i < d) {
+      x(i) = gen.nextGaussian()
+      i += 1
+    }
+    x
   }
 }
