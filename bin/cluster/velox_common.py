@@ -468,7 +468,7 @@ def start_servers_local(num_servers, network_service, buffer_size, sweep_time, p
 
     pprint("Started servers! Logs in /tmp/server-*.log")
 
-def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, client_class, **kwargs):
+def client_bench_local_single(num_servers, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, client_class, client_args, **kwargs):
     clientConfigStr = ",".join(["localhost:"+str(VELOX_FRONTEND_PORT_START+id) for id in range(0, num_servers)])
     if profile:
         pstr = "-agentlib:hprof=cpu=samples,interval=20,depth=%d,file=java.hprof.client.txt" % profile_depth
@@ -482,6 +482,7 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
               "--test_index %(test_index)s "
               "-z localhost:%(zk_port)d "
               "--num_servers %(num_servers)d "
+              " %(client_args)s "
               "--run --load")
 
     cmd_args = {'pstr': pstr,
@@ -498,13 +499,14 @@ def client_bench_local_single(num_servers, network_service, buffer_size, sweep_t
                 'latency': latency,
                 'test_index': test_index,
                 'zk_port': ZOOKEEPER_PORT,
-                'num_servers': num_servers}
+                'num_servers': num_servers,
+                'client_args': client_args}
     runcmd = base_cmd % cmd_args
     print runcmd
     system(runcmd)
 
 #  -agentlib:hprof=cpu=samples,interval=20,depth=3,monitor=y
-def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, client_class, heap_size=HEAP_SIZE_GB, **kwargs):
+def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, profile, profile_depth, parallelism, read_pct, ops, max_time, latency, test_index, client_class,  client_args, heap_size=HEAP_SIZE_GB, **kwargs):
     pstr = ""
 
     if profile:
@@ -520,7 +522,9 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
                 "--sweep_time %(sweep_time)d --latency %(latency)s "
                 "--test_index %(test_index)s "
                 "--num_servers %(num_servers)d "
-                "-z %(zk_servers)s --run 2>&1 | tee client.log"
+                "-z %(zk_servers)s"
+                " %(client_args)s "
+                "--run 2>&1 | tee client.log"
                 )
 
 
@@ -539,7 +543,8 @@ def run_velox_client_bench(cluster, network_service, buffer_size, sweep_time, pr
                 'latency': latency,
                 'test_index': test_index,
                 'zk_servers': zk_servers,
-                'num_servers': cluster.numServers}
+                'num_servers': cluster.numServers,
+                'client_args': client_args}
 
     cmd = base_cmd % cmd_args
 

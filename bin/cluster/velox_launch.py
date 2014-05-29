@@ -142,6 +142,11 @@ if __name__ == "__main__":
     common_benchmark.add_argument('--client_class', dest='client_class',
                                   default="edu.berkeley.velox.benchmark.ClientBenchmark", type=str,
                                   help='ClientBenchmark default class. [default: %(default)s]')
+
+    common_benchmark.add_argument('--client_args', dest='client_args',
+                                  default="", type=str,
+                                  help='Extra client args. [default: %(default)s]')
+
     common_benchmark.add_argument('--sweep_time', dest='sweep_time',
                                   default=500, type=int,
                                   help='Time (in ms) the ArrayNetworkService send sweep thread should wait between sweeps. [default: %(default)s]')

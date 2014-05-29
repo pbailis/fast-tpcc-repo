@@ -38,7 +38,7 @@ class DoubleVector {
       norm += arr(i) * arr(i)
       i += 1
     }
-    math.sqrt(norm)
+    Math.sqrt(norm)
   }
 
   def dot(v: DoubleVector): Double = {

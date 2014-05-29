@@ -32,7 +32,7 @@ object GeneralizedLinearModels {
     data
   }
 
-  def hingeLossDataLikelihood(model: DoubleVector, data: Array[Example], lambda: Double): Double = {
+  def hingeLossDataLikelihoodLocal(model: DoubleVector, data: Array[Example], lambda: Double): Double = {
     val n = data.size
     val d = model.size
     var i = 0
@@ -42,8 +42,11 @@ object GeneralizedLinearModels {
       loss += math.max(0.0, 1.0 - y * (model dot x))
       i += 1
     }
-    //    loss + lambda * model.l2norm()
-    loss
+    loss/n
+  }
+
+  def hingeLossDataLikelihoodGlobal(model: DoubleVector, data: Array[Example], lambda: Double): Double = {
+    hingeLossDataLikelihoodLocal(model, data, lambda) + Math.pow(model.l2norm(), 2)*lambda
   }
 
 }

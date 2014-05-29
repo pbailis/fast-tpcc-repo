@@ -18,12 +18,22 @@ object PegasosBenchmark extends Logging {
   val DATA_SIZE_PER_BOX = 10000
   val DATA_DIMENSION = 5
 
-  val GAMMA = 1
-  val NUM_ITERATIONS = 1000
+  var LOCAL_EVALUATION_PERIOD_MS = 20
+
+  val GAMMA = 1.0
+  val NUM_ITERATIONS = DATA_SIZE_PER_BOX*2
 
   def main(args: Array[String]) {
     VeloxConfig.initialize(args)
     val client = new VeloxConnection
+
+    val parser = new scopt.OptionParser[Unit]("pegasos") {
+      opt[Int]("log_ms") foreach {
+        i => LOCAL_EVALUATION_PERIOD_MS = i
+      }
+    }
+
+    parser.parse(args)
 
     val realModel = GeneralizedLinearModels.randomModel(DATA_DIMENSION)
 
@@ -34,16 +44,28 @@ object PegasosBenchmark extends Logging {
     logger.info(s"Examples loaded!")
 
     logger.error(s"Starting run!")
-    val runFutures = client.ms.sendAllRemote(new RunPegasosAsync(GAMMA, NUM_ITERATIONS))
-    logger.error(s"Finished run!")
-
+    val runFutures = client.ms.sendAllRemote(new RunPegasosAsync(GAMMA, NUM_ITERATIONS, LOCAL_EVALUATION_PERIOD_MS))
     val doneF = Future.sequence(runFutures)
     Await.ready(doneF, Duration.Inf)
+    logger.error(s"Finished run!")
+
+
+    val results = doneF.value.get.get
 
     println(s"real model is $realModel")
-    doneF.value.get.get.foreach( r => println(s"${r.model}, ${r.localLoss}"))
+    results.foreach( r => println(s"${r.finalModel.model}, ${r.finalModel.localLoss}"))
 
+    val computedModel = results.foldLeft(new DoubleVector(DATA_DIMENSION)){ (acc, r) => acc + r.finalModel.model }/results.size
 
-    //TODO: AVERAGE HERE
+    val totalLoss = results.map{ r => r.finalModel.localLoss }.sum + Math.pow(computedModel.l2norm(), 2)*GAMMA
+    println(s"computed model is $computedModel, total loss is $totalLoss")
+
+    val numSamplesToConsider = results.map { r => r.seriesModels.size }.min
+    for(i <- 0 until numSamplesToConsider) {
+      val time = (i+1)*LOCAL_EVALUATION_PERIOD_MS
+      val currentModel = results.foldLeft(new DoubleVector(DATA_DIMENSION)){ (acc, r) => acc + r.seriesModels(i).model }/results.size
+      val currentLoss = results.map{ r => r.seriesModels(i).localLoss }.sum + Math.pow(currentModel.l2norm(), 2)*GAMMA
+      println(s"at time ${time}ms, global loss was $currentLoss")
+    }
   }
 }
