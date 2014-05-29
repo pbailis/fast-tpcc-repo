@@ -39,10 +39,11 @@ object GeneralizedLinearModels {
     var loss = 0.0
     while (i < n) {
       val (x,y) = data(i)
-      loss += math.max(0, 1 - y * (model dot x))
+      loss += math.max(0.0, 1.0 - y * (model dot x))
       i += 1
     }
-    loss + lambda * model.l2norm()
+    //    loss + lambda * model.l2norm()
+    loss
   }
 
 }
