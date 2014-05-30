@@ -23,7 +23,7 @@ object VeloxConfig {
     if (sys.env.contains("VELOX_BUFFER_SIZE"))
       Integer.parseInt(sys.env("VELOX_BUFFER_SIZE"))
     else
-      16384*8
+      16384*32
   var networkService = sys.env.getOrElse("VELOX_NETWORK_SERVICE","array")
   var sweepTime =
     if (sys.env.contains("VELOX_SWEEP_TIME"))

@@ -12,6 +12,7 @@ import scala.reflect.ClassTag
 import java.util.{HashMap => JHashMap}
 import com.typesafe.scalalogging.slf4j.Logging
 import edu.berkeley.velox.util.{VeloxKryoRegistrar,KryoThreadLocal}
+import com.esotericsoftware.kryo.KryoException
 
 // this causes our futures to no thread
 import edu.berkeley.velox.util.NonThreadedExecutionContext.context
@@ -143,16 +144,24 @@ abstract class MessageService extends Logging {
   N bytes: serialized message
  */
   def serializeMessage(requestId: RequestId, msg: Any, isRequest: Boolean): ByteBuffer = {
-    val buffer = ByteBuffer.allocate(4096*4)
-    var header = requestId & ~(1L << 63)
-    if(isRequest) header |= (1L << 63)
-    buffer.putLong(header)
-    //val kryo = VeloxKryoRegistrar.getKryo()
-    val kryo = KryoThreadLocal.kryoTL.get
-    val result = kryo.serialize(msg,buffer)
-    //VeloxKryoRegistrar.returnKryo(kryo)
-    result.flip
-    result
+    var bufSize = 4096
+    while(true) {
+      try {
+        val buffer = ByteBuffer.allocate(bufSize)
+        var header = requestId & ~(1L << 63)
+        if (isRequest) header |= (1L << 63)
+        buffer.putLong(header)
+        //val kryo = VeloxKryoRegistrar.getKryo()
+        val kryo = KryoThreadLocal.kryoTL.get
+        val result = kryo.serialize(msg, buffer)
+        //VeloxKryoRegistrar.returnKryo(kryo)
+        result.flip
+        return result
+      } catch {
+        case e: KryoException => bufSize *= 4
+      }
+    }
+    null
   }
 
   def deserializeMessage(bytes: ByteBuffer): (Any, RequestId, Boolean) = {

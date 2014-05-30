@@ -15,13 +15,15 @@ import edu.berkeley.velox.ml.LoadExamples
 import edu.berkeley.velox.ml.RunPegasosAsync
 
 object PegasosBenchmark extends Logging {
-  val DATA_SIZE_PER_BOX = 10000
-  val DATA_DIMENSION = 5
+  var DATA_SIZE_PER_BOX = 500
+  val DATA_DIMENSION = 100
 
   var LOCAL_EVALUATION_PERIOD_MS = 20
 
   val GAMMA = 1.0
-  val NUM_ITERATIONS = DATA_SIZE_PER_BOX*2
+  var NUM_ITERATIONS = DATA_SIZE_PER_BOX*100
+
+  var DATA_NOISE = 0.3
 
   def main(args: Array[String]) {
     VeloxConfig.initialize(args)
@@ -31,13 +33,22 @@ object PegasosBenchmark extends Logging {
       opt[Int]("log_ms") foreach {
         i => LOCAL_EVALUATION_PERIOD_MS = i
       }
+      opt[Int]("iterations") foreach {
+        i => NUM_ITERATIONS = i
+      }
+      opt[Int]("points_per_worker") foreach {
+        i => DATA_SIZE_PER_BOX = i
+      }
+      opt[Double]("data_noise") foreach {
+        i => DATA_NOISE = i
+      }
     }
 
     parser.parse(args)
 
     val realModel = GeneralizedLinearModels.randomModel(DATA_DIMENSION)
 
-    val loadFutures = client.ms.sendAllRemote(new LoadExamples(realModel, DATA_DIMENSION))
+    val loadFutures = client.ms.sendAllRemote(new LoadExamples(realModel, DATA_DIMENSION, DATA_NOISE))
 
     logger.info(s"Waiting to load examples...")
     Await.ready(Future.sequence(loadFutures), Duration.Inf)

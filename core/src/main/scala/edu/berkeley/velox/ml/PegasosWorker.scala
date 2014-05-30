@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 class PegasosWorker(val ms: MessageService) extends Logging {
   var examples: Array[Example] = null
   var w: DoubleVector = null
+  val running = new AtomicBoolean(false)
 
   val loggedModels = new util.Vector[DoubleVector]()
 
@@ -29,15 +30,15 @@ class PegasosWorker(val ms: MessageService) extends Logging {
     val gamma = msg.gamma
     val iterations = msg.numIterations
 
-    val done = new AtomicBoolean()
-
     w = new DoubleVector(examples(0)._1.size())
+
+    running.set(true)
 
     if(msg.localPeriodEvaluationMs > 0) {
       val modelLogExecutor = Executors.newScheduledThreadPool(1)
       modelLogExecutor.schedule(new Runnable {
         override def run() = {
-          if(!done.get()) {
+          if(running.get()) {
             loggedModels.add(w)
             modelLogExecutor.schedule(this, msg.localPeriodEvaluationMs, TimeUnit.MILLISECONDS)
           }
@@ -66,7 +67,7 @@ class PegasosWorker(val ms: MessageService) extends Logging {
       w = w_next
     }
 
-    done.set(true)
+    running.set(false)
 
     val loss = GeneralizedLinearModels.hingeLossDataLikelihoodLocal(w, examples, LAMBDA)
 
