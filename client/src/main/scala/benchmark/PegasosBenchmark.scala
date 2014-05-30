@@ -49,7 +49,6 @@ object PegasosBenchmark extends Logging {
     Await.ready(doneF, Duration.Inf)
     logger.error(s"Finished run!")
 
-
     val results = doneF.value.get.get
 
     println(s"real model is $realModel")

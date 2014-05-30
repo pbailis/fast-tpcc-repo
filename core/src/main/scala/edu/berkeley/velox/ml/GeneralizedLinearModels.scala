@@ -46,7 +46,6 @@ object GeneralizedLinearModels {
   }
 
   def hingeLossDataLikelihoodGlobal(model: DoubleVector, data: Array[Example], lambda: Double): Double = {
-    hingeLossDataLikelihoodLocal(model, data, lambda) + Math.pow(model.l2norm(), 2)*lambda
+    hingeLossDataLikelihoodLocal(model, data, lambda) + Math.pow(model.l2norm(), 2)*lambda/2.0
   }
-
 }
