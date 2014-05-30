@@ -7,6 +7,7 @@ import edu.berkeley.velox.rpc.{Request, MessageHandler, MessageService}
 import edu.berkeley.velox.NetworkDestinationHandle
 import java.util.concurrent.{TimeUnit, Executors}
 import java.util.concurrent.atomic.AtomicBoolean
+import edu.berkeley.velox.conf.VeloxConfig
 
 class PegasosWorker(val ms: MessageService) extends Logging {
   var examples: Array[Example] = null
@@ -18,6 +19,7 @@ class PegasosWorker(val ms: MessageService) extends Logging {
   val LAMBDA = 1.0
 
   def loadExamples(l: LoadExamples) {
+    GeneralizedLinearModels.gen.setSeed(ms.serviceID.toLong)
     examples = GeneralizedLinearModels.randomData(l.model, l.n, l.obsNoise)
     logger.info("Loaded examples!")
   }
@@ -62,7 +64,7 @@ class PegasosWorker(val ms: MessageService) extends Logging {
 
       val w_delta = w_next - w
 
-      ms.sendAll(new DeltaUpdate(w_delta))
+      ms.sendAllRemote(new DeltaUpdate(w_delta))
 
       w = w_next
     }

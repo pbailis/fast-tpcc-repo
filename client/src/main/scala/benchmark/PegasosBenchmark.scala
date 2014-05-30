@@ -67,15 +67,24 @@ object PegasosBenchmark extends Logging {
 
     val computedModel = results.foldLeft(new DoubleVector(DATA_DIMENSION)){ (acc, r) => acc + r.finalModel.model }/results.size
 
-    val totalLoss = results.map{ r => r.finalModel.localLoss }.sum + Math.pow(computedModel.l2norm(), 2)*GAMMA
+    val totalLoss = results.map{ r => r.finalModel.localLoss }.sum + Math.pow(computedModel.l2norm(), 2)/2*GAMMA
     println(s"computed model is $computedModel, total loss is $totalLoss")
 
     val numSamplesToConsider = results.map { r => r.seriesModels.size }.min
     for(i <- 0 until numSamplesToConsider) {
       val time = (i+1)*LOCAL_EVALUATION_PERIOD_MS
       val currentModel = results.foldLeft(new DoubleVector(DATA_DIMENSION)){ (acc, r) => acc + r.seriesModels(i).model }/results.size
-      val currentLoss = results.map{ r => r.seriesModels(i).localLoss }.sum + Math.pow(currentModel.l2norm(), 2)*GAMMA
+      val currentLoss = results.map{ r => r.seriesModels(i).localLoss }.sum/results.size + Math.pow(currentModel.l2norm(), 2)/2*GAMMA
       println(s"at time ${time}ms, global loss was $currentLoss")
+    }
+
+    for((r, id) <- results.zipWithIndex) {
+      for (i <- 0 until numSamplesToConsider) {
+        val time = (i + 1) * LOCAL_EVALUATION_PERIOD_MS
+        val currentModel = r.seriesModels(i).model
+        val currentLoss = r.seriesModels(i).localLoss+ Math.pow(currentModel.l2norm(), 2)/2 * GAMMA
+        println(s"at time ${time}ms, machine $id loss was $currentLoss")
+      }
     }
   }
 }
