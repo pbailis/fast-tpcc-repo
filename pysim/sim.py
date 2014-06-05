@@ -66,9 +66,6 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
         offset = 1
         
         pluscloud = array([5]*(dim-1)+[offset])
-
-        print pluscloud
-        
         negcloud = array([10]*(dim-1)+[offset])
 
         isplus = (proc_no % 2) == 0
@@ -165,20 +162,20 @@ class Datagen:
 
 LMBDA = 0.1
 NPOINTS = 1000
-ITERATIONS = NPOINTS
+ITERATIONS = NPOINTS*4
 NPROCS = 5
 DIM = 3
 NOISE = 0.05
 LOG_RATE = 100
 BSP_RATE = 500
-DELTA_RATE = 2
+DELTA_RATE = 1
 
 GEN_POLICY = Datagen.POINT_CLOUD
 
 # quit if we get below this penalty
 GLOBAL_CUTOFF_PENALTY = 0
 
-ALGORITHM = Algorithms.BSP
+ALGORITHM = Algorithms.DELTA_BATCH
 
 # indexed arrays of examples
 PROC_DATA = {}
