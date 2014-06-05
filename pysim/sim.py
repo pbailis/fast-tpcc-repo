@@ -197,11 +197,11 @@ for i in range(0, len(SIMULATION_STEPS)-1):
 
 
 serial_model = None
-for stamp in LOGGING_STAMPS:
+for stamp in LOGGING_STAMPS[:-1]:
     serial_model = pegasos_sgd(GLOBAL_DATA,
                             LMBDA,
-                            stamp*NPROCS,
-                            LOG_RATE,
+                            stamp,
+                            LOG_RATE*NPROCS,
                             serial_model)
     serial_loss = hinge_loss_with_penalty(serial_model, GLOBAL_DATA, LMBDA)
     PROC_PROGRESS["serial"].append(serial_loss)
@@ -209,7 +209,8 @@ for stamp in LOGGING_STAMPS:
 
 for proc in PROC_PROGRESS:
     fmt = '-' if proc != "global" and proc !="serial" else "o-"
-    plot(LOGGING_STAMPS, PROC_PROGRESS[proc], fmt, label=proc)
+
+    plot(LOGGING_STAMPS[:-1], PROC_PROGRESS[proc], fmt, label=proc)
 
 xlabel("Iteration Number")
 ylabel("Loss")
