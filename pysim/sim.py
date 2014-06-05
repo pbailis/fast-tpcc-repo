@@ -4,24 +4,22 @@ from numpy import *
 from random import choice, random, gauss
 from collections import defaultdict
 
-def pegasos_sgd(data, lmbda, iterations, initial_t=0, w=None, step=1):
+def pegasos_sgd(data, lmbda, iterations, initial_t=0, w=None, step=1, batchk=1):
     if w is None:
-        w = array([0]*len(data[0][0]))
+        w = zeros(len(data[0][0]))
 
     for i in range(0, iterations):
+        grad = zeros(len(w))
+
         t = initial_t+step*i
-        (x, y) = choice(data)
         eta = 1.0/(lmbda*pow(t+1, 1))
+                
+        for k in range(0, batchk):
+            (x, y) = choice(data)
+            prod = y * (w.dot(x))
+            grad += lmbda*w - (x*y if prod < 1 else 0)
 
-        prod = y * (w.dot(x))
-
-        if prod < 1:
-            w_next = w * (1-eta*lmbda) + x*eta*y
-        else:
-            w_next = w*(1-eta*lmbda)
-
-        w = w_next
-
+        w -= eta*grad
 
     return w
 
@@ -75,7 +73,7 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
             for j in range(0, dim-1):
                 arrarr.append(gauss(0, 1.))
 
-            x = (pluscloud if isplus else negcloud) + array(arrarr+[0])
+            x = (pluscloud if isplus else negcloud) + array(arrarr+[0.])
 
             y = 1 if isplus else -1
             if random() < noise:
@@ -132,7 +130,7 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
     return ret
 
 def average_models(models):
-    s = array([0.]*len(models[0]))
+    s = zeros(len(models[0]))
     for model in models:
         s += model
     return s/len(models)
@@ -163,19 +161,20 @@ class Datagen:
 LMBDA = 0.1
 NPOINTS = 1000
 ITERATIONS = NPOINTS*4
-NPROCS = 5
+NPROCS = 4
 DIM = 3
-NOISE = 0.05
-LOG_RATE = 100
+NOISE = 0.0
+LOG_RATE = 50
 BSP_RATE = 500
-DELTA_RATE = 1
+DELTA_RATE = 10
+BATCH_K = 1
 
 GEN_POLICY = Datagen.POINT_CLOUD
 
 # quit if we get below this penalty
 GLOBAL_CUTOFF_PENALTY = 0
 
-ALGORITHM = Algorithms.DELTA_BATCH
+ALGORITHM = Algorithms.BSP
 
 # indexed arrays of examples
 PROC_DATA = {}
@@ -231,7 +230,7 @@ for i in range(0, len(SIMULATION_STEPS)-1):
     if stamp in LOGGING_STAMPS:
         for proc in range(0, NPROCS):
             PROC_PROGRESS[proc].append(hinge_loss_with_penalty(PROC_MODELS[proc], GLOBAL_DATA, LMBDA))
-            MODEL_HIST[proc].append(PROC_MODELS[proc])
+            MODEL_HIST[proc].append(PROC_MODELS[proc].copy())
 
         global_model = average_models(PROC_MODELS.values())
         global_penalty = hinge_loss_with_penalty(global_model, GLOBAL_DATA, LMBDA)
@@ -239,7 +238,7 @@ for i in range(0, len(SIMULATION_STEPS)-1):
         print stamp, global_penalty
 
         PROC_PROGRESS["global"].append(global_penalty)
-        MODEL_HIST["global"].append(this_fit)
+        MODEL_HIST["global"].append(global_model.copy())
         PROC_MODELS["global"] = global_model
 
         if global_penalty < GLOBAL_CUTOFF_PENALTY:
@@ -248,10 +247,10 @@ for i in range(0, len(SIMULATION_STEPS)-1):
     if stamp in BSP_STAMPS:
         global_model = average_models(PROC_MODELS.values())
         for proc in range(0, NPROCS):
-            PROC_MODELS[proc] = global_model
+            PROC_MODELS[proc] = global_model.copy()
 
     if stamp in DELTA_STAMPS:
-        delta = array([0]*DIM)
+        delta = zeros(DIM)
         old_global = PREV_MODELS["global"]
         if old_global is None:
             old_global = delta.copy()
@@ -263,9 +262,9 @@ for i in range(0, len(SIMULATION_STEPS)-1):
         new_global = old_global + delta
 
         for proc in range(0, NPROCS):
-            PROC_MODELS[proc] = new_global
+            PROC_MODELS[proc] = new_global.copy()
             
-        PREV_MODELS["global"] = new_global
+        PREV_MODELS["global"] = new_global.copy()
      
     for proc in range(0, NPROCS):
         p_data = PROC_DATA[proc]
@@ -274,7 +273,8 @@ for i in range(0, len(SIMULATION_STEPS)-1):
                                LMBDA,
                                step_size,
                                stamp,
-                               PROC_MODELS[proc])
+                               PROC_MODELS[proc],
+                               BATCH_K)
 
         PROC_MODELS[proc] = this_fit
         
@@ -292,14 +292,22 @@ for stamp in LOGGING_STAMPS:
     serial_loss = hinge_loss_with_penalty(serial_model, GLOBAL_DATA, LMBDA)
     PROC_PROGRESS["serial"].append(serial_loss)
     PROC_MODELS["serial"] = serial_model
-    MODEL_HIST["serial"].append(serial_model)
+    MODEL_HIST["serial"].append(serial_model.copy())
     print stamp, serial_loss
 
 PROC_DATA["serial"] = GLOBAL_DATA
-    
+
 for proc in PROC_PROGRESS:
     print proc, PROC_MODELS[proc], accuracy(PROC_MODELS[proc], GLOBAL_DATA)
     #plot_data(PROC_DATA[proc], proc)
+
+for proc in PROC_PROGRESS:
+    if not isinstance(proc, int):
+        continue
+    plot([m[0] for m in MODEL_HIST[proc]], [m[1] for m in MODEL_HIST[proc]], 'o-', label=proc)
+
+legend()
+show()
     
 for proc in PROC_PROGRESS:
     fmt = '-' if proc != "global" and proc !="serial" else "o-"
