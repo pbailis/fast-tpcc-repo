@@ -13,7 +13,7 @@ def pegasos_sgd(data, lmbda, iterations, initial_t=0, w=None, step=1, batchk=1):
 
         t = initial_t+step*i
         eta = 1.0/(lmbda*pow(t+1, 1))
-                
+
         for k in range(0, batchk):
             (x, y) = choice(data)
             prod = y * (w.dot(x))
@@ -28,7 +28,7 @@ def accuracy(model, data):
     for (x, y) in data:
         correct += 1 if sign(y) == sign(model.dot(x)) else 0
     return correct/len(data)
-    
+
 
 def hinge_loss(model, data, lmbda):
     loss = 0.
@@ -62,9 +62,9 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
 
     if policy == Datagen.POINT_CLOUD:
         offset = 1
-        
-        pluscloud = array([5]*(dim-1)+[offset])
-        negcloud = array([10]*(dim-1)+[offset])
+
+        pluscloud = array([5.]*(dim-1)+[offset])
+        negcloud = array([10.]*(dim-1)+[offset])
 
         isplus = (proc_no % 2) == 0
 
@@ -81,10 +81,10 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
 
             ret.append((x, y))
         return ret
-                
+
     if policy == Datagen.SPLIT:
         plusone = (proc_no % 2) == 0
-        
+
         while(len(ret) < num_samples):
             arrarr = []
             for j in range(0, dim):
@@ -100,8 +100,8 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
             else:
                 continue
         return ret
-        
-            
+
+
     # fudge true_w so only the [proc*width, (proc+1)*width) entries
     # are non-zero
     if policy == Datagen.SKEWED:
@@ -119,7 +119,7 @@ def gen_data(num_samples, true_w, policy, proc_no, nprocs, noise=0.3):
 
         x = array(arrarr)
 
-        
+
         y = 1 if w_train.dot(x) > 0 else -1
 
         if random() < noise:
@@ -134,7 +134,7 @@ def average_models(models):
     for model in models:
         s += model
     return s/len(models)
-    
+
 def plot_data(p_data, model = None):
     plot([p[0][0] for p in p_data if p[1] == -1],
         [p[0][1] for p in p_data if p[1] == -1], 'o', color="red")
@@ -144,7 +144,7 @@ def plot_data(p_data, model = None):
 
     if model is not None:
         plot([m[0] for m in MODEL_HIST[model]], [m[1] for m in MODEL_HIST[model]], 's-', color="black")
-        
+
     show()
 
 class Algorithms:
@@ -211,7 +211,7 @@ DELTA_STAMPS = []
 if ALGORITHM == Algorithms.DELTA_BATCH:
     DELTA_STAMPS = list(arange(DELTA_RATE, ITERATIONS+1, DELTA_RATE))
     SIMULATION_STEPS += DELTA_STAMPS
-    
+
 SIMULATION_STEPS = list(set(SIMULATION_STEPS))
 SIMULATION_STEPS.sort()
 
@@ -243,7 +243,7 @@ for i in range(0, len(SIMULATION_STEPS)-1):
 
         if global_penalty < GLOBAL_CUTOFF_PENALTY:
             break
-    
+
     if stamp in BSP_STAMPS:
         global_model = average_models(PROC_MODELS.values())
         for proc in range(0, NPROCS):
@@ -254,7 +254,7 @@ for i in range(0, len(SIMULATION_STEPS)-1):
         old_global = PREV_MODELS["global"]
         if old_global is None:
             old_global = delta.copy()
-            
+
         for proc in range(0, NPROCS):
             delta += (PROC_MODELS[proc]-old_global)
             PREV_MODELS[proc] = PROC_MODELS[proc]
@@ -263,9 +263,9 @@ for i in range(0, len(SIMULATION_STEPS)-1):
 
         for proc in range(0, NPROCS):
             PROC_MODELS[proc] = new_global.copy()
-            
+
         PREV_MODELS["global"] = new_global.copy()
-     
+
     for proc in range(0, NPROCS):
         p_data = PROC_DATA[proc]
 
@@ -277,7 +277,7 @@ for i in range(0, len(SIMULATION_STEPS)-1):
                                BATCH_K)
 
         PROC_MODELS[proc] = this_fit
-        
+
 
 serial_model = None
 tot = 0
@@ -308,16 +308,16 @@ for proc in PROC_PROGRESS:
 
 legend()
 show()
-    
+
 for proc in PROC_PROGRESS:
     fmt = '-' if proc != "global" and proc !="serial" else "o-"
     plot(LOGGING_STAMPS, PROC_PROGRESS[proc], fmt, label=proc)
 
 xlabel("Iteration Number")
 ylabel("Loss")
-    
+
 print PROC_PROGRESS["global"][-1]
-    
+
 legend()
 show()
 
@@ -325,5 +325,5 @@ show()
 # average models
 
 
-        
-    
+
+
