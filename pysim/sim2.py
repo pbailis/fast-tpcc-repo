@@ -13,16 +13,34 @@ class hinge_model:
         self.w = zeros(dim)
         self.lmbda = lmbda
 
+    def copy(self):
+        m = hinge_model(self.lmbda, self.dim)
+        m.w = self.w.copy()
+        return m
+
+    def set(self, other):
+        self.w = other.w.copy()
+        self.lmbda = other.lmbda
+        self.dim = other.dim
+
     def randomize_model(self,  scale=1.0, density=1.0):
         for i in range(0, self.dim):
             self.w[i] = gaus(0, scale) if random() < density else 0.
 
-    def learn(self, x, y, t):
-        eta = 1.0/(self.lmbda*(t+1))
+    def gradient(self, x, y):
         prod = y * (self.w.dot(x))
-        grad = self.lmbda * w - ((y * x) if prod < 1 else 0)
-        self.w -= eta*grad
+        return self.lmbda * self.w - ((y * x) if prod < 1 else 0)
+
+    def apply_gradient(self, grad):
+        self.w -= eta * grad
         return self.w
+
+    # def learn(self, x, y, t):
+    #     eta = 1.0/(self.lmbda*(t+1))
+    #     prod = y * (self.w.dot(x))
+    #     grad = self.lmbda * w - ((y * x) if prod < 1 else 0)
+    #     self.w -= eta*grad
+    #     return self.w
 
     def predict(self, x):
         sign(self.w.dot(x))
@@ -49,12 +67,78 @@ class hinge_model:
         double(correct) / len(data)
 
     def average_models(self, models):
+        self.lbmda = models[0].lmbda
         self.dim = len(models[0])
-        self.w = zeros(dim)
+        new_w = zeros(dim)
         for m in models:
-            self.w += m.w
-        self.w /= len(models)
+            new_w += m.w
+        self.w = new_w / double(len(models))
         return self.w
+
+
+
+def serial_SGD(model, data, iterations, initial_t=0):
+    history = []
+    for t in range(initial_t, initial_t+iterations):
+        (x, y) = choice(data)
+        grad = model.gradient(x, y)
+        eta = 1.0/(model.lmbda*(t+1))
+        model.apply_gradient(grad, eta)
+        history.append(model.copy())
+    return history
+
+def batch_AVG_SGD(model, data_group, iterations, initial_t=0):
+    # Advance all the models serially
+    histories = []
+    local_models = []
+    for data in data_group:
+        local_model = model.copy()
+        history = serial_SGD(local_model, data, iterations, initial_t)
+        histories.append(history)
+        local_models.append(local_model)
+    model.average_models(local_models)
+
+
+
+def bsp_Hogwild(model_group, data_group, iterations, initial_t=0):
+    # Advance all the models serially
+    deltas = {}
+    for (model, data) in zip(model_group, data_group):
+        for t in range(initial_t, initial_t+iterations):
+            (x, y) = choice(data)
+            grad = model.gradient(x, y)
+            eta = 1.0/(model.lmbda*(t+1))
+            model.apply_gradient(grad, eta)
+            deltas
+            (x, y) = choice(data)
+        grad = model.gradient(x, y)
+        eta = 1.0/(model.lmbda*(t+1))
+        model.apply_gradient(grad, eta)
+
+        serial_SGD(model, data, iterations, initial_t)
+    # Compute the averaged model
+    model_group[0].average_models(model_group)
+    # set all the models to be the model average
+    for model in model_group:
+        model.set(model_group[0])
+
+
+def mini_batch_GD(model, data_group, iterations, initial_t=0):
+    grad_sum = None
+    total = 0
+    # For each group of data, compute the gradient average
+    for data in data_group:
+        for t in range(initial_t, initial_t + iterations):
+            (x, y) = choice(data)
+            if grad_sum is None:
+                grad_sum = model.gradient(x, y)
+            else:
+                grad_sum += model.gradient(x, y)
+            total += 1
+    eta = 1.0/(model.lmbda*(initial_t+1))
+    model.apply_gradient(grad_sum / double(total), eta)
+
+
 
 
 class Datagen:
@@ -106,19 +190,6 @@ def gen_synth_data(num_samples, dim, nprocs, proc, params):
         return data
 
 
-def serial_SGD(model, data, iterations, initial_t=0):
-    for t in range(initial_t, initial_t+iterations):
-        (x, y) = choice(data)
-        model.learn(x,y,t)
-    return model
-
-
-def batch_AVG_SGD(model, data, iterations, initial_t=0):
-    models = [model.copy() for i in range(0, procs)]
-    for t in range(initial_t, initial_t+iterations):
-        (x, y) = choice(data)
-        model.learn(x,y,t)
-    return model
 
 
 def plot_data(p_data, model = None):
