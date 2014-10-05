@@ -26,7 +26,7 @@ conf_colors={'cfree': 'blue',
 
 conf_labels={'cfree': 'Coordination-Free',
              'twopl': '2PL',
-             'opt_twopl': 'Coordinated'}
+             'opt_twopl': 'Coordinated (2PL)'}
 
 def avg(l):
     return float(sum(l))/len(l)
@@ -77,9 +77,9 @@ for conf in conf_results:
     for item in items:
         print conf, item, avg(conf_results[conf][item])
 
-text(4.75, 12500000, "Coordination-Free")#, rotation=-1)
-
-text(5.35, 2400, "Coordinated")
+fs=8
+text(4.75, 13000000, "Coordination-Free", size=fs)#, rotation=-1)
+text(4.7, 3000, "Coordinated (2PL)", size=fs)
         
 yscale('log')
 xlabel("Number of Items per Transaction")
