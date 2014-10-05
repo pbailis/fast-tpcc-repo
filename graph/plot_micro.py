@@ -82,7 +82,7 @@ text(4.75, 13000000, "Coordination-Free", size=fs)#, rotation=-1)
 text(4.7, 3000, "Coordinated (2PL)", size=fs)
         
 yscale('log')
-xlabel("Number of Items per Transaction")
+xlabel("Number of Items Written per Transaction")
 ylabel("Throughput (txns/s)")
 ylim(ymax=500000000, ymin=1)
 yticks([pow(10, i*2) for i in range(0, 5)])

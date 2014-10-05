@@ -77,7 +77,7 @@ for conf in conf_results:
 
 
 yscale('log')
-xlabel("Number of Items per Transaction")
+xlabel("Number of Items Written per Transaction")
 ylabel("Throughput (txns/s)")
 ylim(ymax=500000000)
 
