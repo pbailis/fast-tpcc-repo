@@ -5,7 +5,7 @@ from pylab import *
 lw=1
 padInches=0.05
 
-matplotlib.rcParams['figure.figsize'] = 3.3, 1.55
+matplotlib.rcParams['figure.figsize'] = 3.3, 2
 matplotlib.rcParams['lines.linewidth'] = lw
 matplotlib.rcParams['axes.linewidth'] = lw   
 matplotlib.rcParams['lines.markeredgewidth'] = lw
@@ -26,7 +26,7 @@ conf_colors={'cfree': 'blue',
 
 conf_labels={'cfree': 'Coordination-Free',
              'twopl': '2PL',
-             'opt_twopl': 'Coordinated'}
+             'opt_twopl': 'Optimized 2PL'}
 
 def avg(l):
     return float(sum(l))/len(l)
@@ -66,8 +66,6 @@ for d in listdir('output-micro'):
         conf_results[conf][items].append(thru)
 
 for conf in conf_results:
-    if conf == "twopl":
-        continue
     print conf
     items = conf_results[conf].keys()
     items.sort()
@@ -77,22 +75,18 @@ for conf in conf_results:
     for item in items:
         print conf, item, avg(conf_results[conf][item])
 
-text(4.75, 12500000, "Coordination-Free")#, rotation=-1)
 
-text(5.35, 2400, "Coordinated")
-        
 yscale('log')
 xlabel("Number of Items per Transaction")
 ylabel("Throughput (txns/s)")
-ylim(ymax=500000000, ymin=1)
-yticks([pow(10, i*2) for i in range(0, 5)])
+ylim(ymax=500000000)
 
-#l = legend(loc="upper right", ncol=3, handlelength=2)
-#l.draw_frame(False)
+l = legend(loc="upper right", ncol=2, handlelength=2)
+l.draw_frame(False)
 
-subplots_adjust(bottom=0.25, right=0.95, top=0.9, left=0.14)
+subplots_adjust(bottom=0.22, right=0.95, top=0.9, left=0.14)
 
-savefig("micro_thru.pdf", transparent=True, pad_inches=padInches)
+savefig("micro_thru_all.pdf", transparent=True, pad_inches=padInches)
 
 
 
